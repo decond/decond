@@ -10,19 +10,19 @@ basicCharge = 1.60217646E-19 #(Coulomb)
 ps = 1.0E-12 #(s)
 nm = 1.0E-9 #(m)
 
-volume = (3.10913E-9)**3 #(m3)
 
-if (nargin() < 5)
+if (nargin() < 6)
     error("Usage: $calculateEC.m <velData1.binary> <charge1> <velData2.binary> \
-           <charge2> <outFileName> [<maxLag>]")
+           <charge2> <outFileName> <systemVolume> [<maxLag>]")
 else
     v1FileName = argv(){1};
     charge1 = str2num(argv(){2});
     v2FileName = argv(){3};
     charge2 = str2num(argv(){4});
     outFileName = argv(){5};
-    if (nargin() > 5)
-        maxLag = str2num(argv(){6}) # in the unit of frame number
+    volume = str2num(argv(){6}) * 1.0E-9**3; #(m3)
+    if (nargin() > 6)
+        maxLag = str2num(argv(){7}) # in the unit of frame number
     else
         maxLag = -1;
     endif
