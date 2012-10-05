@@ -4,8 +4,8 @@ clear all
 format long
 pkg load signal;
 
-ps = 1.0E-12 #(s)
-nm = 1.0E-9 #(m)
+ps = 1.0E-12; #(s)
+nm = 1.0E-9; #(m)
 
 
 if (nargin() < 2)
@@ -28,18 +28,24 @@ if (maxLag < 0)
     maxLag = idivide(numFrames, 2)
 endif
 
-## x-dimension
 ## data.trajectory(atoms, dimension, frames) 
 ## squeeze(data.trajectory(:,1,:))' = (frames, atoms) in x-dimension
-vData = squeeze(data.trajectory(:,1,:))'; #(nm / ps)
-for i = [1:data.num_atoms]
-    [corrData(:,i), t] = xcorr(vData(:,i), maxLag, "unbiased");
+for dim = [1:3]
+    vData = squeeze(data.trajectory(:,dim,:))'; #(nm / ps)
+    for i = [1:data.num_atoms]
+        [corrData_tmp(:,i), t] = xcorr(vData(:,i), maxLag, "unbiased");
+    endfor
+    if dim == 1
+        corrData = corrData_tmp;
+    else 
+        corrData = corrData + corrData_tmp;
+    endif
 endfor
 
 t = t(maxLag + 1:end);
 corrData = corrData(maxLag + 1:end,:);
 corrData = sum(corrData, 2) / data.num_atoms;
-diffConst = trapz(t', corrData) * timeStep * nm**2 / ps
+diffConst = trapz(t', corrData) * timeStep * nm**2 / ps / 3
 
 size(t)
 #numTimeLag
