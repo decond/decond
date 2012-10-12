@@ -30,21 +30,21 @@ endif
 
 ## data.trajectory(atoms, dimension, frames) 
 ## squeeze(data.trajectory(:,1,:))' = (frames, atoms) in x-dimension
+corrData = 0
 for dim = [1:3]
     vData = squeeze(data.trajectory(:,dim,:))'; #(nm / ps)
     for i = [1:data.num_atoms]
-        [corrData_tmp(:,i), t] = xcorr(vData(:,i), maxLag, "unbiased");
+        if dim == 1 && i == 1
+            [tmp, t] = xcorr(vData(:,i), maxLag, "unbiased");
+            corrData = corrData + tmp;
+        else
+            corrData = corrData + xcorr(vData(:,i), maxLag, "unbiased");
+        endif
     endfor
-    if dim == 1
-        corrData = corrData_tmp;
-    else 
-        corrData = corrData + corrData_tmp;
-    endif
 endfor
 
 t = t(maxLag + 1:end);
-corrData = corrData(maxLag + 1:end,:);
-corrData = sum(corrData, 2) / data.num_atoms;
+corrData = corrData(maxLag + 1:end) / data.num_atoms;
 diffConst = trapz(t', corrData) * timeStep * nm**2 / ps / 3
 
 size(t)
@@ -54,49 +54,3 @@ numFrames
 save(strcat(outFileName, ".corr"), "corrData");
 save(strcat(outFileName, ".diff"), "diffConst");
 
-################
-#{
-for i = indexes
-    fileName = strcat(baseFileName, num2str(i, "%02d"))
-    data = load(fileName)
-    if (!exist("xdata"))
-        xdata= data(:,1)
-        ydata = data(:,2)
-    else
-#        if (size(xdata) != size(data) || xdata != data(:,1))
-#            error("The xdata indexes of file %s is different", fileName)
-#        endif
-    # don't check the consistency of xdata
-    # use the first xdata
-        minSize = min(size(ydata, 1), size(data, 1))
-        ydata(1:minSize, end+1) = data(1:minSize, 2)
-    endif
-endfor
-
-if (nargin() > 3)
-    switch (mode)
-    case "even"
-        ydata_std(1:2:j) = 0
-    case "odd"
-        ydata_std(2:2:j) = 0
-    case "custom"
-        #find the closest xdata, both its value and index
-        for i = [1:length(errbarXPos)]
-            [m, mi] = min(abs(errbarXPos(i) - xdata))
-            errbarIndexes(i) = mi
-        endfor
-        #assign values of OTHER indexes as 0
-        for i = [1:length(xdata)]
-            if (all(errbarIndexes != i))
-                ydata_std(i) = 0
-            endif
-        endfor
-    otherwise
-        error("Unknown mode: %s", mode)
-    endswitch
-endif
-
-out = [xdata, ydata_mean, ydata_std]
-outFileName = strcat("rdf_std_", num2str(ibegin), "-", num2str(iend))
-save(outFileName,"out")
-#}
