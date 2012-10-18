@@ -1,4 +1,4 @@
-#!/home1/kmtu/local/octave-3.6.2/bin/octave -qf
+#!/home/kmtu/local/octave-3.6.2/bin/octave -qf
 
 clear all
 format long
