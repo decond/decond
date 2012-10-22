@@ -108,7 +108,7 @@ corrDataTotal = autocorrData1 + autocorrData2 + corrData11 + corrData22 + corrDa
 
 #numTimeLag = 2 * numFrames - 1;
 
-t = t(maxLag + 1:end);
+t = t(maxLag + 1:end); # t = [0, 1, ..., maxLag]
 
 #corrData = corrData(maxLag + 1:end,:);
 #corrData = sum(corrData, 2);
