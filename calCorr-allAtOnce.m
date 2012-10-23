@@ -23,7 +23,7 @@ else
     endfor
 endif
 
-#check the num_frames are the same for all data
+## check the num_frames are the same for all data
 for n = [1:num_dataFile-1]
     if (data{n}.num_frames != data{n+1}.num_frames)
         error(cstrcat("Numbers of frames are different between ", vFilename{n}, " and ", vFilename{n+1}))
@@ -52,14 +52,13 @@ for dim = [1:3]
     puts(cstrcat("dim = ", num2str(dim), "\n"));
     for n = [1:num_dataFile]
         if (data{n}.num_atoms == 1)
-            #don't transpose because after squeeze it becomes (frames, 1) directly
+            ## don't transpose because after squeeze it becomes (frames, 1) directly
             jData{n} = charge{n}*squeeze(data{n}.trajectory(:,dim,:)); #(nm / ps)
         else
             jData{n} = charge{n}*squeeze(data{n}.trajectory(:,dim,:))'; #(nm / ps)
         endif
     endfor
     
-    #calculate total diffusion directly
     puts("calculating jCorrTotal\n");
     jCorrTotal = jCorrTotal + xcorr([jData{:}], maxLag, "unbiased");
 endfor
@@ -86,6 +85,8 @@ jAutocorr = cell(1,num_dataFile); #creating cell array
 jAutocorr(:) = 0;
 jCorr = cell(num_dataFile, num_dataFile);
 jCorr(:) = 0;
+
+## loop over all possible index pairs to extract autocorr and corr
 for i = [1:num_dataFile]
     for j = [1:num_dataFile]
         for ii = [1:data{i}.num_atoms]

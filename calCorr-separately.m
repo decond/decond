@@ -21,7 +21,7 @@ else
     endfor
 endif
 
-#check the num_frames are the same for all data
+## check the num_frames are the same for all data
 for n = [1:num_dataFile-1]
     if (data{n}.num_frames != data{n+1}.num_frames)
         error(cstrcat("Numbers of frames are different between ", vFilename{n}, " and ", vFilename{n+1}))
@@ -65,7 +65,7 @@ for dim = [1:3]
 #################
 
 
-    #calculate each term separately
+    ## calculate each term separately
     for i = [1:num_dataFile]
         for j = [1:num_dataFile]
             for ii = [1:data{i}.num_atoms]
@@ -93,7 +93,7 @@ for dim = [1:3]
 endfor
                     
 
-#average 3 dimensions
+## average 3 dimensions
 #jCorrTotal = sum(jCorrTotal(maxLag + 1:end, :), 2) / 3;
 #save(strcat(outFilename, ".jCorrTotal"), "jCorrTotal");
 
@@ -108,8 +108,6 @@ for i = [1:num_dataFile]
         endif
     endfor
 endfor
-#save(strcat(outFilename, ".jAutocorr"), "jAutocorr");
-#save(strcat(outFilename, ".jCorr"), "jCorr");
 save(strcat(outFilename, ".jCorr"), "timestep", "jAutocorr", "jCorr");
 
 #For test
