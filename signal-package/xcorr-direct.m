@@ -189,7 +189,7 @@ else
   R(maxlag+1) = X*Y;
   for k=1:maxlag
   	R(maxlag+1-k) = X(k+1:N) * Y(1:N-k);
-  	R(maxlag+1+k) = X(k:N-k) * Y(k+1:N);
+  	R(maxlag+1+k) = X(1:N-k) * Y(k+1:N);
   endfor
 endif
 ##--------------------------------------------------------------
