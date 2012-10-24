@@ -70,11 +70,10 @@ index{1} = [1:data{1}.num_atoms];
 for i = [2:num_dataFile]
     index{i} = [index{i-1}(end) + 1: index{i-1}(end) + data{i}.num_atoms];
 endfor
-index
 
 function serialIndex = indexPair2SerialIndex(idx1, idx2)
     global totalNumAtoms;
-    serialIndex = (idx1 - 1) * totalNumAtoms + idx2
+    serialIndex = (idx1 - 1) * totalNumAtoms + idx2;
 endfunction
 
 
@@ -92,10 +91,8 @@ for i = [1:num_dataFile]
         for ii = [1:data{i}.num_atoms]
             for jj = [1:data{j}.num_atoms]
                 if (i == j && ii == jj)
-i,j,index{i}(ii),index{i}(ii)
                     jAutocorr{i} = jAutocorr{i} + jCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{i}(ii)));
                 else
-i,j,index{i}(ii),index{j}(jj)
                     jCorr{i,j} = jCorr{i,j} + jCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{j}(jj)));
                 endif
             endfor
