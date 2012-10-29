@@ -18,7 +18,7 @@ else
     maxLag = str2num(argv(){2});
 endif
 
-#.vCorr file loads timestep, charge{}, vAutocorr{}, and vCorr{}
+#.vCorr file contains timestep, charge{}, vAutocorr{}, and vCorr{}
 load(filename, "timestep", "numAtoms", "vAutocorr");
 
 numIonTypes = length(vAutocorr);
