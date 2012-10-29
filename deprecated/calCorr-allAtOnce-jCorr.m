@@ -47,25 +47,25 @@ endfor
 
 ## data.trajectory(atoms, dimension, frames) 
 ## squeeze(data{1}.trajectory(:,1,:))' = (frames, atoms) in x-dimension
-vCorrTotal = 0;
+jCorrTotal = 0;
 for dim = [1:3]
     puts(cstrcat("dim = ", num2str(dim), "\n"));
     for n = [1:num_dataFile]
         if (data{n}.num_atoms == 1)
             ## don't transpose because after squeeze it becomes (frames, 1) directly
-            vData{n} = squeeze(data{n}.trajectory(:,dim,:)); #(nm / ps)
+            jData{n} = charge{n}*squeeze(data{n}.trajectory(:,dim,:)); #(nm / ps)
         else
-            vData{n} = squeeze(data{n}.trajectory(:,dim,:))'; #(nm / ps)
+            jData{n} = charge{n}*squeeze(data{n}.trajectory(:,dim,:))'; #(nm / ps)
         endif
     endfor
     
-    puts("calculating vCorrTotal\n");
-    vCorrTotal = vCorrTotal + xcorr([vData{:}], maxLag, "unbiased");
+    puts("calculating jCorrTotal\n");
+    jCorrTotal = jCorrTotal + xcorr([jData{:}], maxLag, "unbiased");
 endfor
                     
 #ex. 3 data files, data{1,2,3}.num_atoms = {2,3,2}
 #index = {[1,2],[3,4,5],[6,7]}
-#vCorrTotal column: 11,12,...,17,21,22,...,27,...,71,72,...,77
+#jCorrTotal column: 11,12,...,17,21,22,...,27,...,71,72,...,77
 index{1} = [1:data{1}.num_atoms];
 for i = [2:num_dataFile]
     index{i} = [index{i-1}(end) + 1: index{i-1}(end) + data{i}.num_atoms];
@@ -78,12 +78,12 @@ endfunction
 
 
 #average 3 dimensions
-vCorrTotal = vCorrTotal(maxLag + 1:end, :) / 3;
+jCorrTotal = jCorrTotal(maxLag + 1:end, :) / 3;
 
-vAutocorr = cell(1,num_dataFile); #creating cell array
-vAutocorr(:) = 0;
-vCorr = cell(num_dataFile, num_dataFile);
-vCorr(:) = 0;
+jAutocorr = cell(1,num_dataFile); #creating cell array
+jAutocorr(:) = 0;
+jCorr = cell(num_dataFile, num_dataFile);
+jCorr(:) = 0;
 
 ## loop over all possible index pairs to extract autocorr and corr
 for i = [1:num_dataFile]
@@ -91,21 +91,16 @@ for i = [1:num_dataFile]
         for ii = [1:data{i}.num_atoms]
             for jj = [1:data{j}.num_atoms]
                 if (i == j && ii == jj)
-                    vAutocorr{i} = vAutocorr{i} + vCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{i}(ii)));
+                    jAutocorr{i} = jAutocorr{i} + jCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{i}(ii)));
                 else
-                    vCorr{i,j} = vCorr{i,j} + vCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{j}(jj)));
+                    jCorr{i,j} = jCorr{i,j} + jCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{j}(jj)));
                 endif
             endfor
         endfor
     endfor
 endfor
+save(strcat(outFilename, ".jCorr"), "timestep", "jAutocorr", "jCorr");
 
-# we need number of atoms for calculating diffusion coefficients
-for i = [1:num_dataFile]
-    numAtoms(i) = data{i}.num_atoms;
-endfor
-save(strcat(outFilename, ".vCorr"), "timestep", "charge", "numAtoms", "vAutocorr", "vCorr");
-
-vCorrTotal = sum(vCorrTotal, 2);
-save(strcat(outFilename, ".vCorrTotal"), "vCorrTotal");
+jCorrTotal = sum(jCorrTotal, 2);
+save(strcat(outFilename, ".jCorrTotal"), "jCorrTotal");
 

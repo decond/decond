@@ -13,8 +13,8 @@ nm = 1.0E-9; #(m)
 
 
 if (nargin() < 3)
-    error("Usage: $calEC.m <filename.vCorr> <maxLag -1=max> <systemVolume(nm^3)>\n\
-where <filename> is used for both input and output: filename.vCorr and filename.ec");
+    error("Usage: $calEC.m <filename.jCorr> <maxLag -1=max> <systemVolume(nm^3)>\n\
+where <filename> is used for both input and output: filename.jCorr and filename.ec");
 else
     filename = argv(){1};
     extnamePos = rindex(filename, "."); #locate the position of the extension name
@@ -23,17 +23,17 @@ else
     volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
 endif
 
-#.vCorr file loads timestep, charge{}, vAutocorr{}, and vCorr{}
+#.jCorr file loads timestep, jAutocorr, and jCorr
 load(filename);
 
-numIonTypes = length(vAutocorr);
-if (numIonTypes != length(vCorr))
+numIonTypes = length(jAutocorr);
+if (numIonTypes != length(jCorr))
     error(strcat("Numbers of ion types are inconsistent!\n\
-vAutocorr: ", num2str(length(vAutocorr)), ", vCorr: ", num2str(length(vCorr))));
+jAutocorr: ", num2str(length(jAutocorr)), ", jCorr: ", num2str(length(jCorr))));
 endif
 
 if (maxLag < 0)
-    maxLag = length(vAutocorr{1}) - 1;
+    maxLag = length(jAutocorr{1}) - 1;
 endif
 maxLag #for showing
 
@@ -51,10 +51,10 @@ endfunction
 
 ecTotal = 0;
 for i = [1:numIonTypes]
-    ecAutocorr(i) = charge{i} * charge{i} * integrateEC(vAutocorr{i});
+    ecAutocorr(i) = integrateEC(jAutocorr{i});
     ecTotal = ecTotal + ecAutocorr(i);
     for j = [1:numIonTypes]
-        ecCorr(i,j) = charge{i} * charge{j} * integrateEC(vCorr{i,j});
+        ecCorr(i,j) = integrateEC(jCorr{i,j});
         ecTotal = ecTotal + ecCorr(i,j);
     endfor
 endfor
