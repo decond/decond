@@ -1,4 +1,4 @@
-#!/home/kmtu/local/octave-3.6.2/bin/octave -qf
+#!/home/kmtu/bin/octave -qf
 
 clear all
 format long
@@ -44,8 +44,8 @@ for dim = [1:3]
 endfor
 
 t = t(maxLag + 1:end);
-corrData = corrData(maxLag + 1:end) / data.num_atoms;
-diffConst = trapz(t', corrData) * timeStep * nm**2 / ps / 3
+corrData = corrData(maxLag + 1:end) / 3;
+diffConst = trapz(t', corrData) * timeStep * nm**2 / ps / data.num_atoms
 
 size(t)
 #numTimeLag
