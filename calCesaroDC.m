@@ -50,5 +50,5 @@ for T = [1:maxLag]
     endfor
 endfor
 
-save(strcat(baseFilename, ".dcCesaro"), "dcCesaro");
+save(strcat(baseFilename, ".dcCesaro"), "timestep", "dcCesaro");
 

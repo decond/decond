@@ -73,5 +73,5 @@ for T = [1:maxLag]
 endfor
 #ecTotalCesaro = ecTotalCesaro';
 
-save(strcat(baseFilename, ".ecCesaro"), "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
+save(strcat(baseFilename, ".ecCesaro"), "timestep", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
 
