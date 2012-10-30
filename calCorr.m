@@ -18,7 +18,7 @@ else
     num_dataFile = num_dataArg / 2
     for i = [1: num_dataFile]
         vFilename{i} = argv(){num_parArg + 2*i - 1};
-        charge{i} = str2num(argv(){num_parArg + 2*i});
+        charge(i) = str2num(argv(){num_parArg + 2*i});
         data{i} = readGmx2Matlab(vFilename{i});
     endfor
 endif
@@ -100,11 +100,15 @@ for i = [1:num_dataFile]
     endfor
 endfor
 
-# we need number of atoms for calculating diffusion coefficients
+# we need number of atoms for each ion type to calculate diffusion coefficients
 for i = [1:num_dataFile]
     numAtoms(i) = data{i}.num_atoms;
 endfor
-save(strcat(outFilename, ".vCorr"), "timestep", "charge", "numAtoms", "vAutocorr", "vCorr");
+
+# output time vector for convenience of plotting
+timeLags = [0:maxLag] * timestep;
+
+save(strcat(outFilename, ".vCorr"), "timestep", "charge", "numAtoms", "timeLags", "vAutocorr", "vCorr");
 
 vCorrTotal = sum(vCorrTotal, 2);
 save(strcat(outFilename, ".vCorrTotal"), "vCorrTotal");

@@ -3,7 +3,7 @@
 clear all
 format long
 
-global ps nm timestep t maxLag numAtoms;
+global ps nm timestep t maxLag;
 
 ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
@@ -18,7 +18,7 @@ else
     maxLag = str2num(argv(){2});
 endif
 
-#.vCorr file contains timestep, charge{}, vAutocorr{}, and vCorr{}
+#.vCorr file contains timestep, charge(), numAtoms(), timeLags(), vAutocorr{}, and vCorr{}
 load(filename, "timestep", "numAtoms", "vAutocorr");
 
 numIonTypes = length(vAutocorr);
@@ -31,7 +31,7 @@ maxLag #for showing
 t = [0:maxLag];
 
 function dc = integrateDC(corrData)
-    global ps nm timestep t maxLag numAtoms;
+    global ps nm timestep t maxLag;
     if (length(corrData) == 1 && maxLag > 0)
         #there is only one ion so no mutual-corr{i}{i}
         dc = 0;
@@ -44,6 +44,5 @@ for i = [1:numIonTypes]
     dc(i) = integrateDC(vAutocorr{i} / numAtoms(i));
 endfor
 
-dc = dc'
 save(strcat(baseFilename, ".dc"), "dc");
 

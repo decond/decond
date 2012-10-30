@@ -20,7 +20,7 @@ else
     baseFilename = filename(1:extnamePos-1);
 endif
 
-#.vCorr file contains timestep, charge{}, numAtoms(), vAutocorr{}, and vCorr{}
+#.vCorr file contains timestep, charge(), numAtoms(), timeLags(), vAutocorr{}, and vCorr{}
 load(filename, "timestep", "numAtoms", "vAutocorr");
 
 numIonTypes = length(vAutocorr);
@@ -29,7 +29,7 @@ if (maxLag < 0)
     maxLag = length(vAutocorr{1}) - 1;
 endif
 maxLag #for showing
-t = [0:maxLag];
+t = [0:maxLag]';
 
 function dc = integrateDC(corrData, maxLag)
     global kB beta basicCharge ps nm volume timestep t;
@@ -37,7 +37,7 @@ function dc = integrateDC(corrData, maxLag)
         #there is only one ion so no mutual-corr{i}{i}
         dc = 0;
     else
-        dc = trapz(t'(1:maxLag+1), corrData(1:maxLag+1)) * timestep * nm**2 / ps;
+        dc = trapz(t(1:maxLag+1), corrData(1:maxLag+1)) * timestep * nm**2 / ps;
     endif
 endfunction
 
@@ -50,5 +50,6 @@ for T = [1:maxLag]
     endfor
 endfor
 
-save(strcat(baseFilename, ".dcCesaro"), "timestep", "dcCesaro");
+timeLags = [1:maxLag] * timestep;
+save(strcat(baseFilename, ".dcCesaro"), "timestep", "timeLags", "dcCesaro");
 

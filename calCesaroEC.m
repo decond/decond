@@ -21,7 +21,7 @@ else
     baseFilename = filename(1:extnamePos-1);
 endif
 
-#.vCorr file contains timestep, charge{}, numAtoms(), vAutocorr{}, and vCorr{}
+#.vCorr file contains timestep, charge(), numAtoms(), timeLags(), vAutocorr{}, and vCorr{}
 load(filename);
 
 numIonTypes = length(vAutocorr);
@@ -57,12 +57,12 @@ for T = [1:maxLag]
     ecAutocorrCesaro(T, 1) = T;
     ecCorrCesaro(T, 1) = T;
     for i = [1:numIonTypes]
-        ecAutocorr(T, i) = charge{i} * charge{i} * integrateEC(vAutocorr{i}, T);
+        ecAutocorr(T, i) = charge(i) * charge(i) * integrateEC(vAutocorr{i}, T);
         ecAutocorrCesaro(T, i+1) = sum(ecAutocorr(1:T, i)) / T;
 #        ecAutocorrCesaro(T, i) = sum(ecAutocorr(1:T, i)) / T;
         ecTotal(T) = ecTotal(T) + ecAutocorr(T, i);
         for j = [1:numIonTypes]
-            ecCorr(T,zipIndexPair(i,j)) = charge{i} * charge{j} * integrateEC(vCorr{i,j}, T);
+            ecCorr(T,zipIndexPair(i,j)) = charge(i) * charge(j) * integrateEC(vCorr{i,j}, T);
             ecCorrCesaro(T, zipIndexPair(i,j)+1) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
 #            ecCorrCesaro(T, zipIndexPair(i,j)) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
             ecTotal(T) = ecTotal(T) + ecCorr(T, zipIndexPair(i,j));
@@ -73,5 +73,6 @@ for T = [1:maxLag]
 endfor
 #ecTotalCesaro = ecTotalCesaro';
 
-save(strcat(baseFilename, ".ecCesaro"), "timestep", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
+timeLags = [1:maxLag] * timestep;
+save(strcat(baseFilename, ".ecCesaro"), "timestep", "timeLags", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
 

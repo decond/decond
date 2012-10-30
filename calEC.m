@@ -23,7 +23,7 @@ else
     volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
 endif
 
-#.vCorr file loads timestep, charge{}, vAutocorr{}, and vCorr{}
+#.vCorr file contains timestep, charge(), numAtoms(), timeLags(), vAutocorr{}, and vCorr{}
 load(filename);
 
 numIonTypes = length(vAutocorr);
@@ -51,10 +51,10 @@ endfunction
 
 ecTotal = 0;
 for i = [1:numIonTypes]
-    ecAutocorr(i) = charge{i} * charge{i} * integrateEC(vAutocorr{i});
+    ecAutocorr(i) = charge(i) * charge(i) * integrateEC(vAutocorr{i});
     ecTotal = ecTotal + ecAutocorr(i);
     for j = [1:numIonTypes]
-        ecCorr(i,j) = charge{i} * charge{j} * integrateEC(vCorr{i,j});
+        ecCorr(i,j) = charge(i) * charge(j) * integrateEC(vCorr{i,j});
         ecTotal = ecTotal + ecCorr(i,j);
     endfor
 endfor
