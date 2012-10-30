@@ -106,7 +106,7 @@ for i = [1:num_dataFile]
 endfor
 
 # output time vector for convenience of plotting
-timeLags = [0:maxLag] * timestep;
+timeLags = [0:maxLag]' * timestep;
 
 save(strcat(outFilename, ".vCorr"), "timestep", "charge", "numAtoms", "timeLags", "vAutocorr", "vCorr");
 

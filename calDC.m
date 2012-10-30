@@ -44,5 +44,6 @@ for i = [1:numIonTypes]
     dc(i) = integrateDC(vAutocorr{i} / numAtoms(i));
 endfor
 
+dc
 save(strcat(baseFilename, ".dc"), "dc");
 

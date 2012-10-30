@@ -50,6 +50,6 @@ for T = [1:maxLag]
     endfor
 endfor
 
-timeLags = [1:maxLag] * timestep;
+timeLags = [1:maxLag]' * timestep;
 save(strcat(baseFilename, ".dcCesaro"), "timestep", "timeLags", "dcCesaro");
 

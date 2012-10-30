@@ -73,6 +73,6 @@ for T = [1:maxLag]
 endfor
 #ecTotalCesaro = ecTotalCesaro';
 
-timeLags = [1:maxLag] * timestep;
+timeLags = [1:maxLag]' * timestep;
 save(strcat(baseFilename, ".ecCesaro"), "timestep", "timeLags", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
 
