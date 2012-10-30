@@ -42,11 +42,11 @@ function dc = integrateDC(corrData, maxLag)
 endfunction
 
 for T = [1:maxLag]
-    dcCesaro(T,1) = T;
+#    dcCesaro(T,1) = T;
     for i = [1:numIonTypes]
         dc(T, i) = integrateDC(vAutocorr{i} / numAtoms(i), T);
-        dcCesaro(T,i+1) = sum(dc(1:T, i)) / T;
-#        dcCesaro(T,i) = sum(dc(1:T, i)) / T;
+#        dcCesaro(T,i+1) = sum(dc(1:T, i)) / T;
+        dcCesaro(T,i) = sum(dc(1:T, i)) / T;
     endfor
 endfor
 

@@ -54,24 +54,24 @@ endfunction
 
 for T = [1:maxLag]
     ecTotal(T) = 0;
-    ecAutocorrCesaro(T, 1) = T;
-    ecCorrCesaro(T, 1) = T;
+#    ecAutocorrCesaro(T, 1) = T;
+#    ecCorrCesaro(T, 1) = T;
     for i = [1:numIonTypes]
         ecAutocorr(T, i) = charge(i) * charge(i) * integrateEC(vAutocorr{i}, T);
-        ecAutocorrCesaro(T, i+1) = sum(ecAutocorr(1:T, i)) / T;
-#        ecAutocorrCesaro(T, i) = sum(ecAutocorr(1:T, i)) / T;
+#        ecAutocorrCesaro(T, i+1) = sum(ecAutocorr(1:T, i)) / T;
+        ecAutocorrCesaro(T, i) = sum(ecAutocorr(1:T, i)) / T;
         ecTotal(T) = ecTotal(T) + ecAutocorr(T, i);
         for j = [1:numIonTypes]
             ecCorr(T,zipIndexPair(i,j)) = charge(i) * charge(j) * integrateEC(vCorr{i,j}, T);
-            ecCorrCesaro(T, zipIndexPair(i,j)+1) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
-#            ecCorrCesaro(T, zipIndexPair(i,j)) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
+#            ecCorrCesaro(T, zipIndexPair(i,j)+1) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
+            ecCorrCesaro(T, zipIndexPair(i,j)) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
             ecTotal(T) = ecTotal(T) + ecCorr(T, zipIndexPair(i,j));
         endfor
     endfor
-    ecTotalCesaro(T,:) = [T, sum(ecTotal(1:T)) / T];
-#    ecTotalCesaro(T) = sum(ecTotal(1:T)) / T;
+#    ecTotalCesaro(T,:) = [T, sum(ecTotal(1:T)) / T];
+    ecTotalCesaro(T) = sum(ecTotal(1:T)) / T;
 endfor
-#ecTotalCesaro = ecTotalCesaro';
+ecTotalCesaro = ecTotalCesaro';
 
 timeLags = [1:maxLag]' * timestep;
 save(strcat(baseFilename, ".ecCesaro"), "timestep", "timeLags", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
