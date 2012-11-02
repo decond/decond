@@ -18,7 +18,7 @@ else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
     volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
-    maxLagLowerBound = str2num(argv(){4});
+    maxLagLowerBound = str2num(argv(){4})
 
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);

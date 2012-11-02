@@ -17,7 +17,7 @@ if (nargin() < 3)
 else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
-    maxLagLowerBound = str2num(argv(){3});
+    maxLagLowerBound = str2num(argv(){3})
 
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);
