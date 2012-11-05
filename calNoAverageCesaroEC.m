@@ -56,27 +56,27 @@ for T = [0:maxLag]
     ecTotal(T+1) = 0;
     for i = [1:numIonTypes]
         ecAutocorr(T+1, i) = charge(i) * charge(i) * integrateEC(vAutocorr{i}, T);
-        if (T>0)
-#            ecAutocorrCesaro(T, i) = sum(ecAutocorr(1:T, i)) / T;
-            ecAutocorrCesaro(T, i) = trapz([0:T]', ecAutocorr(1:T+1, i)) / T;
+#        ecAutocorrNoAverageCesaro(T, i) = sum(ecAutocorr(1:T, i));
+        if (T > 0)
+            ecAutocorrNoAverageCesaro(T, i) = trapz([0:T]', ecAutocorr(1:T+1, i)) * timestep;
         endif
         ecTotal(T+1) = ecTotal(T+1) + ecAutocorr(T+1, i);
         for j = [1:numIonTypes]
             ecCorr(T+1,zipIndexPair(i,j)) = charge(i) * charge(j) * integrateEC(vCorr{i,j}, T);
-            if (T>0)
-#                ecCorrCesaro(T, zipIndexPair(i,j)) = sum(ecCorr(1:T, zipIndexPair(i,j))) / T;
-                ecCorrCesaro(T, zipIndexPair(i,j)) = trapz([0:T]', ecCorr(1:T+1, zipIndexPair(i,j))) / T;
+#            ecCorrNoAverageCesaro(T, zipIndexPair(i,j)) = sum(ecCorr(1:T, zipIndexPair(i,j)));
+            if (T > 0)
+                ecCorrNoAverageCesaro(T, zipIndexPair(i,j)) = trapz([0:T]', ecCorr(1:T+1, zipIndexPair(i,j))) * timestep;
             endif
             ecTotal(T+1) = ecTotal(T+1) + ecCorr(T+1, zipIndexPair(i,j));
         endfor
     endfor
-    if (T>0)
-#        ecTotalCesaro(T) = sum(ecTotal(1:T)) / T;
-        ecTotalCesaro(T) = trapz([0:T], ecTotal(1:T+1)) / T;
+#    ecTotalNoAverageCesaro(T) = sum(ecTotal(1:T));
+    if (T > 0)
+        ecTotalNoAverageCesaro(T) = trapz([0:T], ecTotal(1:T+1)) * timestep;
     endif
 endfor
-ecTotalCesaro = ecTotalCesaro';
+ecTotalNoAverageCesaro = ecTotalNoAverageCesaro';
 
 timeLags = [1:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecCesaro"), "timestep", "timeLags", "ecTotalCesaro", "ecAutocorrCesaro", "ecCorrCesaro");
+save(strcat(baseFilename, ".ecNoAverageCesaro"), "timestep", "timeLags", "ecTotalNoAverageCesaro", "ecAutocorrNoAverageCesaro", "ecCorrNoAverageCesaro");
 

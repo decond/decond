@@ -44,13 +44,13 @@ endfunction
 for T = [0:maxLag]
     for i = [1:numIonTypes]
         dc(T+1, i) = integrateDC(vAutocorr{i} / numAtoms(i), T);
-#        dcCesaro(T,i) = sum(dc(1:T, i)) / T;
-        if (T>0)
-            dcCesaro(T,i) = trapz([0:T]', dc(1:T+1,i)) / T;
+#        dcNoAverageCesaro(T,i) = sum(dc(1:T, i));
+        if (T > 0)
+            dcNoAverageCesaro(T,i) = trapz([0:T]', dc(1:T+1, i)) * timestep;
         endif
     endfor
 endfor
 
 timeLags = [1:maxLag]' * timestep;
-save(strcat(baseFilename, ".dcCesaro"), "timestep", "timeLags", "dcCesaro");
+save(strcat(baseFilename, ".dcNoAverageCesaro"), "timestep", "timeLags", "dcNoAverageCesaro");
 
