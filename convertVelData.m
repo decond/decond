@@ -10,5 +10,5 @@ endif
 dataFileName = argv(){1}
 outFileName = argv(){2}
 
-trr2matlab(dataFileName, 'v', outFileName)
+trr2matlab_d(dataFileName, 'v', outFileName)
 

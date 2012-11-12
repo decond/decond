@@ -1,6 +1,7 @@
 #!/home/kmtu/bin/octave -qf
 
 clear all
+format long
 pkg load signal;
 
 global totalNumAtoms;
@@ -18,7 +19,7 @@ else
     for i = [1: num_dataFile]
         vFilename{i} = argv(){num_parArg + 2*i - 1};
         charge(i) = str2num(argv(){num_parArg + 2*i});
-        data{i} = readGmx2Matlab(vFilename{i});
+        data{i} = readGmx2Matlab_d(vFilename{i});
     endfor
 endif
 
