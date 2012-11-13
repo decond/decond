@@ -1,6 +1,7 @@
 #!/home/kmtu/bin/octave -qf
 
 clear all
+format long
 pkg load signal;
 
 global totalNumAtoms;
@@ -19,56 +20,68 @@ else
         vFilename{i} = argv(){num_parArg + 2*i - 1};
         charge(i) = str2num(argv(){num_parArg + 2*i});
         data{i} = readGmx2Matlab(vFilename{i});
-    endfor
-endif
+    end
+end
 
 ## check the num_frames are the same for all data
 for n = [1:num_dataFile-1]
     if (data{n}.num_frames != data{n+1}.num_frames)
         error(cstrcat("Numbers of frames are different between ", vFilename{n}, " and ", vFilename{n+1}))
-    endif
+    end
     if (data{n}.time_step != data{n+1}.time_step)
         error(cstrcat("Timesteps are different between ", vFilename{n}, " and ", vFilename{n+1}))
-    endif
-endfor
+    end
+end
 
 timestep = data{1}.time_step
 num_frames = data{1}.num_frames #for showing purpose
 if (maxLag < 0)
     maxLag = num_frames - 1;
-endif
+end
 maxLag #showing
 
 totalNumAtoms = 0;
 for n = [1:num_dataFile]
     totalNumAtoms = totalNumAtoms + data{n}.num_atoms; 
-endfor
+# we need number of atoms for each ion type to calculate diffusion coefficients
+    numAtoms(n) = data{n}.num_atoms;
+end
 
 ## data.trajectory(atoms, dimension, frames) 
 ## squeeze(data{1}.trajectory(:,1,:))' = (frames, atoms) in x-dimension
 vCorrTotal = 0;
 for dim = [1:3]
     puts(cstrcat("dim = ", num2str(dim), "\n"));
+
+    if (!exist("data"))
+        for i = [1: num_dataFile]
+            data{i} = readGmx2Matlab(vFilename{i});
+        end
+    end
+
     for n = [1:num_dataFile]
-        if (data{n}.num_atoms == 1)
+        if (numAtoms(n) == 1)
             ## don't transpose because after squeeze it becomes (frames, 1) directly
             vData{n} = squeeze(data{n}.trajectory(:,dim,:)); #(nm / ps)
         else
             vData{n} = squeeze(data{n}.trajectory(:,dim,:))'; #(nm / ps)
-        endif
-    endfor
+        end
+    end
+
+    clear data;
     
     puts("calculating vCorrTotal\n");
+whos
     vCorrTotal = vCorrTotal + xcorr([vData{:}], maxLag, "unbiased");
-endfor
+end
                     
 #ex. 3 data files, data{1,2,3}.num_atoms = {2,3,2}
 #index = {[1,2],[3,4,5],[6,7]}
 #vCorrTotal column: 11,12,...,17,21,22,...,27,...,71,72,...,77
-index{1} = [1:data{1}.num_atoms];
+index{1} = [1:numAtoms(1)];
 for i = [2:num_dataFile]
-    index{i} = [index{i-1}(end) + 1: index{i-1}(end) + data{i}.num_atoms];
-endfor
+    index{i} = [index{i-1}(end) + 1: index{i-1}(end) + numAtoms(i)];
+end
 
 function serialIndex = indexPair2SerialIndex(idx1, idx2)
     global totalNumAtoms;
@@ -87,22 +100,18 @@ vCorr(:) = 0;
 ## loop over all possible index pairs to extract autocorr and corr
 for i = [1:num_dataFile]
     for j = [1:num_dataFile]
-        for ii = [1:data{i}.num_atoms]
-            for jj = [1:data{j}.num_atoms]
+        for ii = [1:numAtoms(i)]
+            for jj = [1:numAtoms(j)]
                 if (i == j && ii == jj)
                     vAutocorr{i} = vAutocorr{i} + vCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{i}(ii)));
                 else
                     vCorr{i,j} = vCorr{i,j} + vCorrTotal(:,indexPair2SerialIndex(index{i}(ii), index{j}(jj)));
-                endif
-            endfor
-        endfor
-    endfor
-endfor
+                end
+            end
+        end
+    end
+end
 
-# we need number of atoms for each ion type to calculate diffusion coefficients
-for i = [1:num_dataFile]
-    numAtoms(i) = data{i}.num_atoms;
-endfor
 
 # output time vector for convenience of plotting
 timeLags = [0:maxLag]' * timestep;
