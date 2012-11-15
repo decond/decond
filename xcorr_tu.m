@@ -215,10 +215,21 @@ puts("calculating pre......");
     pre = fft (postpad (prepad (X, N+maxlag), M) );
 puts("done\n");
 whos
-puts("saving pre to a pre.tmp......");
-    save("-binary", "pre.tmp","pre");
+puts("saving pre to a temp file......");
+    deleteWhenExit = true;
+    [fid_r, fname_r, msg] = mkstemp("pre_r_tmp.XXXXXX", deleteWhenExit);
+    if (fid_r < 0)
+      error("msg");
+    endif
+    [fid_i, fname_i, msg] = mkstemp("pre_i_tmp.XXXXXX", deleteWhenExit);
+    if (fid_i < 0)
+      error("msg");
+    endif
+    fwrite(fid_r, real(pre), "double");
+    fwrite(fid_i, imag(pre), "double");
+    fflush(fid_r);
+    fflush(fid_i);
 puts(" done\n");
-error("stop");
     clear pre;
 puts("cleared pre\n");
 puts("calculating post......");
@@ -228,11 +239,20 @@ whos
     ## save memory
     clear X;
 puts("cleared X\n");
-puts("load pre\n");
-    load("pre.tmp");
-puts("delete pre.tmp\n");
-    unlink("pre.tmp");
-puts("all done\n");
+puts("loading pre......");
+    frewind(fid_r);
+    frewind(fid_i);
+    pre_h_r = fread(fid_r, [M, P/2], "double");
+    pre_h_i = fread(fid_i, [M, P/2], "double");
+    pre(:,1:P/2) = pre_h_r + i*pre_h_i;
+whos
+    pre_h_r = fread(fid_r, [M, P/2], "double");
+    pre_h_i = fread(fid_i, [M, P/2], "double");
+    pre(:,P/2+1:P) = pre_h_r + i*pre_h_i;
+whos
+    fclose(fid_r);
+    fclose(fid_i);
+puts("done\n");
 whos
 
     ## do autocorrelations (each column with itself)
@@ -242,8 +262,8 @@ whos
 #    cor = ifft (post .* pre);
 #    R(:, 1:P+1:P^2) = cor (1:2*maxlag+1,:);
     for i=1:P
-puts(strcat("calculating autocorr for column ", num2str(i), " ......"));
-        cor = real(ifft (post(:,i) .* pre(:,i))(maxlag+1:2*maxlag+1));
+puts(cstrcat("calculating autocorr for column ", num2str(i), " ......"));
+        cor = ifft(post(:,i) .* pre(:,i))(maxlag+1:2*maxlag+1);
 puts("done\n");
         autocorr{a2g(i)} = autocorr{a2g(i)} + cor;
     endfor
@@ -253,15 +273,15 @@ whos
     ##   -- these are the off-diagonal colummn of the reshaped 3D result
     ##      matrix -- i!=j in R(:,i,j)
     for i=1:P-1
+puts(cstrcat("looping corr for column pair ", num2str(i), "-[", num2str(i+1), " to ", num2str(P), "] ......"));
       for j = i+1:P
-puts(strcat("calculating corr for column ", num2str(i), " and ", num2str(j), " ......"));
         cor = ifft( pre(:,i) .* post(:,j) );
-puts("done\n");
 #      R(:,(i-1)*P+j) = cor(1:2*maxlag+1,:);
 #      R(:,(j-1)*P+i) = conj( flipud( cor(1:2*maxlag+1,:) ) );
-        corr{a2g(i),a2g(j)} = corr{a2g(i),a2g(j)} + real(cor(maxlag+1:2*maxlag+1));
-        corr{a2g(j),a2g(i)} = corr{a2g(j),a2g(i)} + real(conj( flipud( cor(1:2*maxlag+1) )(maxlag+1:2*maxlag+1,:) ));
+        corr{a2g(i),a2g(j)} = corr{a2g(i),a2g(j)} + cor(maxlag+1:2*maxlag+1);
+        corr{a2g(j),a2g(i)} = corr{a2g(j),a2g(i)} + conj( flipud( cor(1:2*maxlag+1) )(maxlag+1:2*maxlag+1,:) );
       endfor
+puts("done\n");
 whos
     endfor
   elseif isempty(Y)
