@@ -77,7 +77,7 @@
 
 %% set file inputs and outputs
 
-function trr2matlab( trajFile, varargin )
+function trr2matlab_tu( trajFile, varargin )
 
 tic;
 
@@ -89,6 +89,39 @@ else
     return;
 end
 
+%% determine single/double precision
+
+% user override
+if sum(strcmp(varargin, 'single')) > 0
+    fileType = 'single';
+    isDouble = '';
+else if sum(strcmp(varargin, 'double')) > 0
+    fileType = 'double';
+    isDouble = '_d';
+else
+    error('Must specify "single" or "double" precision in the input argument');
+end
+
+% detect single/double
+#if sum(strcmp(varargin, 'single')) + sum(strcmp(varargin, 'double')) == 0
+#    
+#    OPENfile = fopen(trajFile, 'r', 'b');
+#    fseek(OPENfile, 0 ,'bof');
+#    precisionTest = fread(OPENfile, [1 9], 'int32');
+#    
+#    if precisionTest(9) == 36
+#        fprintf('single precision detected\n');
+#        fileType = 'single';
+#    elseif precisionTest(9) == 72
+#        fprintf('double precision detected\n');
+#        fileType = 'double';
+#    else
+#        fprintf('no precision dectected, defaulting to single precision\n');
+#        fileType = 'single';
+#    end
+#    fclose(OPENfile);
+#    
+#end
 % decide if output name was in input, and output frequency
 outputX = 'xdata.binary';
 outputV = 'vdata.binary';
@@ -97,17 +130,19 @@ outputF = 'fdata.binary';
 noX = varargin(~strcmp(varargin, 'x'));
 noV = noX(~strcmp(noX, 'v'));
 noF = noV(~strcmp(noV, 'f'));
+noSingle = noF(~strcmp(noF, 'single'));
+noDouble= noSingle(~strcmp(noSingle, 'double'));
 
 outputEveryIntFrames = 50;
-for n = 1:numel(noF)
-    if isfloat(cell2mat(noF(n))) == true
-        outputEveryIntFrames = floor(cell2mat(noF(n)));
+for n = 1:numel(noDouble)
+    if isfloat(cell2mat(noDouble(n))) == true
+        outputEveryIntFrames = floor(cell2mat(noDouble(n)));
     end
-    if ischar(cell2mat(noF(n))) == true
-        outputName = cell2mat(noF(n));
-        outputX = [outputName '_xdata.binary'];
-        outputV = [outputName '_vdata.binary'];
-        outputF = [outputName '_fdata.binary'];
+    if ischar(cell2mat(noDouble(n))) == true
+        outputName = cell2mat(noDouble(n));
+        outputX = [outputName isDouble '_xdata.binary'];
+        outputV = [outputName isDouble '_vdata.binary'];
+        outputF = [outputName isDouble '_fdata.binary'];
     end
 end
 if outputEveryIntFrames < 1
@@ -136,36 +171,6 @@ if writeX + writeV + writeF == 0
     writeF = true;
 end
 
-%% determine single/double precision
-
-% user override
-if sum(strcmp(varargin, 'single')) > 0
-    fileType = 'single';
-end
-if sum(strcmp(varargin, 'double')) > 0
-    fileType = 'double';
-end
-
-% detect single/double
-if sum(strcmp(varargin, 'single')) + sum(strcmp(varargin, 'double')) == 0
-    
-    OPENfile = fopen(trajFile, 'r', 'b');
-    fseek(OPENfile, 0 ,'bof');
-    precisionTest = fread(OPENfile, [1 9], 'int32');
-    
-    if precisionTest(9) == 36
-        fprintf('single precision detected\n');
-        fileType = 'single';
-    elseif precisionTest(9) == 72
-        fprintf('double precision detected\n');
-        fileType = 'double';
-    else
-        fprintf('no precision dectected, defaulting to single precision\n');
-        fileType = 'single';
-    end
-    fclose(OPENfile);
-    
-end
 
 %% parse binary from trr file
 
@@ -180,17 +185,17 @@ system('rm -f tempx tempv tempf');
 WRITEfile_X = fopen('tempx', 'w', 'b');
     fwrite(WRITEfile_X, 0, 'int32');
     fwrite(WRITEfile_X, 0, 'int32');
-    fwrite(WRITEfile_X, 0, 'double');
+    fwrite(WRITEfile_X, 0, fileType);
 
 WRITEfile_V = fopen('tempv', 'w', 'b');
     fwrite(WRITEfile_V, 0, 'int32');
     fwrite(WRITEfile_V, 0, 'int32');
-    fwrite(WRITEfile_V, 0, 'double');
+    fwrite(WRITEfile_V, 0, fileType);
 
 WRITEfile_F = fopen('tempf', 'w', 'b');
     fwrite(WRITEfile_F, 0, 'int32');
     fwrite(WRITEfile_F, 0, 'int32');
-    fwrite(WRITEfile_F, 0, 'double');
+    fwrite(WRITEfile_F, 0, fileType);
 
 % initialize local variables - throws error for traj > 500,000 frames
 maxNumFrames = 500000; % increase this if more than this # frames in sim!
@@ -237,7 +242,7 @@ while ~feof(OPENfile)
         
         coord_XYZ = fread(OPENfile, [1 (num_atoms * 3)], fileType);
         if writeX == true
-            fwrite(WRITEfile_X, coord_XYZ, 'double');
+            fwrite(WRITEfile_X, coord_XYZ, fileType);
         end
     end
     
@@ -249,7 +254,7 @@ while ~feof(OPENfile)
         
         velocity_XYZ = fread(OPENfile, [1 (num_atoms * 3)], fileType);
         if writeV == true
-            fwrite(WRITEfile_V, velocity_XYZ, 'double');
+            fwrite(WRITEfile_V, velocity_XYZ, fileType);
         end
     end
     
@@ -261,7 +266,7 @@ while ~feof(OPENfile)
         
         force_XYZ = fread(OPENfile, [1 (num_atoms * 3)], fileType);
         if writeF == true
-            fwrite(WRITEfile_F, force_XYZ, 'double');
+            fwrite(WRITEfile_F, force_XYZ, fileType);
         end
     end
     
@@ -286,7 +291,7 @@ if writeX == true
     frewind(WRITEfile_X);
     fwrite(WRITEfile_X, num_atoms, 'int32');
     fwrite(WRITEfile_X, coord_frame, 'int32');
-    fwrite(WRITEfile_X, coord_incriment, 'double');
+    fwrite(WRITEfile_X, coord_incriment, fileType);
     
     fclose(WRITEfile_X);
     system(['mv -f tempx ' outputX]);
@@ -306,7 +311,7 @@ if writeV == true
     frewind(WRITEfile_V);
     fwrite(WRITEfile_V, num_atoms, 'int32');
     fwrite(WRITEfile_V, veloc_frame, 'int32');
-    fwrite(WRITEfile_V, veloc_incriment, 'double');
+    fwrite(WRITEfile_V, veloc_incriment, fileType);
     
     fclose(WRITEfile_V);
     system(['mv -f tempv ' outputV]);
@@ -325,7 +330,7 @@ if writeF == true
     frewind(WRITEfile_F);
     fwrite(WRITEfile_F, num_atoms, 'int32');
     fwrite(WRITEfile_F, force_frame, 'int32');
-    fwrite(WRITEfile_F, force_incriment, 'double');
+    fwrite(WRITEfile_F, force_incriment, fileType);
     
     fclose(WRITEfile_F);
     system(['mv -f tempf ' outputF]);

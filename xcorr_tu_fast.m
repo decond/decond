@@ -134,15 +134,7 @@
 ## If length(x) == length(y) + k, then you can use the simpler
 ##    ( hankel(x(1:k),x(k:N-k)) * y ) ./ N
 
-# corr = cross-correlation
-function [autocorr, corr] = xcorr_tu (X, Y, maxlag, scale)
-  global dataIndex a2g;
-
-  numGroups = length(dataIndex)
-  autocorr = cell(1, numGroups);
-  autocorr(:) = 0;
-  corr = cell(numGroups, numGroups);
-  corr(:) = 0;
+function [R, lags] = xcorr_tu_fast (X, Y, maxlag, scale)
 
   if (nargin < 1 || nargin > 4)
     print_usage;
@@ -193,8 +185,8 @@ function [autocorr, corr] = xcorr_tu (X, Y, maxlag, scale)
   ##    (b) are all zero; so provide them by padding
   ##        the results (with zeros) before returning.
   if (maxlag > N-1)
-    pad_result = maxlag - (N - 1);
-    maxlag = N - 1;
+    pad_result = maxlag - (N - 1)
+    maxlag = N - 1
     %error("xcorr: maxlag must be less than length(X)");
   else
     pad_result = 0;
@@ -204,130 +196,74 @@ function [autocorr, corr] = xcorr_tu (X, Y, maxlag, scale)
     error("xcorr: scale must be 'none' if length(X) != length(Y)")
   endif
 
+puts("Tag1\n");
+whos
   P = columns(X);
   M = 2^nextpow2(N + maxlag);
-
   if !isvector(X)
     ## For matrix X, correlate each column "i" with all other "j" columns
-#    R = zeros(2*maxlag+1,P^2);
+    R = zeros(maxlag+1,P^2);
+puts("Tag2\n");
+whos
+
     ## do FFTs of padded column vectors
-puts("calculating pre......");
     pre = fft (postpad (prepad (X, N+maxlag), M) );
-puts("done\n");
-#whos
-#puts("saving pre to a temp file......");
-#    deleteWhenExit = true;
-#    [fid_r, fname_r, msg] = mkstemp("pre_r_tmp.XXXXXX", deleteWhenExit);
-#    if (fid_r < 0)
-#      error("msg");
-#    endif
-#    [fid_i, fname_i, msg] = mkstemp("pre_i_tmp.XXXXXX", deleteWhenExit);
-#    if (fid_i < 0)
-#      error("msg");
-#    endif
-#    fwrite(fid_r, real(pre), "double");
-#    fwrite(fid_i, imag(pre), "double");
-#    fflush(fid_r);
-#    fflush(fid_i);
-#puts(" done\n");
-#    clear pre;
-#puts("cleared pre\n");
-puts("calculating post......");
+puts("Tag3\n");
+whos
     post = conj (fft (postpad (X, M)));
-puts("done\n");
+
+puts("Tag4\n");
 whos
-    ## save memory
     clear X;
-puts("cleared X\n");
-#puts("loading pre......");
-#    frewind(fid_r);
-#    frewind(fid_i);
-#    pre_h_r = fread(fid_r, [M, P/2], "double");
-#    pre_h_i = fread(fid_i, [M, P/2], "double");
-#    pre(:,1:P/2) = pre_h_r + i*pre_h_i;
-#whos
-#    pre_h_r = fread(fid_r, [M, P/2], "double");
-#    pre_h_i = fread(fid_i, [M, P/2], "double");
-#    pre(:,P/2+1:P) = pre_h_r + i*pre_h_i;
-#whos
-#    fclose(fid_r);
-#    fclose(fid_i);
-#puts("done\n");
-whos
 
     ## do autocorrelations (each column with itself)
     ##  -- if result R is reshaped to 3D matrix (i.e. R=reshape(R,M,P,P))
     ##     the autocorrelations are on leading diagonal columns of R,
     ##     where i==j in R(:,i,j)
-#    cor = ifft (post .* pre);
-#    R(:, 1:P+1:P^2) = cor (1:2*maxlag+1,:);
-    for i=1:P
-puts(cstrcat("calculating autocorr for column ", num2str(i), " ......"));
-        cor = ifft(post(:,i) .* pre(:,i))(maxlag+1:2*maxlag+1);
-puts("done\n");
-        autocorr{a2g(i)} = autocorr{a2g(i)} + cor;
-    endfor
+    cor = ifft (post .* pre);
+puts("Tag5\n");
+whos
+    R(:, 1:P+1:P^2) = cor (maxlag+1:2*maxlag+1,:);
+puts("Tag6\n");
 whos
 
     ## do the cross correlations
     ##   -- these are the off-diagonal colummn of the reshaped 3D result
     ##      matrix -- i!=j in R(:,i,j)
     for i=1:P-1
-puts(cstrcat("looping corr for column pair ", num2str(i), "-[", num2str(i+1), " to ", num2str(P), "] ......"));
-      for j = i+1:P
-        cor = ifft( pre(:,i) .* post(:,j) );
-#      R(:,(i-1)*P+j) = cor(1:2*maxlag+1,:);
-#      R(:,(j-1)*P+i) = conj( flipud( cor(1:2*maxlag+1,:) ) );
-        corr{a2g(i),a2g(j)} = corr{a2g(i),a2g(j)} + cor(maxlag+1:2*maxlag+1);
-        corr{a2g(j),a2g(i)} = corr{a2g(j),a2g(i)} + conj( flipud( cor(1:2*maxlag+1) )(maxlag+1:2*maxlag+1,:) );
-      endfor
-puts("done\n");
+      j = i+1:P;
+      cor = ifft( pre(:,i*ones(length(j),1)) .* post(:,j) );
+      R(:,(i-1)*P+j) = cor(maxlag+1:2*maxlag+1,:);
+      R(:,(j-1)*P+i) = conj( flipud( cor(1:2*maxlag+1,:) )(maxlag+1:2*maxlag+1,:) );
+puts("Tag7\n");
 whos
     endfor
   elseif isempty(Y)
     ## compute autocorrelation of a single vector
     post = fft( postpad(X(:),M) );
     cor = ifft( post .* conj(post) );
-#    R = [ conj(cor(maxlag+1:-1:2)) ; cor(1:maxlag+1) ];
+    R = [ conj(cor(maxlag+1:-1:2)) ; cor(1:maxlag+1) ];
   else
     ## compute cross-correlation of X and Y
     ##  If one of X & Y is a row vector, the other can be a column vector.
     pre  = fft( postpad( prepad( X(:), length(X)+maxlag ), M) );
     post = fft( postpad( Y(:), M ) );
     cor = ifft( pre .* conj(post) );
-#    R = cor(1:2*maxlag+1);
+    R = cor(1:2*maxlag+1);
   endif
 
   ## if inputs are real, outputs should be real, so ignore the
   ## insignificant complex portion left over from the FFT
 #  if isreal(X) && (isempty(Y) || isreal(Y))
-#    R=real(R);
-    for i = [1:numGroups]
-      autocorr{i} = real(autocorr{i});
-      for j = [1:numGroups]
-        corr{i,j} = real(corr{i,j});
-      endfor
-    endfor
+    R=real(R);
 #  endif
 
   ## correct for bias
   if strcmp(scale, 'biased')
-#    R = R ./ N;
-    for i = [1:numGroups]
-      autocorr{i} = autocorr{i} ./ N;
-      for j = [1:numGroups]
-        corr{i,j} = corr{i,j} ./ N;
-      endfor
-    endfor
+    R = R ./ N;
   elseif strcmp(scale, 'unbiased')
-#    R = R ./ ( [ N-maxlag:N-1, N, N-1:-1:N-maxlag ]' * ones(1,columns(R)) );
-    for i = [1:numGroups]
-      autocorr{i} = autocorr{i} ./ [ N, N-1:-1:N-maxlag ]';
-      for j = [1:numGroups]
-        corr{i,j} = corr{i,j} ./ [ N, N-1:-1:N-maxlag ]';
-      endfor
-    endfor
-  elseif strcmp(scale, 'coeff')
+    R = R ./ ( [ N, N-1:-1:N-maxlag ]' * ones(1,columns(R)) );
+#  elseif strcmp(scale, 'coeff')
 #    ## R = R ./ R(maxlag+1) works only for autocorrelation
 #    ## For cross correlation coeff, divide by rms(X)*rms(Y).
 #    if !isvector(X)
@@ -349,20 +285,20 @@ whos
   ##  (most likely is not required, use "if" to avoid uncessary code)
   ## At this point, lag varies with the first index in R;
   ##  so pad **before** the transpose.
-#  if pad_result
-#    R_pad = zeros(pad_result,columns(R));
-#    R = [R_pad; R; R_pad];
-#  endif
+  if pad_result
+    R_pad = zeros(pad_result,columns(R));
+    R = [R_pad; R; R_pad];
+  endif
   ## Correct the shape (transpose) so it is the same as the first input vector
 #  if isvector(X) && P > 1
 #    R = R.';
 #  endif
 
-#  ## return the lag indices if desired
-#  if nargout == 2
-#    maxlag += pad_result;
-#    lags = [-maxlag:maxlag];
-#  endif
+  ## return the lag indices if desired
+  if nargout == 2
+    maxlag += pad_result;
+    lags = [-maxlag:maxlag];
+  endif
 
 endfunction
 

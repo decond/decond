@@ -11,12 +11,12 @@ ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
 
 if (nargin() < 2)
-    error("Usage: $calCesaroEC.m <filename.vCorr> <systemVolume(nm^3)> <maxLag -1=max>\n\
+    error("Usage: $calCesaroEC.m <filename.vCorr> <maxLag -1=max> <systemVolume(nm^3)>\n\
 where <filename> is used for both input and output: filename.vCorr and filename.xvg");
 else
     filename = argv(){1};
-    volume = str2num(argv(){2}) * (1.0E-9)**3; #(m3)
-    maxLag = str2num(argv(){3});
+    maxLag = str2num(argv(){2});
+    volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);
 endif

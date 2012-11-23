@@ -6,20 +6,20 @@ pkg load signal;
 
 global totalNumAtoms dataIndex a2g;
 
-num_parArg = 2;
+num_parArg = 3;
 num_dataArg = nargin() - num_parArg;
 if (num_dataArg < 2 || mod(num_dataArg, 2) == 1)
-    error("Usage: $calculateCorr.m <outFilename> <maxLag (-1=max)> <velData1.binary> <charge1> [<velData2.binary> <charge2>...]")
+    error("Usage: $calculateCorr.m <outFilename> <maxLag (-1=max)> <precision> <velData1.binary> <charge1> [<velData2.binary> <charge2>...]")
 else
     outFilename = argv(){1};
-
     maxLag = str2num(argv(){2}); # in the unit of frame number
+    precision = argv(){3}; # single or double
 
     num_dataFile = num_dataArg / 2
     for i = [1: num_dataFile]
         vFilename{i} = argv(){num_parArg + 2*i - 1};
         charge(i) = str2num(argv(){num_parArg + 2*i});
-        data{i} = readGmx2Matlab(vFilename{i});
+        data{i} = readGmx2Matlab_tu(vFilename{i}, precision);
     endfor
 endif
 
@@ -90,7 +90,7 @@ for dim = [1:3]
 
     if (!exist("data"))
         for i = [1: num_dataFile]
-            data{i} = readGmx2Matlab(vFilename{i});
+            data{i} = readGmx2Matlab_tu(vFilename{i}, precision);
         endfor
     endif
 
@@ -112,21 +112,23 @@ for dim = [1:3]
     [vAutocorr_tmp, vCorr_tmp] =  xcorr_tu([vData{:}], maxLag, "unbiased");
     for i = [1:num_dataFile]
             vAutocorr{i} = vAutocorr{i} + vAutocorr_tmp{i};
-            vCorrTotal = vCorrTotal + vAutocorr_tmp{i};
+#            vCorrTotal = vCorrTotal + vAutocorr{i};
         for j = [1:num_dataFile]
             vCorr{i,j} = vCorr{i,j} + vCorr_tmp{i,j};
-            vCorrTotal = vCorrTotal + vCorr_tmp{i,j};
+#            vCorrTotal = vCorrTotal + vCorr_tmp{i,j};
         endfor
     endfor
 endfor
-                    
+
 #average 3 dimensions
 #vCorrTotal = vCorrTotal(maxLag + 1:end, :) / 3;
-vCorrTotal = vCorrTotal / 3;
+#vCorrTotal = vCorrTotal / 3;
 for i = [1:num_dataFile]
     vAutocorr{i} = vAutocorr{i} / 3;
+    vCorrTotal = vCorrTotal + vAutocorr{i};
     for j = [1:num_dataFile]
         vCorr{i,j} = vCorr{i,j} / 3;
+        vCorrTotal = vCorrTotal + vCorr{i,j};
     endfor
 endfor
 

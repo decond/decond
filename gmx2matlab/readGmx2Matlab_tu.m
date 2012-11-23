@@ -54,7 +54,7 @@
 %     end
 %        - plot out every other frame of trajectory as a 3D figure
 
-function [coodData] = readGmx2Matlab_d(coordFile, start_frame, end_frame)
+function [coodData] = readGmx2Matlab_tu(coordFile, fileType, start_frame, end_frame)
 
 if exist(coordFile, 'file')
     fprintf('\n    Reading %s... \n', coordFile);
@@ -79,7 +79,7 @@ coodData.num_frames = fread(file_ID, 1, 'int32');
 coodData.time_step = fread(file_ID, 1, 'double');
 
 % scrub input options
-if nargin == 3
+if nargin == 4
     if (end_frame > coodData.num_frames)
         end_frame = coodData.num_frames;
     end
@@ -92,7 +92,7 @@ if nargin == 3
     
     fprintf('    beginning from %g frame \n', start_frame);
     fprintf('    processing simulation until frame %g \n', end_frame);
-elseif nargin == 2
+elseif nargin == 3
     end_frame = start_frame;
     start_frame = 1;
     if (end_frame > coodData.num_frames)
@@ -105,10 +105,17 @@ else
     end_frame = coodData.num_frames;
 end
 
-% find first frame to read (3 axes * 8 hex sectors per float)
-fseek(file_ID, (start_frame - 1)*3*8*coodData.num_atoms, 'cof');
+if strcmp(fileType, 'single')
+    recordByte = 4;
+else if strcmp(fileType, 'double')
+    recordByte = 8;
+else
+    error('Must specify "single" or "double" precision in the input argument');
+end
+% find first frame to read (3 axes * 4 hex sectors per float)
+fseek(file_ID, (start_frame - 1)*(recordByte*3)*coodData.num_atoms, 'cof');
 % stream in data
-rawdata = fread(file_ID, [3 coodData.num_atoms*end_frame], 'double');
+rawdata = fread(file_ID, [3 coodData.num_atoms*end_frame], fileType);
 fclose(file_ID);
 
 % structure data as XYZ * atoms * frames 3D matrix
