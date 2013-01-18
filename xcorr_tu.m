@@ -165,6 +165,8 @@ function [autocorr, corr] = xcorr_tu (X, Y, maxlag, scale)
 
   ## assign defaults to missing arguments
   if isvector(X)
+    error(strcat("Vector input is not implemented in this version, yet\n",
+          "Use the original xcorr.m (in calCorr_fast.m) instead"))
     ## if isempty(Y), Y=X; endif  ## this line disables code for autocorr'n
     N = max(length(X),length(Y));
   else
