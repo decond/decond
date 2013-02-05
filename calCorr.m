@@ -105,6 +105,7 @@ for dim = [1:3]
         endif
     endfor
 
+    #clear data for saving memory. comment out this to increase speed
     clear data;
     
     puts("calculating correlation\n");

@@ -4,18 +4,21 @@ clear all
 format long
 pkg load signal;
 
-global totalNumAtoms dataIndex a2g;
+global totalNumAtoms dataIndex a2g rBinWidth boxHalfLength;
 
-num_parArg = 4;
+num_parArg = 5;
 num_argPerData = 3;
 num_dataArg = nargin() - num_parArg;
 if (num_dataArg < num_argPerData || mod(num_dataArg, num_argPerData) != 0)
-    error("Usage: $spatialDecompose.m <outFilename> <maxLag (-1=max)> <rBinWidth(nm)> <precision> <posData1.binary> <velData1.binary> <charge1> [<posData2.binary> <velData2.binary> <charge2>...]")
+    error("Usage: $spatialDecompose.m <outFilename> <maxLag (-1=max)> <rBinWidth(nm)> <boxLength(nm)> <precision> <posData1.binary> <velData1.binary> <charge1> [<posData2.binary> <velData2.binary> <charge2>...]")
 else
     outFilename = argv(){1};
     maxLag = str2num(argv(){2}); # in the unit of frame number
     rBinWidth = str2num(argv(){3}); 
-    precision = argv(){4}; # single or double
+    boxLength = str2num(argv(){4}); 
+    precision = argv(){5}; # single or double
+
+    boxHalfLength = boxLength / 2;
 
     num_dataFile = num_dataArg / num_argPerData
     for i = [1: num_dataFile]
@@ -87,24 +90,33 @@ function groupIndex = atomIndex2GroupIndex(idx)
     error(strcat("Unable to convert atomIndex:", num2str(idx), " to groupIndex"));
 endfunction
 
+function wrappedR = wrap(r)
+    global boxHalfLength;
+    if (r <= boxHalfLength)
+        wrappedR = r;
+    else
+        wrappedR = r - boxHalfLength;
+    endif
+endfunction
+
+function binIndex = getBinIndex(pos1, pos2)
+    global rBinWidth;
+    r = wrap(pos1 - pos2);
+    binIndex = ceil(sqrt(sum(r*r)) / rBinWidth);
+    if (binIndex == 0)
+        binIndex = 1;
+    endif
+endfunction
+
 a2g = @atomIndex2GroupIndex;
 
-vCorrTotal = 0;
-vAutocorr = cell(1,num_dataFile); #creating cell array
-vAutocorr(:) = 0;
-vCorr = cell(num_dataFile, num_dataFile);
-vCorr(:) = 0;
+cAutocorr = cell(1,num_dataFile); #creating cell array
+cAutocorr(:) = 0;
+cCorr = cell(num_dataFile, num_dataFile);
+cCorr(:) = 0;
 
 for dim = [1:3]
     puts(cstrcat("dim = ", num2str(dim), "\n"));
-
-    #Not sure why the check is here, is it necessary?
-    if (!exist("vData"))
-        for i = [1: num_dataFile]
-            vData{i} = readGmx2Matlab_tu(vFilename{i}, precision);
-        endfor
-    endif
-
     for n = [1:num_dataFile]
         ## data.trajectory(atoms, dimension, frames) 
         ## squeeze(vData{1}.trajectory(:,1,:))' = (frames, atoms) in x-dimension
@@ -116,17 +128,29 @@ for dim = [1:3]
         endif
     endfor
 
-    clear data;
-    
-    puts("calculating correlation\n");
-    whos
-    [vAutocorr_tmp, vCorr_tmp] =  xcorr_tu([vDataSqz{:}], maxLag, "unbiased");
+    ## calculate each term separately
     for i = [1:num_dataFile]
-            vAutocorr{i} = vAutocorr{i} + vAutocorr_tmp{i};
-#            vCorrTotal = vCorrTotal + vAutocorr{i};
         for j = [1:num_dataFile]
-            vCorr{i,j} = vCorr{i,j} + vCorr_tmp{i,j};
-#            vCorrTotal = vCorrTotal + vCorr_tmp{i,j};
+            for ii = [1:data{i}.num_atoms]
+                if (i == j)
+                    #self-diffusion (jAutocorrelation) for data{i}
+                    puts(cstrcat("calculating jAutocorr", num2str(i), " of dimension ", num2str(dim), " for atom ", num2str(ii), "\n"));
+                    jAutocorr{i} = jAutocorr{i} + xcorr(jData{i}(:, ii), maxLag, "unbiased");
+                endif
+                for jj = [1:data{j}.num_atoms]
+                    if (i == j)
+                        if (ii != jj)
+                            #mutual-diffusion for data{i}-data{i}
+                            puts(cstrcat("calculating jCorr", num2str(i), num2str(i), " of dimension ", num2str(dim), " for atom-pair(", num2str(ii), ", ", num2str(jj), ")\n"));
+                            jCorr{i,j} = jCorr{i,j} + xcorr(jData{i}(:,ii), jData{j}(:,jj), maxLag, "unbiased");
+                        endif
+                    else
+                            #mutual-diffusion for data{i}-data{j}
+                            puts(cstrcat("calculating jCorr", num2str(i), num2str(i), " of dimension ", num2str(dim), " for atom-pair(", num2str(ii), ", ", num2str(jj), ")\n"));
+                            jCorr{i,j} = jCorr{i,j} + xcorr(jData{i}(:,ii), jData{j}(:,jj), maxLag, "unbiased");
+                    endif
+                endfor
+            endfor
         endfor
     endfor
 endfor
