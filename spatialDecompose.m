@@ -60,6 +60,7 @@ for n = [1:num_dataFile]
     numAtoms(n) = vData{n}.num_atoms;
 endfor
 
+
 #ex. 3 data files, vData{1,2,3}.num_atoms = {2,3,2}
 #dataIndex = {[1,2],[3,4,5],[6,7]}
 #atomIndex = 1,2,3,4,5,6,7
@@ -70,9 +71,18 @@ endfor
 #groupIndex pair: [1][1]=11,12,21,22=(1,2)x(1,2); [1][2]=(1,2)x(3,4,5); ...
 
 dataIndex{1} = [1:numAtoms(1)];
-for i = [2:num_dataFile]
-    dataIndex{i} = [dataIndex{i-1}(end) + 1: dataIndex{i-1}(end) + numAtoms(i)];
+for n = [2:num_dataFile]
+    dataIndex{n} = [dataIndex{n-1}(end) + 1: dataIndex{n-1}(end) + numAtoms(n)];
 endfor
+
+#rData{i} should have only one time frame. combine all ion types to make one array
+rDataAll = [];
+for n = [1:num_dataFile]
+    rDataAll = [rDataAll; rData{n}.trajectory(:,:,1)];
+endfor
+if (size(rDataAll,1) != totalNumAtoms)
+    error("Combining rData to rDataAll failed. The total numbers of atoms are inconsistent");
+endif
 
 function serialIndex = atomPair2SerialIndex(idx1, idx2)
     global totalNumAtoms;
@@ -92,20 +102,19 @@ endfunction
 
 function wrappedR = wrap(r)
     global boxHalfLength;
-    if (r <= boxHalfLength)
-        wrappedR = r;
-    else
-        wrappedR = r - boxHalfLength;
+    wrappedR = r;
+    isOutsideHalfBox = (r > boxHalfLength);
+    wrappedR(isOutsideHalfBox) = abs(r(isOutsideHalfBox) - boxLength);
     endif
 endfunction
 
 function binIndex = getBinIndex(pos1, pos2)
     global rBinWidth;
-    r = wrap(pos1 - pos2);
-    binIndex = ceil(sqrt(sum(r*r)) / rBinWidth);
-    if (binIndex == 0)
-        binIndex = 1;
-    endif
+    r = pos1 - pos2;
+    r = sqrt(sum(r.*r, 2));
+    r = wrap(r);
+    binIndex = ceil(r / rBinWidth);
+    binIndex(binIndex == 0) = 1;
 endfunction
 
 a2g = @atomIndex2GroupIndex;
@@ -114,6 +123,15 @@ cAutocorr = cell(1,num_dataFile); #creating cell array
 cAutocorr(:) = 0;
 cCorr = cell(num_dataFile, num_dataFile);
 cCorr(:) = 0;
+
+binIndex = zeros(totalNumAtoms);
+for k = [0:totalNumAtoms-1]
+    binIndexK = getBinIndex(rDataAll(1+k:end), rDataAll(1:end-k))
+    for i = [1:length(binIndexK)]
+        binIndex(i, i+k) = binIndexK(i);
+    endfor
+endfor
+binIndex = binIndex + triu(binIndex, 1)'; #mirror the upper half to lower half
 
 for dim = [1:3]
     puts(cstrcat("dim = ", num2str(dim), "\n"));
