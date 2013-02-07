@@ -19,6 +19,7 @@ else
     precision = argv(){5}; # single or double
 
     boxHalfLength = boxLength / 2;
+    num_rBin = boxLength / rBinWidth;
 
     num_dataFile = num_dataArg / num_argPerData
     for i = [1: num_dataFile]
@@ -80,6 +81,7 @@ rDataAll = [];
 for n = [1:num_dataFile]
     rDataAll = [rDataAll; rData{n}.trajectory(:,:,1)];
 endfor
+clear rData;
 if (size(rDataAll,1) != totalNumAtoms)
     error("Combining rData to rDataAll failed. The total numbers of atoms are inconsistent");
 endif
@@ -108,80 +110,65 @@ function wrappedR = wrap(r)
     endif
 endfunction
 
-function binIndex = getBinIndex(pos1, pos2)
+function rBinIndex = getBinIndex(pos1, pos2)
     global rBinWidth;
     r = pos1 - pos2;
-    r = sqrt(sum(r.*r, 2));
     r = wrap(r);
-    binIndex = ceil(r / rBinWidth);
-    binIndex(binIndex == 0) = 1;
+    r = sqrt(sum(r.*r, 2));
+    rBinIndex = ceil(r ./ rBinWidth);
+    rBinIndex(rBinIndex == 0) = 1;
 endfunction
 
 a2g = @atomIndex2GroupIndex;
 
 cAutocorr = cell(1,num_dataFile); #creating cell array
-cAutocorr(:) = 0;
+cAutocorr(:) = zeros(maxLag+1, num_rBin);
 cCorr = cell(num_dataFile, num_dataFile);
-cCorr(:) = 0;
+cCorr(:) = zeros(maxLag+1, num_rBin);
+rhoAutocorr = cell(1, num_dataFile); #rho_I(r)
+rhoAutocorr(:) = zeros(num_rBin);
+rhoCorr = cell(num_dataFile, num_dataFile); #rho_IJ(r)
+rhoCorr(:) = zeros(num_rBin);
 
-binIndex = zeros(totalNumAtoms);
+#rBinIndex(i,j) = the binning index of |r_i - r_j|, the distance between particle i and j
+rBinIndex = zeros(totalNumAtoms);
 for k = [0:totalNumAtoms-1]
-    binIndexK = getBinIndex(rDataAll(1+k:end), rDataAll(1:end-k))
-    for i = [1:length(binIndexK)]
-        binIndex(i, i+k) = binIndexK(i);
+    rBinIndexK = getBinIndex(rDataAll(1+k:end), rDataAll(1:end-k));
+    for i = [1:length(rBinIndexK)]
+        rBinIndex(i, i+k) = rBinIndexK(i);
     endfor
 endfor
-binIndex = binIndex + triu(binIndex, 1)'; #mirror the upper half to lower half
+rBinIndex = rBinIndex + triu(rBinIndex, 1)' #mirror the upper half to lower half
+clear rDataAll;
 
-for dim = [1:3]
-    puts(cstrcat("dim = ", num2str(dim), "\n"));
-    for n = [1:num_dataFile]
-        ## data.trajectory(atoms, dimension, frames) 
-        ## squeeze(vData{1}.trajectory(:,1,:))' = (frames, atoms) in x-dimension
-        if (numAtoms(n) == 1)
-            ## don't transpose because after squeeze it becomes (frames, 1) directly
-            vDataSqz{n} = squeeze(vData{n}.trajectory(:,dim,:)); #(nm / ps)
-        else
-            vDataSqz{n} = squeeze(vData{n}.trajectory(:,dim,:))'; #(nm / ps)
-        endif
-    endfor
-
-    ## calculate each term separately
-    for i = [1:num_dataFile]
-        for j = [1:num_dataFile]
-            for ii = [1:data{i}.num_atoms]
-                if (i == j)
-                    #self-diffusion (jAutocorrelation) for data{i}
-                    puts(cstrcat("calculating jAutocorr", num2str(i), " of dimension ", num2str(dim), " for atom ", num2str(ii), "\n"));
-                    jAutocorr{i} = jAutocorr{i} + xcorr(jData{i}(:, ii), maxLag, "unbiased");
+## vData{i}.trajectory(atoms, dimension, frames) 
+for i = [1:num_dataFile]
+    for j = [1:num_dataFile]
+        for ii = [1:vData{i}.num_atoms]
+            if (i == j)
+                idx = rBinIndex(dataIndex{i}(ii), dataIndex{i}(ii));
+                for dim = [1:3]
+                    cAutocorr{i}(:, idx) += xcorr(vData{i}.trajectory(ii, dim, :), maxLag, "unbiased");
+                    rhoAutocorr{i}(idx) += 1;
+                endfor 
+            endif
+            for jj = [1:vData{j}.num_atoms]
+                #omit autocorrelation
+                if ((i != j) || (ii != jj))
+                    for dim = [1:3]
+                        idx = rBinIndex(dataIndex{i}(ii), dataIndex{j}(jj));
+                        cCorr{i,j}(:, idx) += xcorr(vData{i}.trajectory(ii, dim, :), vData{j}.trajectory(jj, dim, :), maxLag, "unbiased");
+                        rhoCorr{i,j}(idx) += 1;
+                    endfor
                 endif
-                for jj = [1:data{j}.num_atoms]
-                    if (i == j)
-                        if (ii != jj)
-                            #mutual-diffusion for data{i}-data{i}
-                            puts(cstrcat("calculating jCorr", num2str(i), num2str(i), " of dimension ", num2str(dim), " for atom-pair(", num2str(ii), ", ", num2str(jj), ")\n"));
-                            jCorr{i,j} = jCorr{i,j} + xcorr(jData{i}(:,ii), jData{j}(:,jj), maxLag, "unbiased");
-                        endif
-                    else
-                            #mutual-diffusion for data{i}-data{j}
-                            puts(cstrcat("calculating jCorr", num2str(i), num2str(i), " of dimension ", num2str(dim), " for atom-pair(", num2str(ii), ", ", num2str(jj), ")\n"));
-                            jCorr{i,j} = jCorr{i,j} + xcorr(jData{i}(:,ii), jData{j}(:,jj), maxLag, "unbiased");
-                    endif
-                endfor
-            endfor
-        endfor
-    endfor
-endfor
+            endfor 
 
 #average 3 dimensions
 #vCorrTotal = vCorrTotal(maxLag + 1:end, :) / 3;
-#vCorrTotal = vCorrTotal / 3;
 for i = [1:num_dataFile]
-    vAutocorr{i} = vAutocorr{i} / 3;
-    vCorrTotal = vCorrTotal + vAutocorr{i};
+    cAutocorr{i} /= (3*rhoAutocorr{i});
     for j = [1:num_dataFile]
-        vCorr{i,j} = vCorr{i,j} / 3;
-        vCorrTotal = vCorrTotal + vCorr{i,j};
+        vCorr{i,j} /= (3*rhoCorr{i,j};
     endfor
 endfor
 
@@ -203,9 +190,7 @@ endfor
 
 # output time vector for convenience of plotting
 timeLags = [0:maxLag]' * timestep;
+rBins = ([1:num_rBin] - 0.5)* rBinWidth;
 
-save(strcat(outFilename, ".vCorr"), "timestep", "charge", "numAtoms", "timeLags", "vAutocorr", "vCorr");
-
-#vCorrTotal = sum(vCorrTotal, 2);
-save(strcat(outFilename, ".vCorrTotal"), "vCorrTotal");
+save(strcat(outFilename, ".cCorr"), "timestep", "charge", "numAtoms", "timeLags", "rBins", "cAutocorr", "rhoAutocorr", "cCorr", "rhoCorr");
 
