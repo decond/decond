@@ -78,6 +78,7 @@
 %% set file inputs and outputs
 
 function trr2matlab_tu( trajFile, varargin )
+#varargin is a cell array with a variable number of elements
 
 tic;
 
@@ -127,7 +128,7 @@ outputX = 'xdata.binary';
 outputV = 'vdata.binary';
 outputF = 'fdata.binary';
 
-noX = varargin(~strcmp(varargin, 'x'));
+noX = varargin(~strcmp(varargin, 'x')); #~ is the same as !
 noV = noX(~strcmp(noX, 'v'));
 noF = noV(~strcmp(noV, 'f'));
 noSingle = noF(~strcmp(noF, 'single'));

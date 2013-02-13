@@ -12,7 +12,9 @@ if [[ ! -d "md$idx" ]]; then
 fi
 
 cd md$idx
+boxLength=$(tail -n 1 frame$idx.gro | awk '{print $1}')
 systemVolume=$(tail -n 1 frame$idx.gro | echo "$(awk '{print $1}')^3" | bc)
+echo "box length = $boxLength"
 echo "system volume = $systemVolume"
 
 GMDIR=/home/kmtu/local/gromacs-4.5.5/bin
@@ -24,22 +26,25 @@ naBase=md-na
 clBase=md-cl
 naData=$naBase.trr
 clData=$clBase.trr
-naBin=${naBase}_d_vdata.binary
-clBin=${clBase}_d_vdata.binary
+naXBin=${naBase}_d_xdata.binary
+clXBin=${clBase}_d_xdata.binary
+naVBin=${naBase}_d_vdata.binary
+clVBin=${clBase}_d_vdata.binary
 dataMaxlag=1000000
 outName=lag$dataMaxlag
 analyzeMaxlag=100000
 
-$GMDIR/trjconv_d -f $mdData -o $naData -n ../na.ndx &&\
-$GMDIR/trjconv_d -f $mdData -o $clData -n ../cl.ndx &&\
-$ECDIR/convertVelData.m $naData md-na double &&\
-$ECDIR/convertVelData.m $clData md-cl double &&\
-$ECDIR/calCorr.m $outName $dataMaxlag double $naBin 1 $clBin -1 &&\
-$ECDIR/calDC.m $outName.vCorr $analyzeMaxlag &&\
-$ECDIR/calEC.m $outName.vCorr $analyzeMaxlag $systemVolume &&\
-mv $outName.dc ${outName}-int_$analyzeMaxlag.dc &&\
-mv $outName.ec ${outName}-int_$analyzeMaxlag.ec 
+#$GMDIR/trjconv_d -f $mdData -o $naData -n ../na.ndx &&\
+#$GMDIR/trjconv_d -f $mdData -o $clData -n ../cl.ndx &&\
+#$ECDIR/convertData.m $naData $naBase double &&\
+#$ECDIR/convertData.m $clData $clBase double &&\
+#$ECDIR/calCorr.m $outName $dataMaxlag double $naVBin 1 $clVBin -1 &&\
+$ECDIR/spatialDecompose.m $outName $dataMaxlag 0.1 $boxLength double $naXBin $naVBin 1 $clXBin $clVBin -1
+#$ECDIR/calDC.m $outName.vCorr $analyzeMaxlag &&\
+#$ECDIR/calEC.m $outName.vCorr $analyzeMaxlag $systemVolume &&\
+#mv $outName.dc ${outName}-int_$analyzeMaxlag.dc &&\
+#mv $outName.ec ${outName}-int_$analyzeMaxlag.ec 
 #g_rdf_d -f $mdData -n ../na-cl.ndx -o rdf-na_cl.xvg
-$ECDIR/calNoAverageCesaroEC.m $outName.vCorr $analyzeMaxlag $systemVolume
+#$ECDIR/calNoAverageCesaroEC.m $outName.vCorr $analyzeMaxlag $systemVolume
 
 cd ..
