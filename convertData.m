@@ -12,6 +12,6 @@ outFileName = argv(){2}
 fileType = argv(){3}
 
 trr2matlab_tu(dataFileName, 'x', outFileName, fileType)
-#trr2matlab_tu(dataFileName, 'v', outFileName, fileType)
+trr2matlab_tu(dataFileName, 'v', outFileName, fileType)
 #trr2matlab(dataFileName, 'v', outFileName)
 

@@ -123,10 +123,6 @@ function rBinIndex = getBinIndex(pos1, pos2)
     rBinIndex(rBinIndex == 0) = 1;
 endfunction
 
-function getCorr(X, Y)
-   
-endfunction
-
 a2g = @atomIndex2GroupIndex;
 
 #cAutocorr = cell(1,num_dataFile); #creating cell array
@@ -220,7 +216,7 @@ whos
 for i = [1:num_dataFile]
 #    cAutocorr{i} ./= (3*rhoAutocorr{i});
     for j = [1:num_dataFile]
-        cCorr{i,j} ./= repmat((3*[num_frames:-1:num_frames-maxLag].*rhoCorr{i,j}'), [maxLag+1, 1]);
+        cCorr{i,j} ./= 3*repmat([num_frames:-1:num_frames-maxLag]', [1, num_rBin]).*repmat(rhoCorr{i,j}', [maxLag+1, 1]);
     endfor
 endfor
 
