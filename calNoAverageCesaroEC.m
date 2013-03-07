@@ -10,15 +10,24 @@ basicCharge = 1.60217646E-19; #(Coulomb)
 ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
 
-if (nargin() < 2)
-    error("Usage: $calCesaroEC.m <filename.vCorr> <maxLag -1=max> <systemVolume(nm^3)>\n\
-where <filename> is used for both input and output: filename.vCorr and filename.xvg");
+if (nargin() < 3)
+    error("Usage: $calCesaroEC.m <filename.vCorr> <maxLag -1=max (step)> <systemVolume(nm^3)> [deltaStep] \n\
+where <filename> is used for both input and output: filename.vCorr and filename.xvg,\n\
+optional deltaStep is for integrating the vCorr every deltaStep, default is 1.");
 else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
     volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);
+    if (nargin() > 3)
+        deltaStep = round(str2num(argv(){4}))
+        if (deltaStep <= 0)
+            deltaStep = 1;
+        endif
+    else
+        deltaStep = 1
+    endif
 endif
 
 #.vCorr file contains timestep, charge(), numAtoms(), timeLags(), vAutocorr{}, and vCorr{}
@@ -30,10 +39,28 @@ if (numIonTypes != length(vCorr))
 vAutocorr: ", num2str(length(vAutocorr)), ", vCorr: ", num2str(length(vCorr))));
 endif
 
+# modifying data according deltaStep if it is greater than 1
+if (deltaStep > 1)
+    timestep *= deltaStep;
+    timeLags = timeLags(1:deltaStep:end);
+    for i = [1:numIonTypes]
+        vAutocorr{i} = vAutocorr{i}(1:deltaStep:end);
+        for j = [1:numIonTypes]
+            vCorr{i, j} = vCorr{i, j}(1:deltaStep:end);
+        endfor
+    endfor
+    if (maxLag > 0)
+        maxLag = floor(maxLag / deltaStep);
+    endif
+endif
+
 if (maxLag < 0)
     maxLag = length(vAutocorr{1}) - 1;
 endif
-maxLag #for showing
+
+#for showing
+timestep
+maxLag 
 
 t = [0:maxLag];
 
@@ -101,4 +128,4 @@ endfor
 ecTotalNoAverageCesaro = cumtrapz(ecTotal) * timestep;
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecNoAverageCesaro-cum"), "timestep", "timeLags", "ecTotalNoAverageCesaro", "ecAutocorrNoAverageCesaro", "ecCorrNoAverageCesaro");
+save(strcat(baseFilename, ".ecNoAverageCesaro-dt-", num2str(deltaStep)), "timestep", "timeLags", "ecTotalNoAverageCesaro", "ecAutocorrNoAverageCesaro", "ecCorrNoAverageCesaro");

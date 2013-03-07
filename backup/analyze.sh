@@ -39,12 +39,16 @@ analyzeMaxlag=100000
 #$ECDIR/convertData.m $naData $naBase double &&\
 #$ECDIR/convertData.m $clData $clBase double &&\
 #$ECDIR/calCorr.m $outName $dataMaxlag double $naVBin 1 $clVBin -1 &&\
-$ECDIR/spatialDecompose.m $outName $dataMaxlag 0.1 $boxLength double $naXBin $naVBin 1 $clXBin $clVBin -1
+#$ECDIR/spatialDecompose.m $outName $dataMaxlag 0.1 $boxLength double $naXBin $naVBin 1 $clXBin $clVBin -1
 #$ECDIR/calDC.m $outName.vCorr $analyzeMaxlag &&\
 #$ECDIR/calEC.m $outName.vCorr $analyzeMaxlag $systemVolume &&\
 #mv $outName.dc ${outName}-int_$analyzeMaxlag.dc &&\
 #mv $outName.ec ${outName}-int_$analyzeMaxlag.ec 
 #g_rdf_d -f $mdData -n ../na-cl.ndx -o rdf-na_cl.xvg
-#$ECDIR/calNoAverageCesaroEC.m $outName.vCorr $analyzeMaxlag $systemVolume
+
+for d in {1..5}
+do
+    $ECDIR/calNoAverageCesaroEC.m $outName.vCorr $analyzeMaxlag $systemVolume $d
+done
 
 cd ..
