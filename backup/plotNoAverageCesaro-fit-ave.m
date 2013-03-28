@@ -3,11 +3,13 @@
 clear all;
 global numIonTypes;
 
-%if (nargin() < 1)
-%    error("Usage: $plotNoAverageCesaro.m <md#>")
-%endif
+if (nargin() < 3)
+    error("Usage: $plotNoAverageCesaro.m <dataBaseName> <skip> <dt>")
+endif
 
-%md_str = argv(){1}
+dataBaseName = argv(){1}
+skip = str2num(argv(){2}) #skipped interval in vCorr data
+deltaStep = str2num(argv(){3})
 
 set(0, "defaultlinelinewidth", 4);
 
@@ -16,7 +18,7 @@ set(0, "defaultlinelinewidth", 4);
 
 numMD = 10;
 
-initialize = load(strcat("./md0/lag1000000.ecNoAverageCesaro"));
+initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
 numIonTypes = size(initialize.ecAutocorrNoAverageCesaro, 2);
 timeLags = initialize.timeLags;
 clear initialize;
@@ -29,7 +31,7 @@ endfunction
 # packing and distributing data to a single md array
 # md(fileIndex, corrIndex, corrData)
 for n = [1:numMD]
-    data = load(strcat("./md", num2str(n-1), "/lag1000000.ecNoAverageCesaro"));
+    data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
     md(n, 1, :) = data.ecTotalNoAverageCesaro;
     for i = [1:numIonTypes]
         for j = [1:numIonTypes]
@@ -73,7 +75,7 @@ md_std = squeeze(std(md, 0, 1))';
 md_err = squeeze(std(md, 0, 1) ./ sqrt(numMD))';  # standard error 
 
 fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
-fitRange .*= 1000; #fs (frame)
+fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
 
 # calculate slope for each segment of md_ave
 for i = [1:size(md_ave, 2)]
@@ -123,16 +125,17 @@ slopeSD = sqrt(S ./ Delta);
 #numPlots = 1 + numIonTypes + numIonTypes*numIonTypes;
 
 # standard error for selected values
-errFrameInterval = 5000;
+errFrameInterval = floor(5000 / skip / deltaStep);
 errFrames = [1:errFrameInterval:length(timeLags)]';
 
 
 f1 = figure(1);
 clf;
 hold on;
+errOffset = floor(200 / skip / deltaStep);
 
 for i = [1:size(md_ave, 2)]
-    drawFrames = errFrames .+ (i-1)*200;
+    drawFrames = errFrames .+ (i-1)*errOffset;
     drawFrames = drawFrames(drawFrames <= length(timeLags));
     if (i == 6)
 #        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0.6, 0]);
@@ -167,13 +170,15 @@ endfor
 %set(p3, "linewidth", 3);
 %set(p4, "linewidth", 3);
 
-title(strcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution - md", "-ave"));
+%title(strcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution - md", "-ave"));
+title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",\
+             "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Non-averaged partial sum (ps*S/m)");
 axis([0,100,-600, 1000]);
 
-print(strcat('ecNoAverageCesaro-', 'ave' , '.eps'), '-deps', '-color');
+print(strcat('ecNoAverageCesaro-', 'ave-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');
 hold off
 %axis([0,0.1,0,1.5]);
 %print('ecNoAverageCesaro-zoom.eps', '-deps', '-color');
@@ -188,9 +193,10 @@ endfor
 f2 = figure(2);
 %clf;
 hold on;
+stdOffset = floor(100 / skip / deltaStep);
 
 for i = [1:size(md_ave, 2)]
-    drawFrames = stdFrames .+ (i-1)*100;
+    drawFrames = stdFrames .+ (i-1)*stdOffset;
     if (i == 6)
         p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
         set(p(i).errorbar(1), "color", [0, 0.6, 0]);
@@ -221,10 +227,12 @@ legend("Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-
 %set(p3, "linewidth", 3);
 %set(p4, "linewidth", 3);
 
-title(strcat("Electrical conductivity of 1m NaCl solution - md", "-ave"));
+%title(strcat("Electrical conductivity of 1m NaCl solution - md", "-ave"));
+title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",\
+             "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Electrical conductivity (S/m)");
 axis([0,100,-5, 10]);
 
-print(strcat('ecNoAverageCesaro-', 'ave-slope' , '.eps'), '-deps', '-color');
+print(strcat('ecNoAverageCesaro-', 'ave-slope-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');

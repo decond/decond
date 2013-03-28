@@ -78,15 +78,15 @@ for n = [2:num_dataFile]
     dataIndex{n} = [dataIndex{n-1}(end) + 1: dataIndex{n-1}(end) + numAtoms(n)];
 endfor
 
-#rData{i} should have only one time frame. combine all ion types to make one array
-#rDataAll = [];
-#for n = [1:num_dataFile]
-#    rDataAll = [rDataAll; rData{n}.trajectory(:,:,1)];
-#endfor
-#clear rData;
-#if (size(rDataAll,1) != totalNumAtoms)
-#    error("Combining rData to rDataAll failed. The total numbers of atoms are inconsistent");
-#endif
+%rData{i} should have only one time frame. combine all ion types to make one array
+%rDataAll = [];
+%for n = [1:num_dataFile]
+%    rDataAll = [rDataAll; rData{n}.trajectory(:,:,1)];
+%endfor
+%clear rData;
+%if (size(rDataAll,1) != totalNumAtoms)
+%    error("Combining rData to rDataAll failed. The total numbers of atoms are inconsistent");
+%endif
 
 puts("Tag2\n");
 whos
@@ -125,51 +125,51 @@ endfunction
 
 a2g = @atomIndex2GroupIndex;
 
-#cAutocorr = cell(1,num_dataFile); #creating cell array
-#cAutocorr(:) = zeros(maxLag+1, num_rBin);
-#rhoAutocorr = cell(1, num_dataFile); #rho_I(r)
-#rhoAutocorr(:) = zeros(num_rBin);
+%cAutocorr = cell(1,num_dataFile); %creating cell array
+%cAutocorr(:) = zeros(maxLag+1, num_rBin);
+%rhoAutocorr = cell(1, num_dataFile); %rho_I(r)
+%rhoAutocorr(:) = zeros(num_rBin);
 
-#rBinIndex(t,i,j) = the binning index of |r_i - r_j| at time frame t
-#rBinIndex = cell(totalNumAtoms, totalNumAtoms);
-#rBinIndex(:) = zeros(num_frames, 1);
+%rBinIndex(t,i,j) = the binning index of |r_i - r_j| at time frame t
+%rBinIndex = cell(totalNumAtoms, totalNumAtoms);
+%rBinIndex(:) = zeros(num_frames, 1);
 
-#rBinIndex = zeros(num_frames, totalNumAtoms, totalNumAtoms);
-#for i = [1:num_dataFile]
-#    for j = [i:num_dataFile]
-#        for ii = [1:rData{i}.num_atoms]
-#            for jj = [1:rData{j}.num_atoms]
-#                # omit autocorrelation
-#                if ((i != j) || (ii != jj))
-#                    rBinIndex(:, dataIndex{i}(ii),dataIndex{j}(jj)) = getBinIndex(squeeze(rData{i}.trajectory(ii,:,:))', squeeze(rData{j}.trajectory(jj,:,:))');
-#                endif
-#                # apply symmetry
-#                if (ii != jj)
-#                    rBinIndex(:, dataIndex{j}(jj),dataIndex{i}(ii)) = rBinIndex(:, dataIndex{i}(ii),dataIndex{j}(jj));
-#                endif
-#            endfor
-#        endfor
-#    endfor
-#endfor
-#clear rData;
+%rBinIndex = zeros(num_frames, totalNumAtoms, totalNumAtoms);
+%for i = [1:num_dataFile]
+%    for j = [i:num_dataFile]
+%        for ii = [1:rData{i}.num_atoms]
+%            for jj = [1:rData{j}.num_atoms]
+%                % omit autocorrelation
+%                if ((i != j) || (ii != jj))
+%                    rBinIndex(:, dataIndex{i}(ii),dataIndex{j}(jj)) = getBinIndex(squeeze(rData{i}.trajectory(ii,:,:))', squeeze(rData{j}.trajectory(jj,:,:))');
+%                endif
+%                % apply symmetry
+%                if (ii != jj)
+%                    rBinIndex(:, dataIndex{j}(jj),dataIndex{i}(ii)) = rBinIndex(:, dataIndex{i}(ii),dataIndex{j}(jj));
+%                endif
+%            endfor
+%        endfor
+%    endfor
+%endfor
+%clear rData;
 
-#for i = [1:num_dataFile]
-#    for j = [1:num_dataFile]
-#        for r = [1:num_rBin]
-#            rhoCorr{i,j}(r) = sum(rBinIndex(:,dataIndex{i},dataIndex{j}) == r);
-#        endfor
-#        rhoCorr{i,j} ./= num_frames;
-#    endfor
-#endfor
+%for i = [1:num_dataFile]
+%    for j = [1:num_dataFile]
+%        for r = [1:num_rBin]
+%            rhoCorr{i,j}(r) = sum(rBinIndex(:,dataIndex{i},dataIndex{j}) == r);
+%        endfor
+%        rhoCorr{i,j} ./= num_frames;
+%    endfor
+%endfor
 
-#for k = [0:totalNumAtoms-1]
-#    rBinIndexK = getBinIndex(rDataAll(1+k:end,:), rDataAll(1:end-k,:));
-#    for i = [1:length(rBinIndexK)]
-#        rBinIndex(i, i+k) = rBinIndexK(i);
-#    endfor
-#endfor
-#rBinIndex = rBinIndex + triu(rBinIndex, 1)' #mirror the upper half to lower half
-#clear rDataAll;
+%for k = [0:totalNumAtoms-1]
+%    rBinIndexK = getBinIndex(rDataAll(1+k:end,:), rDataAll(1:end-k,:));
+%    for i = [1:length(rBinIndexK)]
+%        rBinIndex(i, i+k) = rBinIndexK(i);
+%    endfor
+%endfor
+%rBinIndex = rBinIndex + triu(rBinIndex, 1)' #mirror the upper half to lower half
+%clear rDataAll;
 
 puts("Tag3\n");
 whos
@@ -178,17 +178,24 @@ cCorr = cell(num_dataFile, num_dataFile);
 cCorr(:) = zeros(maxLag+1, num_rBin);
 rhoCorr = cell(num_dataFile, num_dataFile); #rho_IJ(r)
 rhoCorr(:) = zeros(num_rBin, 1);
+
 ## vData{i}.trajectory(atoms, dimension, frames) 
 for i = [1:num_dataFile]
+puts(cstrcat("File loop i = ", num2str(i), "\n"));
+whos
     for j = [1:num_dataFile]
+puts(cstrcat("File loop j = ", num2str(j), "\n"));
+whos
         for ii = [1:vData{i}.num_atoms]
-#            if (i == j)
-#                idx = rBinIndex(dataIndex{i}(ii), dataIndex{i}(ii));
-#                for dim = [1:3]
-#                    cAutocorr{i}(:, idx) += xcorr(squeeze(vData{i}.trajectory(ii, dim, :)), maxLag, "unbiased")(maxLag+1:end);
-#                    rhoAutocorr{i}(idx) += 1;
-#                endfor 
-#            endif
+puts(cstrcat("File loop ii = ", num2str(ii), "\n"));
+whos
+%            if (i == j)
+%                idx = rBinIndex(dataIndex{i}(ii), dataIndex{i}(ii));
+%                for dim = [1:3]
+%                    cAutocorr{i}(:, idx) += xcorr(squeeze(vData{i}.trajectory(ii, dim, :)), maxLag, "unbiased")(maxLag+1:end);
+%                    rhoAutocorr{i}(idx) += 1;
+%                endfor 
+%            endif
             for jj = [1:vData{j}.num_atoms]
                 # omit autocorrelation
                 if ((i != j) || (ii != jj))
@@ -197,11 +204,11 @@ for i = [1:num_dataFile]
                         cCorr{i,j}(k, rBinIndex([1:num_frames-k+1])) .+= reshape(sum(vData{i}.trajectory(ii, :, [k:num_frames]) .* vData{j}.trajectory(jj, :, [1:num_frames-k+1]), 2), [1, num_frames-k+1]);
                         rhoCorr{i,j}(rBinIndex([1:num_frames-k+1])) += 1;
                     endfor
-#                    for dim = [1:3]
-#                        idx = rBinIndex(dataIndex{i}(ii), dataIndex{j}(jj));
-#                        cCorr{i,j}(:, idx) += xcorr(squeeze(vData{i}.trajectory(ii, dim, :)), squeeze(vData{j}.trajectory(jj, dim, :)), maxLag, "unbiased")(maxLag+1:end);
-#                        rhoCorr{i,j}(idx) += 1;
-#                    endfor
+%                    for dim = [1:3]
+%                        idx = rBinIndex(dataIndex{i}(ii), dataIndex{j}(jj));
+%                        cCorr{i,j}(:, idx) += xcorr(squeeze(vData{i}.trajectory(ii, dim, :)), squeeze(vData{j}.trajectory(jj, dim, :)), maxLag, "unbiased")(maxLag+1:end);
+%                        rhoCorr{i,j}(idx) += 1;
+%                    endfor
                 endif
             endfor 
         endfor
@@ -214,7 +221,7 @@ whos
 
 #average 3 dimensions
 for i = [1:num_dataFile]
-#    cAutocorr{i} ./= (3*rhoAutocorr{i});
+%    cAutocorr{i} ./= (3*rhoAutocorr{i});
     for j = [1:num_dataFile]
         cCorr{i,j} ./= 3*repmat([num_frames:-1:num_frames-maxLag]', [1, num_rBin]).*repmat(rhoCorr{i,j}', [maxLag+1, 1]);
     endfor
@@ -222,21 +229,6 @@ endfor
 
 puts("Tag5\n");
 whos
-
-### loop over all possible dataIndex pairs to extract autocorr and corr
-#for i = [1:num_dataFile]
-#    for j = [1:num_dataFile]
-#        for ii = [1:numAtoms(i)]
-#            for jj = [1:numAtoms(j)]
-#                if (i == j && ii == jj)
-#                    vAutocorr{i} = vAutocorr{i} + vCorrTotal(:,atomPair2SerialIndex(dataIndex{i}(ii), dataIndex{i}(ii)));
-#                else
-#                    vCorr{i,j} = vCorr{i,j} + vCorrTotal(:,atomPair2SerialIndex(dataIndex{i}(ii), dataIndex{j}(jj)));
-#                endif
-#            endfor
-#        endfor
-#    endfor
-#endfor
 
 
 # output time vector for convenience of plotting
