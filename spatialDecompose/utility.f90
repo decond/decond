@@ -79,8 +79,8 @@ contains
 
   ! convert cell-length & (alpha, beta, gamma) to cell vectors
   subroutine angles_to_cell_vector(cell_len, angles, out_cell_vectors)
-    use engmain, only: pi
     implicit none
+    real, parameter :: pi = 3.1415926535897932
     real, intent(in) :: cell_len(3)
     real, intent(in) :: angles(3)
     real, intent(out) :: out_cell_vectors(3, 3)
