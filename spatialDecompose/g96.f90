@@ -3,7 +3,7 @@
 ! Trajectory module template file
 ! If you would like to make custom trajectory I/O module, use this file
 ! as a template.
-module trajectory
+module g96
   character(len=*), parameter :: key_title = "TITLE"
   character(len=*), parameter :: key_timestep = "TIMESTEP"
   character(len=*), parameter :: key_positionred = "POSITIONRED"
@@ -19,37 +19,10 @@ module trajectory
   end type handle
   
 contains
-  ! The following function is a snippet from Fortran wiki and in public
-  ! domain.
-  ! 
-  ! This is a simple function to search for an available unit.
-  ! LUN_MIN and LUN_MAX define the range of possible LUNs to check.
-  ! The UNIT value is returned by the function, and also by the optional
-  ! argument. This allows the function to be used directly in an OPEN
-  ! statement, and optionally save the result in a local variable.
-  ! If no units are available, -1 is returned.
-  integer function newunit(unit)
-    implicit none
-    integer, intent(out), optional :: unit
-    ! local
-    integer, parameter :: LUN_MIN=100, LUN_MAX=110
-    logical :: opened
-    integer :: lun
-    ! begin
-    newunit=-1
-    do lun=LUN_MIN,LUN_MAX
-       inquire(unit=lun,opened=opened)
-       if (.not. opened) then
-          newunit=lun
-          exit
-       end if
-    end do
-    if (present(unit)) unit=newunit
-  end function newunit
-
   ! Open trajectory and returns handle as htraj. 
   ! Should open fails, the program abends.
   subroutine open_trajectory(htraj, fname)
+    use utility
     implicit none
     type(handle), intent(inout) :: htraj
     character(len=*), intent(in) :: fname
@@ -196,5 +169,5 @@ contains
     call close_trajectory(htraj)
     return
   end subroutine read_cell
-end module trajectory
+end module g96
 
