@@ -146,23 +146,13 @@ program spatialDecompose
       if (i /= j) then
 write(*,*) "i=",i,", j=",j
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
-!write(*,*) "rBinIndex=", rBinIndex
-!read(*,*)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
-!write(*,*) "atomTypePairIndex=", atomTypePairIndex
-!read(*,*)
         do k = 1, maxLag+1      
-!if (mod(k,maxLag/100) == 0) then
-!write(*,*) "i=",i,", j=",j,", lag_k=",k
-!end if
           sdCorr(k, rBinIndex, atomTypePairIndex) = sdCorr(k, rBinIndex, atomTypePairIndex) + &
           & sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
         end do
 
         do k = 1, numFrame
-!if (mod(k,numFrame/100) == 0) then
-!write(*,*) "i=",i,", j=",j,", frame_k=",k
-!end if
           tmp_i = rBinIndex(k)
           rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1
         end do
@@ -175,9 +165,6 @@ write(*,*) "i=",i,", j=",j
   sdCorr = sdCorr / 3d0
 
   norm = [ (numFrame - (i-1), i = 1, maxLag+1) ]
-!  forall(i = 1:maxLag+1)
-!    norm(i) = numFrame - (i-1)
-!  end forall
   forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
     sdCorr(:,i,n) = sdCorr(:,i,n) / norm
   end forall
