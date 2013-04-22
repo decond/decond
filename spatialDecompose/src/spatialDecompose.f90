@@ -9,7 +9,7 @@ program spatialDecompose
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType
   integer :: atomTypePairIndex, tmp_i
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
   character(len=10) :: numFrame_str, maxLag_str, rBinWidth_str, charge_str, numAtom_str
   real(8) :: cell(3), timestep, rBinWidth
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
@@ -20,18 +20,21 @@ program spatialDecompose
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
+  real(8) :: rZero
+
+  rZero = epsilon(0d0)
 
   is_periodic = .true.
 
-  num_dataArg = command_argument_count() - num_parArg
-  if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-    write(*,*) "Usage: $spatialDecompose <outFile> <inFile.g96> <numFrame> <maxLag> <rBinWidth(nm)> &
-                &<numAtom1> <charge1> [<numAtom2> <charge2>...]"
+  num_dataarg = command_argument_count() - num_pararg
+  if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
+    write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numframe> <maxlag> <rbinwidth(nm)> &
+                &<numatom1> <charge1> [<numatom2> <charge2>...]"
     call exit(1)
   end if
 
-  call get_command_argument(1, outFilename)
-  write(*,*) "outFile = ", outFilename
+  call get_command_argument(1, outfilename)
+  write(*,*) "outfile = ", outfilename
 
   call get_command_argument(2, dataFilename)
   write(*,*) "inFile.g96 = ", dataFilename
@@ -60,12 +63,6 @@ program spatialDecompose
   allocate(charge(numAtomType))
   if (stat /=0) then
     write(*,*) "Allocation failed: charge"
-    call exit(1)
-  end if 
-
-  allocate(norm(maxLag+1))
-  if (stat /=0) then
-    write(*,*) "Allocation failed: norm"
     call exit(1)
   end if 
 
@@ -148,8 +145,10 @@ write(*,*) "i=",i,", j=",j
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
-          sdCorr(k, rBinIndex, atomTypePairIndex) = sdCorr(k, rBinIndex, atomTypePairIndex) + &
-          & sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
+          vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
+          do n = 1, numFrame-k+1
+            sdCorr(k, rBinIndex(n), atomTypePairIndex) = sdCorr(k, rBinIndex(n), atomTypePairIndex) + vv(n)
+          end do
         end do
 
         do k = 1, numFrame
@@ -161,6 +160,12 @@ write(*,*) "i=",i,", j=",j
   end do
 
   !normalization
+  allocate(norm(maxLag+1))
+  if (stat /=0) then
+    write(*,*) "Allocation failed: norm"
+    call exit(1)
+  end if 
+
   rho = rho / numFrame
   sdCorr = sdCorr / 3d0
 
@@ -168,12 +173,28 @@ write(*,*) "i=",i,", j=",j
   forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
     sdCorr(:,i,n) = sdCorr(:,i,n) / norm
   end forall
-  forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
-    sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
-  end forall
-  where (isnan(sdCorr))
-    sdCorr = 0
-  end where
+!  forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
+!    where (rho > 0d0)
+!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
+!    end where
+!  end forall
+
+  do n = 1, numAtomType*numAtomType
+    do j = 1, num_rBin
+      if (rho(j, n) > 0d0) then
+          sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
+      else if (any(abs(sdCorr(:,j,n)) > 0d0)) then
+        !rho is zero, sdCorr should also be zero
+        write(*,*) "error: rho(",j,",",n,") = ", rho(j,n)
+        write(*,*) "but sdCorr(:,", j, ",", n, ") are not all zero"
+        call exit(1)
+      end if
+    end do
+  end do
+
+!  where (isnan(sdCorr))
+!    sdCorr = 0
+!  end where
 
   allocate(timeLags(maxLag+1))
   if (stat /=0) then

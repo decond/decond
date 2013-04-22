@@ -2,7 +2,7 @@
 
 ! Writing octave compatible save format 
 module octave_save
-  character(len=*), parameter :: f_fmt = "EN30.16"
+  character(len=*), parameter :: f_fmt = "ES30.16E3"
 
   type handle
      integer :: iohandle
