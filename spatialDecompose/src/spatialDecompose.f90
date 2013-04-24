@@ -16,13 +16,10 @@ program spatialDecompose
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), timeLags(:), rBins(:)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
-  real(8) :: rZero
-
-  rZero = epsilon(0d0)
 
   is_periodic = .true.
 
@@ -54,13 +51,13 @@ program spatialDecompose
   numAtomType = num_dataArg / num_argPerData
   write(*,*) "numAtomType = ", numAtomType
 
-  allocate(numAtom(numAtomType))
+  allocate(numAtom(numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: numAtom"
     call exit(1)
   end if 
 
-  allocate(charge(numAtomType))
+  allocate(charge(numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: charge"
     call exit(1)
@@ -74,34 +71,34 @@ program spatialDecompose
   end do
   totNumAtom = sum(numAtom)
 
-  allocate(pos_tmp(3, totNumAtom))
+  allocate(pos_tmp(3, totNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos_tmp"
     call exit(1)
   end if 
-  allocate(vel_tmp(3, totNumAtom))
+  allocate(vel_tmp(3, totNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel_tmp"
     call exit(1)
   end if 
-  allocate(time(numFrame))
+  allocate(time(numFrame), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: time"
     call exit(1)
   end if 
 
-  allocate(rBinIndex(numFrame))
+  allocate(rBinIndex(numFrame), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: rBinIndex"
     call exit(1)
   end if 
 
-  allocate(pos(3, numFrame, totNumAtom))
+  allocate(pos(3, numFrame, totNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos"
     call exit(1)
   end if 
-  allocate(vel(3, numFrame, totNumAtom))
+  allocate(vel(3, numFrame, totNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel"
     call exit(1)
@@ -123,31 +120,31 @@ program spatialDecompose
   num_rBin = ceiling(cell(1) / rBinWidth)
   write(*,*) "num_rBin = ", num_rBin
 
-  allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType))
+  allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: sdCorr"
     call exit(1)
   end if 
-  sdCorr = 0
+  sdCorr = 0d0
 
-  allocate(rho(num_rBin, numAtomType*numAtomType))
+  allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: rho"
     call exit(1)
   end if 
-  rho = 0
+  rho = 0d0
 
   !spatial decomposition correlation
   do i = 1, totNumAtom
     do j = 1, totNumAtom
       if (i /= j) then
-write(*,*) "i=",i,", j=",j
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
           do n = 1, numFrame-k+1
-            sdCorr(k, rBinIndex(n), atomTypePairIndex) = sdCorr(k, rBinIndex(n), atomTypePairIndex) + vv(n)
+            tmp_i = rBinIndex(n)
+            sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
           end do
         end do
 
@@ -158,9 +155,12 @@ write(*,*) "i=",i,", j=",j
       end if
     end do
   end do
+  deallocate(rBinIndex)
+  deallocate(pos)
+  deallocate(vel)
 
   !normalization
-  allocate(norm(maxLag+1))
+  allocate(norm(maxLag+1), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: norm"
     call exit(1)
@@ -196,20 +196,6 @@ write(*,*) "i=",i,", j=",j
 !    sdCorr = 0
 !  end where
 
-  allocate(timeLags(maxLag+1))
-  if (stat /=0) then
-    write(*,*) "Allocation failed: timeLags"
-    call exit(1)
-  end if 
-  timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
-  
-  allocate(rBins(num_rBin))
-  if (stat /=0) then
-    write(*,*) "Allocation failed: rBins"
-    call exit(1)
-  end if 
-  rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
-
   !output results
   call output()
   stop
@@ -231,7 +217,7 @@ contains
     real(8), intent(in) :: p1(:,:), p2(:,:), cellLength, rBinWidth
     !p1(dim,timeFrame)
     integer, intent(out) :: rBinIndex(:)
-    real(8) :: pp(size(p1,1), size(p1,2)), tmp_r
+    real(8) :: pp(size(p1,1), size(p1,2))
     
     pp = abs(p1 - p2)
     pp = wrap(pp, cellLength)
@@ -272,6 +258,21 @@ contains
     use octave_save
     implicit none
     type(handle) :: htraj
+    real(8), allocatable :: timeLags(:), rBins(:)
+
+    allocate(timeLags(maxLag+1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: timeLags"
+      call exit(1)
+    end if 
+    timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
+    
+    allocate(rBins(num_rBin), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rBins"
+      call exit(1)
+    end if 
+    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
 
     call create_octave(htraj, outFilename)
     call write_octave_scalar(htraj, "timestep", timestep)

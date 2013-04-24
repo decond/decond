@@ -121,7 +121,6 @@ contains
     character(len=*), intent(in):: fname
     type(handle) :: htraj
     character(len=line_len) :: line
-    integer :: dummy_i
 
     get_natom = 0
     call open_trajectory(htraj, fname)

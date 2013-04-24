@@ -2,7 +2,7 @@
 FC = gfortran
 FCMPI = mpif90
 MODFLAG = -J
-FCFLAGS = $(MODFLAG)$(MODDIR)
+FCFLAGS = -Wall $(MODFLAG)$(MODDIR)
 
 SRCDIR = ./src/
 #OBJDIR = ./obj/

@@ -18,14 +18,13 @@ program spatialDecompose_mpi
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
 !  real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :), vel_r(:, :, :), vel_c(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), timeLags(:), rBins(:), rho_tmp(:, :), sdCorr_tmp(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
 
   !MPI variables
   integer :: ierr, nprocs, myrank
-  character(len=10) :: numDomain_r_str, numDomain_c_str
   integer:: numDomain_r, numDomain_c, numAtomPerDomain_r, numAtomPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
@@ -204,7 +203,7 @@ program spatialDecompose_mpi
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
-  sdCorr = 0
+  sdCorr = 0d0
 
   allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
@@ -212,10 +211,10 @@ program spatialDecompose_mpi
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
-  rho = 0
+  rho = 0d0
 
   allocate(rBinIndex(numFrame), stat=stat)
-  if (stat /=0) then
+  if (stat /= 0) then
     write(*,*) "Allocation failed: rBinIndex"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
@@ -235,7 +234,8 @@ program spatialDecompose_mpi
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
           do n = 1, numFrame-k+1
-            sdCorr(k, rBinIndex(n), atomTypePairIndex) = sdCorr(k, rBinIndex(n), atomTypePairIndex) + vv(n)
+            tmp_i = rBinIndex(n)
+            sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
           end do
         end do
         do k = 1, numFrame
@@ -342,7 +342,7 @@ contains
     real(8), intent(in) :: p1(:,:), p2(:,:), cellLength, rBinWidth
     !p1(dim,timeFrame)
     integer, intent(out) :: rBinIndex(:)
-    real(8) :: pp(size(p1,1), size(p1,2)), tmp_r
+    real(8) :: pp(size(p1,1), size(p1,2))
     
     pp = abs(p1 - p2)
     pp = wrap(pp, cellLength)
