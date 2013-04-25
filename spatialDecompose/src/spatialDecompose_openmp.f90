@@ -87,12 +87,6 @@ program spatialDecompose
     call exit(1)
   end if 
 
-  allocate(rBinIndex(numFrame), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: rBinIndex"
-    call exit(1)
-  end if 
-
   allocate(pos(3, numFrame, totNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos"
@@ -134,13 +128,20 @@ program spatialDecompose
   end if 
   rho = 0d0
 
+  !spatial decomposition correlation
+!$OMP parallel private(rBinIndex, vv)
+  allocate(rBinIndex(numFrame), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rBinIndex"
+    call exit(1)
+  end if 
   allocate(vv(numFrame))
   if (stat /=0) then
     write(*,*) "Allocation failed: vv"
     call exit(1)
   end if 
 
-  !spatial decomposition correlation
+  !$OMP do reduction(+:sdCorr, rho) private(k, n, tmp_i, atomTypePairIndex)
   do i = 1, totNumAtom
     do j = 1, totNumAtom
       if (i /= j) then
@@ -161,6 +162,8 @@ program spatialDecompose
       end if
     end do
   end do
+  !$OMP end do
+!$OMP end parallel
   deallocate(rBinIndex)
   deallocate(pos)
   deallocate(vel)
@@ -184,6 +187,8 @@ program spatialDecompose
 !      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
 !    end where
 !  end forall
+
+  deallocate(norm)
 
   do n = 1, numAtomType*numAtomType
     do j = 1, num_rBin
@@ -288,6 +293,9 @@ contains
     call write_octave_mat3(htraj, "sdCorr", sdCorr)
     call write_octave_mat2(htraj, "rho", rho)
     call close_octave(htraj)
+
+    deallocate(timeLags)
+    deallocate(rBins)
   end subroutine output
 
 end program spatialDecompose

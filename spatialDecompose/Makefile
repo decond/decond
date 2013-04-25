@@ -3,6 +3,7 @@ FC = gfortran
 FCMPI = mpif90
 MODFLAG = -J
 FCFLAGS = -Wall $(MODFLAG)$(MODDIR)
+OMPFLAGS = -fopenmp
 
 SRCDIR = ./src/
 #OBJDIR = ./obj/
@@ -10,7 +11,7 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-PROGRAM = spatialDecompose spatialDecompose_mpi
+PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -20,6 +21,12 @@ vpath %.f90 $(SRCDIR)
 .PHONY : all 
 all : $(PROGRAM)
 # ---------------------------
+spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
+	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+spatialDecompose_openmp.o : spatialDecompose_openmp.f90 utility.o g96.o octave_save.o
+	$(FCMPI) $(OMPFLAGS) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
 spatialDecompose_mpi : spatialDecompose_mpi.o utility.o g96.o octave_save.o
 	$(FCMPI) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
