@@ -184,6 +184,8 @@ program spatialDecompose
 !      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
 !    end where
 !  end forall
+  
+  deallocate(norm)
 
   do n = 1, numAtomType*numAtomType
     do j = 1, num_rBin

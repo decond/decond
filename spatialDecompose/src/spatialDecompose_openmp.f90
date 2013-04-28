@@ -1,4 +1,5 @@
 program spatialDecompose
+  use omp_lib
   use g96
   implicit none
   integer, parameter :: num_parArg = 5
@@ -8,7 +9,7 @@ program spatialDecompose
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType
-  integer :: atomTypePairIndex, tmp_i
+  integer :: atomTypePairIndex, tmp_i, atomPairIndex, typei, typej, atomi, atomj
   integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
   character(len=10) :: numFrame_str, maxLag_str, rBinWidth_str, charge_str, numAtom_str
   real(8) :: cell(3), timestep, rBinWidth
@@ -16,16 +17,21 @@ program spatialDecompose
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), rho_tmp(:, :), sdCorr(:, :, :), sdCorr_tmp(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
+
+  !openmp
+  integer :: myID, numThreads 
+  real(8), allocatable :: allocationTime(:)
+  real(8) :: runtime, starttime, allocationStartTime
 
   is_periodic = .true.
 
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numframe> <maxlag> <rbinwidth(nm)> &
+    write(*,*) "usage: $spatialDecompose <outfile> <infile.g96> <numframe> <maxlag> <rbinwidth(nm)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
     call exit(1)
   end if
@@ -129,42 +135,78 @@ program spatialDecompose
   rho = 0d0
 
   !spatial decomposition correlation
-!$OMP parallel private(rBinIndex, vv)
-  allocate(rBinIndex(numFrame), stat=stat)
+  numThreads = omp_get_max_threads()
+  allocate(sdCorr_tmp(maxLag+1, num_rBin, numThreads), stat=stat)
   if (stat /=0) then
-    write(*,*) "Allocation failed: rBinIndex"
-    call exit(1)
-  end if 
-  allocate(vv(numFrame))
-  if (stat /=0) then
-    write(*,*) "Allocation failed: vv"
+    write(*,*) "Allocation failed: sdCorr_tmp"
     call exit(1)
   end if 
 
-  !$OMP do reduction(+:sdCorr, rho) private(k, n, tmp_i, atomTypePairIndex)
-  do i = 1, totNumAtom
-    do j = 1, totNumAtom
-      if (i /= j) then
-        call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
-        atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
+  allocate(rho_tmp(num_rBin, numThreads), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rho_tmp"
+    call exit(1)
+  end if 
+
+  allocate(allocationTime(numThreads), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: allocationTime"
+    call exit(1)
+  end if 
+  allocationTime = 0d0
+  starttime = omp_get_wtime()
+  do atomTypePairIndex = 1, numAtomType*numAtomType
+    sdCorr_tmp = 0d0
+    rho_tmp = 0d0
+    typei = (atomTypePairIndex - 1) / numAtomType + 1
+    typej = mod(atomTypePairIndex - 1, numAtomType) + 1
+    allocationStartTime = omp_get_wtime()
+!$OMP parallel private(rBinIndex, vv, myID)
+    myID = omp_get_thread_num() + 1
+    allocate(rBinIndex(numFrame), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rBinIndex"
+      call exit(1)
+    end if 
+    allocate(vv(numFrame), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: vv"
+      call exit(1)
+    end if 
+    allocationTime(myID) = allocationTime(myID) + omp_get_wtime() - allocationStartTime
+!$OMP do private(k, n, tmp_i, atomi, atomj)
+    do atomPairIndex = 1, numAtom(typei)*numAtom(typej)
+      call atomPairIndex2atomIndexes(atomPairIndex, numAtom, typei, typej, atomi, atomj)
+      if (atomi /= atomj) then
+        call getBinIndex(pos(:,:,atomi), pos(:,:,atomj), cell(1), rBinWidth, rBinIndex)
         do k = 1, maxLag+1      
-          vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
+          vv = sum(vel(:, k:numFrame, atomi) * vel(:, 1:numFrame-k+1, atomj), 1)
           do n = 1, numFrame-k+1
             tmp_i = rBinIndex(n)
-            sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+            sdCorr_tmp(k, tmp_i, myID) = sdCorr_tmp(k, tmp_i, myID) + vv(n)
           end do
         end do
 
         do k = 1, numFrame
           tmp_i = rBinIndex(k)
-          rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1
+          rho_tmp(tmp_i, myID) = rho_tmp(tmp_i, myID) + 1d0
         end do
-      end if
+      end if 
     end do
-  end do
-  !$OMP end do
+!OMP end do
+    deallocate(rBinIndex)
+    deallocate(vv)
 !$OMP end parallel
-  deallocate(rBinIndex)
+    sdCorr(:, :, atomTypePairIndex) = sum(sdCorr_tmp, 3)
+    rho(:, atomTypePairIndex) = sum(rho_tmp, 2)
+  end do
+  runtime = omp_get_wtime() - starttime
+  write(*,*) "Total time for spatialDecompose = ", runtime, " seconds"
+  write(*,*) "Time spent on repeating allocation = ", sum(allocationTime), " seconds"
+  
+  deallocate(allocationTime)
+  deallocate(sdCorr_tmp)
+
   deallocate(pos)
   deallocate(vel)
 
@@ -297,5 +339,14 @@ contains
     deallocate(timeLags)
     deallocate(rBins)
   end subroutine output
+  
+  pure subroutine atomPairIndex2atomIndexes(atomPairIndex, numAtom, typei, typej, atomi, atomj)
+    implicit none
+    integer, intent(in) :: atomPairIndex, numAtom(:), typei, typej
+    integer, intent(out) :: atomi, atomj
+
+    atomi = sum(numAtom(1:typei-1)) + (atomPairIndex - 1) / numAtom(typej) + 1
+    atomj = sum(numAtom(1:typej-1)) + mod(atomPairIndex-1, numAtom(typej)) + 1
+  end subroutine atomPairIndex2atomIndexes
 
 end program spatialDecompose
