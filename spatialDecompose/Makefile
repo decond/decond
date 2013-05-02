@@ -1,15 +1,16 @@
 # Defining variables ===============================
 FC = gfortran
 FCMPI = mpif90
-MODFLAG = -J
-FCFLAGS = -Wall $(MODFLAG)$(MODDIR)
 OMPFLAGS = -fopenmp
+MODFLAG = -J
 
 SRCDIR = ./src/
 #OBJDIR = ./obj/
-MODDIR = ./mod/
+MODDIR = ./mod
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
+
+FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) $(OMPFLAGS)
 
 PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp
 

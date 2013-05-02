@@ -1,17 +1,17 @@
 program spatialDecompose
   use g96
   implicit none
-  integer, parameter :: num_parArg = 5
+  integer, parameter :: num_parArg = 6
   integer, parameter :: num_argPerData = 2
   integer :: num_dataArg, i, j, k, n, totNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType
-  integer :: atomTypePairIndex, tmp_i
+  integer :: atomTypePairIndex, tmp_i, skip
   integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
-  character(len=10) :: numFrame_str, maxLag_str, rBinWidth_str, charge_str, numAtom_str
-  real(8) :: cell(3), timestep, rBinWidth
+  character(len=10) :: tmp_str
+  real(8) :: cell(3), timestep, rBinWidth, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
@@ -25,8 +25,9 @@ program spatialDecompose
 
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numframe> <maxlag> <rbinwidth(nm)> &
+    write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
+    write(*,*) "Note: skip=0 means no frames are skipped. skip=1 means every two frames is read."
     call exit(1)
   end if
 
@@ -36,16 +37,20 @@ program spatialDecompose
   call get_command_argument(2, dataFilename)
   write(*,*) "inFile.g96 = ", dataFilename
 
-  call get_command_argument(3, numFrame_str) ! in the unit of frame number
-  read(numFrame_str, *) numFrame 
-  write(*,*) "numFrame= ", numFrame
+  call get_command_argument(3, tmp_str) ! in the unit of frame number
+  read(tmp_str, *) numFrame 
+  write(*,*) "numFrame = ", numFrame
 
-  call get_command_argument(4, maxLag_str) ! in the unit of frame number
-  read(maxLag_str, *) maxLag
+  call get_command_argument(4, tmp_str) ! in the unit of frame number
+  read(tmp_str, *) skip
+  write(*,*) "skip = ", skip
+
+  call get_command_argument(5, tmp_str) ! in the unit of frame number
+  read(tmp_str, *) maxLag
   write(*,*) "maxLag = ", maxLag 
 
-  call get_command_argument(5, rBinWidth_str)
-  read(rBinWidth_str, *) rBinWidth
+  call get_command_argument(6, tmp_str)
+  read(tmp_str, *) rBinWidth
   write(*,*) "rBinWidth = ", rBinWidth
   
   numAtomType = num_dataArg / num_argPerData
@@ -64,10 +69,10 @@ program spatialDecompose
   end if 
 
   do n = 1, numAtomType
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, numAtom_str) 
-    read(numAtom_str, *) numAtom(n)
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, charge_str) 
-    read(charge_str, *) charge(n)
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, tmp_str) 
+    read(tmp_str, *) numAtom(n)
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
+    read(tmp_str, *) charge(n)
   end do
   totNumAtom = sum(numAtom)
 
@@ -107,8 +112,19 @@ program spatialDecompose
   call open_trajectory(dataFileHandle, dataFilename)
   do i = 1, numFrame
     call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+    if (stat /=0) then
+      write(*,*) "Reading trajectory error"
+      call exit(1)
+    end if 
     pos(:,i,:) = pos_tmp
     vel(:,i,:) = vel_tmp
+    do j = 1, skip
+      call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+      if (stat /=0) then
+        write(*,*) "Reading trajectory error"
+        call exit(1)
+      end if 
+    end do
   end do
   call close_trajectory(dataFileHandle)
 
