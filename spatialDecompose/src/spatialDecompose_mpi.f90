@@ -37,7 +37,7 @@ program spatialDecompose_mpi
   num_dataArg = command_argument_count() - num_parArg
 
   !welcome message
-  write(*,*) "hello from rank ", myrank
+!  write(*,*) "hello from rank ", myrank
 
   !root check the input arguments
   if (myrank == root) then
@@ -45,7 +45,8 @@ program spatialDecompose_mpi
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
       write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                   &<numatom1> <charge1> [<numatom2> <charge2>...]"
-      write(*,*) "Note: skip=0 means no frames are skipped. skip=1 means every two frames is read."
+      write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
+      write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -125,10 +126,10 @@ program spatialDecompose_mpi
   if (myrank == root) then
     write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c 
   end if
-  write(*,*) "my rank =", myrank
-  write(*,*) "r_start, r_end =", r_start, r_end
-  write(*,*) "c_start, c_end =", c_start, c_end
-  write(*,*)
+!  write(*,*) "my rank =", myrank
+!  write(*,*) "r_start, r_end =", r_start, r_end
+!  write(*,*) "c_start, c_end =", c_start, c_end
+!  write(*,*)
 
   !prepare memory for all ranks
   allocate(pos(3, numFrame, totNumAtom), stat=stat)
@@ -170,18 +171,22 @@ program spatialDecompose_mpi
     call open_trajectory(dataFileHandle, dataFilename)
     do i = 1, numFrame
       call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
-      if (stat /=0) then
+      if (stat /= 0) then
         write(*,*) "Reading trajectory error"
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
       end if 
       pos(:,i,:) = pos_tmp
       vel(:,i,:) = vel_tmp
-      do j = 1, skip
+      do j = 1, skip-1
         call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
-        if (stat /=0) then
+        if (stat > 0) then
           write(*,*) "Reading trajectory error"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
           call exit(1)
+        else if (stat < 0) then
+          !end of file
+          exit
         end if 
       end do
     end do

@@ -25,9 +25,10 @@ program spatialDecompose
 
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
+    write(*,*) "Usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
-    write(*,*) "Note: skip=0 means no frames are skipped. skip=1 means every two frames is read."
+    write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
+    write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
     call exit(1)
   end if
 
@@ -118,7 +119,7 @@ program spatialDecompose
     end if 
     pos(:,i,:) = pos_tmp
     vel(:,i,:) = vel_tmp
-    do j = 1, skip
+    do j = 1, skip-1
       call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat /=0) then
         write(*,*) "Reading trajectory error"
