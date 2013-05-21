@@ -9,10 +9,10 @@ program spatialDecompose
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType
   integer :: atomTypePairIndex, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
+  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
@@ -33,8 +33,8 @@ program spatialDecompose
     call exit(1)
   end if
 
-  call get_command_argument(1, outfilename)
-  write(*,*) "outfile = ", outfilename
+  call get_command_argument(1, outFilename)
+  write(*,*) "outfile = ", outFilename
 
   call get_command_argument(2, dataFilename)
   write(*,*) "inFile.g96 = ", dataFilename
@@ -262,6 +262,7 @@ contains
     implicit none
     integer, intent(in) :: i, numAtom(:)
     integer :: n, numAtom_acc
+!    integer, save :: numAtomType = size(numAtom)
 
     numAtom_acc = 0
     do n = 1, numAtomType
@@ -276,10 +277,9 @@ contains
   integer function getAtomTypePairIndex(i, j, numAtom)
     implicit none
     integer, intent(in) :: i, j, numAtom(:)
-    integer :: numAtomType
     integer :: ii, jj
+!    integer, save :: numAtomType = size(numAtom)
   
-    numAtomType = size(numAtom)
     ii = getAtomTypeIndex(i, numAtom)
     jj = getAtomTypeIndex(j, numAtom)
     getAtomTypePairIndex = (ii-1)*numAtomType + jj
