@@ -7,7 +7,7 @@ program spatialDecompose
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
-  integer :: numFrame, maxLag, num_rBin, stat, numAtomType
+  integer :: numFrame, maxLag, num_rBin, stat, numAtomType, numFrameRead
   integer :: atomTypePairIndex, tmp_i, skip
   integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
   character(len=10) :: tmp_str
@@ -94,11 +94,6 @@ program spatialDecompose
     call exit(1)
   end if 
 
-  allocate(rBinIndex(numFrame), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: rBinIndex"
-    call exit(1)
-  end if 
 
   allocate(pos(3, numFrame, totNumAtom), stat=stat)
   if (stat /=0) then
@@ -111,6 +106,7 @@ program spatialDecompose
     call exit(1)
   end if 
 
+  numFrameRead = 0
   call open_trajectory(dataFileHandle, dataFilename)
   do i = 1, numFrame
     call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
@@ -118,6 +114,7 @@ program spatialDecompose
       write(*,*) "Reading trajectory error"
       call exit(1)
     end if 
+    numFrameRead = numFrameRead + 1
     pos(:,i,:) = pos_tmp
     vel(:,i,:) = vel_tmp
     do j = 1, skip-1
@@ -132,6 +129,7 @@ program spatialDecompose
     end do
   end do
   call close_trajectory(dataFileHandle)
+  write(*,*) "numFrameRead = ", numFrameRead
 
   timestep = time(2) - time(1)
   deallocate(pos_tmp)
@@ -155,7 +153,13 @@ program spatialDecompose
   end if 
   rho = 0d0
 
-  allocate(vv(numFrame))
+  allocate(rBinIndex(numFrameRead), stat=stat)
+  if (stat /= 0) then
+    write(*,*) "Allocation failed: rBinIndex"
+    call exit(1)
+  end if 
+
+  allocate(vv(numFrameRead))
   if (stat /=0) then
     write(*,*) "Allocation failed: vv"
     call exit(1)
@@ -170,16 +174,15 @@ program spatialDecompose
         !get the index for different atomType pair (ex. Na-Na, Na-Cl, Cl-Na, Cl-Cl)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
-          vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
-          do n = 1, numFrame-k+1
+          vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
+          do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
             sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
           end do
         end do
-
-        do k = 1, numFrame
+        do k = 1, numFrameRead
           tmp_i = rBinIndex(k)
-          rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1
+          rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
         end do
       end if
     end do
@@ -195,10 +198,10 @@ program spatialDecompose
     call exit(1)
   end if 
 
-  rho = rho / numFrame
+  rho = rho / numFrameRead
   sdCorr = sdCorr / 3d0
 
-  norm = [ (numFrame - (i-1), i = 1, maxLag+1) ]
+  norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
   forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
     sdCorr(:,i,n) = sdCorr(:,i,n) / norm
   end forall
