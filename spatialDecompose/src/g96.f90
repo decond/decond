@@ -1,8 +1,3 @@
-! -*- F90 -*-
-
-! Trajectory module template file
-! If you would like to make custom trajectory I/O module, use this file
-! as a template.
 module g96
   use utility, only : handle, newunit
   character(len=*), parameter :: key_title = "TITLE"

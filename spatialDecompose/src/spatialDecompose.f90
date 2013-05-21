@@ -23,6 +23,7 @@ program spatialDecompose
 
   is_periodic = .true.
 
+  !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
     write(*,*) "Usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
@@ -164,7 +165,9 @@ program spatialDecompose
   do i = 1, totNumAtom
     do j = 1, totNumAtom
       if (i /= j) then
+        !get rBinIndex
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
+        !get the index for different atomType pair (ex. Na-Na, Na-Cl, Cl-Na, Cl-Cl)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)

@@ -1,6 +1,4 @@
-! -*- F90 -*-
-
-! Writing octave compatible save format 
+! This program writes octave-compatible save file
 module octave_save
   use utility, only : handle, newunit
   character(len=*), parameter :: f_fmt = "ES30.16E3"
