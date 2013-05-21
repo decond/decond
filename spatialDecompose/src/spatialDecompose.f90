@@ -121,9 +121,12 @@ program spatialDecompose
     vel(:,i,:) = vel_tmp
     do j = 1, skip-1
       call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
-      if (stat /=0) then
+      if (stat > 0) then
         write(*,*) "Reading trajectory error"
         call exit(1)
+      else if (stat < 0) then
+        !end of file
+        exit
       end if 
     end do
   end do

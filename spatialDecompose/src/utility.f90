@@ -26,6 +26,10 @@
 module utility
   implicit none
 
+  type handle
+     integer :: iohandle
+  end type handle
+
 contains
   ! The following function is a snippet from Fortran wiki and in public
   ! domain.

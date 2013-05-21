@@ -4,6 +4,7 @@
 ! If you would like to make custom trajectory I/O module, use this file
 ! as a template.
 module g96
+  use utility, only : handle, newunit
   character(len=*), parameter :: key_title = "TITLE"
   character(len=*), parameter :: key_timestep = "TIMESTEP"
   character(len=*), parameter :: key_positionred = "POSITIONRED"
@@ -14,15 +15,10 @@ module g96
   character(len=*), parameter :: key_end = "END"
   integer, parameter :: line_len = 128
 
-  type handle
-     integer :: iohandle
-  end type handle
-  
 contains
   ! Open trajectory and returns handle as htraj. 
   ! Should open fails, the program abends.
   subroutine open_trajectory(htraj, fname)
-    use utility
     implicit none
     type(handle), intent(inout) :: htraj
     character(len=*), intent(in) :: fname

@@ -2,17 +2,13 @@
 
 ! Writing octave compatible save format 
 module octave_save
+  use utility, only : handle, newunit
   character(len=*), parameter :: f_fmt = "ES30.16E3"
 
-  type handle
-     integer :: iohandle
-  end type handle
-  
 contains
   ! Open file and returns handle as htraj. 
   ! Should open fails, the program abends.
   subroutine create_octave(htraj, fname)
-    use utility
     implicit none
     type(handle), intent(inout) :: htraj
     character(len=*), intent(in) :: fname
