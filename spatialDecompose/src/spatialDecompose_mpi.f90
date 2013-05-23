@@ -8,12 +8,12 @@ program spatialDecompose_mpi
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
-  integer :: numFrame, maxLag, num_rBin, stat, numAtomType
+  integer :: numFrame, maxLag, num_rBin, stat, numAtomType, numFrameRead
   integer :: atomTypePairIndex, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
+  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
@@ -168,6 +168,7 @@ program spatialDecompose_mpi
       call exit(1)
     end if 
 
+    numFrameRead = 0
     call open_trajectory(dataFileHandle, dataFilename)
     do i = 1, numFrame
       call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
@@ -176,6 +177,7 @@ program spatialDecompose_mpi
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
       end if 
+      numFrameRead = numFrameRead + 1
       pos(:,i,:) = pos_tmp
       vel(:,i,:) = vel_tmp
       do j = 1, skip-1
@@ -191,6 +193,7 @@ program spatialDecompose_mpi
       end do
     end do
     call close_trajectory(dataFileHandle)
+    if (myrank == root) write(*,*) "numFrameRead = ", numFrameRead
 
     timestep = time(2) - time(1)
     deallocate(pos_tmp)
@@ -208,6 +211,7 @@ program spatialDecompose_mpi
   call mpi_bcast(pos, 3*numFrame*totNumAtom, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   call mpi_bcast(vel, 3*numFrame*totNumAtom, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   call mpi_bcast(cell, 3, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
+  call mpi_bcast(numFrameRead, 1, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
@@ -233,14 +237,14 @@ program spatialDecompose_mpi
   end if 
   rho = 0d0
 
-  allocate(rBinIndex(numFrame), stat=stat)
+  allocate(rBinIndex(numFrameRead), stat=stat)
   if (stat /= 0) then
     write(*,*) "Allocation failed: rBinIndex"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
 
-  allocate(vv(numFrame))
+  allocate(vv(numFrameRead))
   if (stat /=0) then
     write(*,*) "Allocation failed: vv"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -252,13 +256,13 @@ program spatialDecompose_mpi
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
-          vv = sum(vel(:, k:numFrame, i) * vel(:, 1:numFrame-k+1, j), 1)
-          do n = 1, numFrame-k+1
+          vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
+          do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
             sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
           end do
         end do
-        do k = 1, numFrame
+        do k = 1, numFrameRead
           tmp_i = rBinIndex(k)
           rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
         end do
@@ -311,10 +315,10 @@ program spatialDecompose_mpi
       call exit(1)
     end if 
 
-    rho = rho / numFrame
+    rho = rho / numFrameRead
     sdCorr = sdCorr / 3d0
 
-    norm = [ (numFrame - (i-1), i = 1, maxLag+1) ]
+    norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
     forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
       sdCorr(:,i,n) = sdCorr(:,i,n) / norm
     end forall
@@ -376,6 +380,7 @@ contains
     implicit none
     integer, intent(in) :: i, numAtom(:)
     integer :: n, numAtom_acc
+!    integer, save :: numAtomType = size(numAtom)
 
     numAtom_acc = 0
     do n = 1, numAtomType
@@ -390,10 +395,9 @@ contains
   integer function getAtomTypePairIndex(i, j, numAtom)
     implicit none
     integer, intent(in) :: i, j, numAtom(:)
-    integer :: numAtomType
     integer :: ii, jj
+!    integer, save :: numAtomType = size(numAtom)
   
-    numAtomType = size(numAtom)
     ii = getAtomTypeIndex(i, numAtom)
     jj = getAtomTypeIndex(j, numAtom)
     getAtomTypePairIndex = (ii-1)*numAtomType + jj
