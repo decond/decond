@@ -98,6 +98,12 @@ endfunction
 %endfor
 %ecTotalNoAverageCesaro = ecTotalNoAverageCesaro';
 
+function [type1, type2] = unzipIonTypePairs(pairIndex)
+    global numIonTypes;
+    type1 = floor((pairIndex-1) / numIonTypes) + 1;
+    type2 = mod(pairIndex-1, numIonTypes) + 1;
+endfunction
+
 function ec = cumIntegrateEC(sdCorrData, maxLag)
     global kB beta basicCharge ps nm volume timestep t;
     if (length(sdCorrData) == 1 && maxLag > 0)
@@ -108,15 +114,18 @@ function ec = cumIntegrateEC(sdCorrData, maxLag)
     endif
 endfunction
 
-ecSDTotal = zeros(maxLag+1, 1); 
+ecSDTotal = zeros(maxLag+1, length(rBins)); 
 for i = [1:numIonTypePairs]
     for j = [1:length(rBins)]
-      [ionType1, ionType2] = unzipIonTypePairs(i);
-      ecSDCorr(:, j, i) = charge(ionType1) * charge(ionType2) * cumIntegrateEC(sdCorr(:,j,i), maxLag);
-      ecSDCorrNoAverageCesaro(:, j, i) = cumtrapz(ecSDCorr(:, j, i)) * timestep;
-      ecSDTotal .+= ecSDCorr(:, zipIndexPair(i,j));
+        [ionType1, ionType2] = unzipIonTypePairs(i);
+        ecSDCorr(:, j, i) = charge(ionType1) * charge(ionType2) * cumIntegrateEC(sdCorr(:,j,i), maxLag);
+        ecSDCorrNoAverageCesaro(:, j, i) = cumtrapz(ecSDCorr(:, j, i)) * timestep;
+    endfor
+    ecSDTotal .+= ecSDCorr(:, :, i);
 endfor
-ecSDTotalNoAverageCesaro = cumtrapz(ecSDTotal) * timestep;
+for j = [1:length(rBins)]
+    ecSDTotalNoAverageCesaro = cumtrapz(ecSDTotal(:, j)) * timestep;
+endfor
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "timestep", "timeLags", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
+save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
