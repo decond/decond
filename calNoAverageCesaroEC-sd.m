@@ -124,7 +124,7 @@ for i = [1:numIonTypePairs]
     ecSDTotal .+= ecSDCorr(:, :, i);
 endfor
 for j = [1:length(rBins)]
-    ecSDTotalNoAverageCesaro = cumtrapz(ecSDTotal(:, j)) * timestep;
+    ecSDTotalNoAverageCesaro(:, j) = cumtrapz(ecSDTotal(:, j)) * timestep;
 endfor
 
 timeLags = [0:maxLag]' * timestep;
