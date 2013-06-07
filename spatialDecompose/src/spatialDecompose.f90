@@ -17,6 +17,7 @@ program spatialDecompose
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
   real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
+  integer(kind=4), allocatable :: sdCorrNorm(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
@@ -136,7 +137,7 @@ program spatialDecompose
   deallocate(vel_tmp)
   deallocate(time)
 
-  num_rBin = ceiling(cell(1) / rBinWidth)
+  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
   write(*,*) "num_rBin = ", num_rBin
 
   allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
@@ -145,6 +146,13 @@ program spatialDecompose
     call exit(1)
   end if 
   sdCorr = 0d0
+
+  allocate(sdCorrNorm(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: sdCorrNorm"
+    call exit(1)
+  end if 
+  sdCorrNorm = 0
 
   allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
@@ -175,15 +183,27 @@ program spatialDecompose
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
+          aveNum = count(rBinIndex(1:numFrameRead-k+1) > 0)
+          sdCorr_tmp = 0d0
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
-            sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+            if (tmp_i > 0)
+!              sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+              sdCorr_tmp(tmp_i) = sdCorr_tmp(tmp_i) + vv(n)
+!              sdCorrNorm(k, tmp_i, atomTypePairIndex) = sdCorrNorm(k, tmp_i, atomTypePairIndex) + 1
+            end if
           end do
+          sdCorr(k, :, atomTypePairIndex) = sdCorr(k, :, atomTypePairIndex) + (sdCorr_tmp / dble(aveNum))
         end do
-        do k = 1, numFrameRead
-          tmp_i = rBinIndex(k)
-          rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
+        rhoCount_tmp = 0
+        aveNum = count(rBinIndex > 0)
+        do t = 1, numFrameRead
+          tmp_i = rBinIndex(t)
+          if (tmp_i > 0)
+            rhoCount_tmp(tmp_i) = rhoCount_tmp(tmp_i) + 1
+          end if
         end do
+        rho(:, atomTypePairIndex) = rho(:, atomTypePairIndex) + (dble(rhoCount_tmp) / dble(aveNum))
       end if
     end do
   end do
@@ -192,11 +212,11 @@ program spatialDecompose
   deallocate(vel)
 
   !normalization
-  allocate(norm(maxLag+1), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: norm"
-    call exit(1)
-  end if 
+!  allocate(norm(maxLag+1), stat=stat)
+!  if (stat /=0) then
+!    write(*,*) "Allocation failed: norm"
+!    call exit(1)
+!  end if 
 
   rho = rho / numFrameRead
   sdCorr = sdCorr / 3d0
@@ -258,6 +278,9 @@ contains
     rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
     where (rBinIndex == 0)
       rBinIndex = 1
+    end where
+    where (rBinIndex > ceiling(cellLength / 2.d0 / rBinWidth))
+      rBinIndex = -1
     end where
   end subroutine getBinIndex
 
