@@ -3,21 +3,21 @@ program spatialDecompose
   implicit none
   integer, parameter :: num_parArg = 6
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom
+  integer :: num_dataArg, i, j, k, n, totNumAtom, t
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType, numFrameRead
-  integer :: atomTypePairIndex, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
+  integer :: atomTypePairIndex, tmp_i, skip, aveNum
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
-  integer(kind=4), allocatable :: sdCorrNorm(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), sdCorr_tmp(:)
+  integer, allocatable :: rhoCount_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
@@ -147,12 +147,12 @@ program spatialDecompose
   end if 
   sdCorr = 0d0
 
-  allocate(sdCorrNorm(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
+  allocate(sdCorr_tmp(num_rBin), stat=stat)
   if (stat /=0) then
-    write(*,*) "Allocation failed: sdCorrNorm"
+    write(*,*) "Allocation failed: sdCorr_tmp"
     call exit(1)
   end if 
-  sdCorrNorm = 0
+  sdCorr_tmp = 0d0
 
   allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
@@ -160,6 +160,13 @@ program spatialDecompose
     call exit(1)
   end if 
   rho = 0d0
+
+  allocate(rhoCount_tmp(num_rBin), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rhoCount_tmp"
+    call exit(1)
+  end if 
+  rhoCount_tmp = 0
 
   allocate(rBinIndex(numFrameRead), stat=stat)
   if (stat /= 0) then
@@ -183,33 +190,43 @@ program spatialDecompose
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
-          aveNum = count(rBinIndex(1:numFrameRead-k+1) > 0)
+!          aveNum = count(rBinIndex(1:numFrameRead-k+1) > 0)
+          aveNum = 0
           sdCorr_tmp = 0d0
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
-            if (tmp_i > 0)
+            if (tmp_i > 0) then
 !              sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+              aveNum = aveNum + 1
               sdCorr_tmp(tmp_i) = sdCorr_tmp(tmp_i) + vv(n)
 !              sdCorrNorm(k, tmp_i, atomTypePairIndex) = sdCorrNorm(k, tmp_i, atomTypePairIndex) + 1
             end if
           end do
-          sdCorr(k, :, atomTypePairIndex) = sdCorr(k, :, atomTypePairIndex) + (sdCorr_tmp / dble(aveNum))
+          if (aveNum > 0) then
+            sdCorr(k, :, atomTypePairIndex) = sdCorr(k, :, atomTypePairIndex) + (sdCorr_tmp / dble(aveNum))
+          end if
         end do
+        aveNum = 0
         rhoCount_tmp = 0
-        aveNum = count(rBinIndex > 0)
+!        aveNum = count(rBinIndex > 0)
         do t = 1, numFrameRead
           tmp_i = rBinIndex(t)
-          if (tmp_i > 0)
+          if (tmp_i > 0) then
+            aveNum = aveNum + 1
             rhoCount_tmp(tmp_i) = rhoCount_tmp(tmp_i) + 1
           end if
         end do
-        rho(:, atomTypePairIndex) = rho(:, atomTypePairIndex) + (dble(rhoCount_tmp) / dble(aveNum))
+        if (aveNum > 0) then
+          rho(:, atomTypePairIndex) = rho(:, atomTypePairIndex) + (dble(rhoCount_tmp) / dble(aveNum))
+        end if
       end if
     end do
   end do
   deallocate(rBinIndex)
   deallocate(pos)
   deallocate(vel)
+  deallocate(sdCorr_tmp)
+  deallocate(rhoCount_tmp)
 
   !normalization
 !  allocate(norm(maxLag+1), stat=stat)
@@ -221,17 +238,17 @@ program spatialDecompose
   rho = rho / numFrameRead
   sdCorr = sdCorr / 3d0
 
-  norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
-  forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
-    sdCorr(:,i,n) = sdCorr(:,i,n) / norm
-  end forall
+!  norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
+!  forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
+!    sdCorr(:,i,n) = sdCorr(:,i,n) / norm
+!  end forall
 !  forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
 !    where (rho > 0d0)
 !      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
 !    end where
 !  end forall
   
-  deallocate(norm)
+!  deallocate(norm)
 
   do n = 1, numAtomType*numAtomType
     do j = 1, num_rBin
