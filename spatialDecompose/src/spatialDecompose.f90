@@ -235,7 +235,7 @@ program spatialDecompose
 !    call exit(1)
 !  end if 
 
-  rho = rho / numFrameRead
+!  rho = rho / numFrameRead
   sdCorr = sdCorr / 3d0
 
 !  norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
