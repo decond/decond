@@ -296,7 +296,7 @@ contains
     where (rBinIndex == 0)
       rBinIndex = 1
     end where
-    where (rBinIndex > ceiling(cellLength / 2.d0 / rBinWidth))
+    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
       rBinIndex = -1
     end where
   end subroutine getBinIndex
