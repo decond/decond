@@ -4,20 +4,21 @@ program spatialDecompose_mpi
   implicit none
   integer, parameter :: num_parArg = 6, stdout = 6
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom
+  integer :: num_dataArg, i, j, k, n, totNumAtom, t
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType, numFrameRead
-  integer :: atomTypePairIndex, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
+  integer :: atomTypePairIndex, tmp_i, skip, aveNum
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_mpi_tmp(:, :), sdCorr_mpi_tmp(:, :, :), sdCorr_tmp(:)
+  integer, allocatable :: rhoCount_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
@@ -215,7 +216,7 @@ program spatialDecompose_mpi
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
-  num_rBin = ceiling(cell(1) / rBinWidth)
+  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
   if (myrank == root) write(*,*) "num_rBin = ", num_rBin
 
   !spatial decomposition correlation
@@ -229,6 +230,13 @@ program spatialDecompose_mpi
   end if 
   sdCorr = 0d0
 
+  allocate(sdCorr_tmp(num_rBin), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: sdCorr_tmp"
+    call exit(1)
+  end if
+  sdCorr_tmp = 0d0
+
   allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: rho"
@@ -236,6 +244,13 @@ program spatialDecompose_mpi
     call exit(1)
   end if 
   rho = 0d0
+
+  allocate(rhoCount_tmp(num_rBin), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rhoCount_tmp"
+    call exit(1)
+  end if
+  rhoCount_tmp = 0
 
   allocate(rBinIndex(numFrameRead), stat=stat)
   if (stat /= 0) then
@@ -257,21 +272,39 @@ program spatialDecompose_mpi
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
+          aveNum = 0
+          sdCorr_tmp = 0d0
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
-            sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+            if (tmp_i > 0) then
+              aveNum = aveNum + 1
+              sdCorr_tmp(tmp_i) = sdCorr_tmp(tmp_i) + vv(n)
+            end if
           end do
+          if (aveNum > 0) then
+            sdCorr(k, :, atomTypePairIndex) = sdCorr(k, :, atomTypePairIndex) + (sdCorr_tmp / dble(aveNum))
+          end if
         end do
-        do k = 1, numFrameRead
-          tmp_i = rBinIndex(k)
-          rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
+        aveNum = 0
+        rhoCount_tmp = 0
+        do t = 1, numFrameRead
+          tmp_i = rBinIndex(t)
+          if (tmp_i > 0) then
+            aveNum = aveNum + 1
+            rhoCount_tmp(tmp_i) = rhoCount_tmp(tmp_i) + 1
+          end if
         end do
+        if (aveNum > 0) then
+          rho(:, atomTypePairIndex) = rho(:, atomTypePairIndex) + (dble(rhoCount_tmp) / dble(aveNum))
+        end if
       end if
     end do
   end do
   deallocate(rBinIndex)
   deallocate(pos)
   deallocate(vel)
+  deallocate(sdCorr_tmp)
+  deallocate(rhoCount_tmp)
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished spatial decomposition. It took ", endtime - starttime, " seconds"
 
@@ -279,26 +312,26 @@ program spatialDecompose_mpi
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
-    allocate(sdCorr_tmp(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
+    allocate(sdCorr_mpi_tmp(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: sdCorr_tmp"
+      write(*,*) "Allocation failed: sdCorr_mpi_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
-    allocate(rho_tmp(num_rBin, numAtomType*numAtomType), stat=stat)
+    allocate(rho_mpi_tmp(num_rBin, numAtomType*numAtomType), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: rho_tmp"
+      write(*,*) "Allocation failed: rho_mpi_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
     do i = 1, nprocs - 1
-      call mpi_recv(sdCorr_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
-      call mpi_recv(rho_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
-      sdCorr = sdCorr + sdCorr_tmp
-      rho = rho + rho_tmp
+      call mpi_recv(sdCorr_mpi_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
+      call mpi_recv(rho_mpi_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
+      sdCorr = sdCorr + sdCorr_mpi_tmp
+      rho = rho + rho_mpi_tmp
     end do
-    deallocate(sdCorr_tmp)
-    deallocate(rho_tmp)
+    deallocate(sdCorr_mpi_tmp)
+    deallocate(rho_mpi_tmp)
   else
     call mpi_send(sdCorr, size(sdCorr), mpi_double_precision, root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
     call mpi_send(rho, size(rho), mpi_double_precision, root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
@@ -308,26 +341,26 @@ program spatialDecompose_mpi
 
   !normalization at root and then output
   if (myrank == root) then
-    allocate(norm(maxLag+1), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: norm"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-
-    rho = rho / numFrameRead
+!    allocate(norm(maxLag+1), stat=stat)
+!    if (stat /=0) then
+!      write(*,*) "Allocation failed: norm"
+!      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+!      call exit(1)
+!    end if 
+!
+!    rho = rho / numFrameRead
     sdCorr = sdCorr / 3d0
 
-    norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
-    forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
-      sdCorr(:,i,n) = sdCorr(:,i,n) / norm
-    end forall
-!    forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
-!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
+!    norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
+!    forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
+!      sdCorr(:,i,n) = sdCorr(:,i,n) / norm
 !    end forall
-!    where (isnan(sdCorr))
-!      sdCorr = 0
-!    end where
+!!    forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
+!!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
+!!    end forall
+!!    where (isnan(sdCorr))
+!!      sdCorr = 0
+!!    end where
     do n = 1, numAtomType*numAtomType
       do j = 1, num_rBin
         if (rho(j, n) > 0d0) then
@@ -373,6 +406,9 @@ contains
     rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
     where (rBinIndex == 0)
       rBinIndex = 1
+    end where
+    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
+      rBinIndex = -1
     end where
   end subroutine getBinIndex
 
