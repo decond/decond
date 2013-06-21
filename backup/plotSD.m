@@ -12,26 +12,29 @@ sd_file = argv(){1}
 set(0, "defaultlinelinewidth", 4);
 sd = load(sd_file);
 
-%maxlag = size(sd.timeLags, 1)
-maxlag = 1000
+maxlag = size(sd.timeLags, 1) 
+%maxlag = 1000
 
 f = figure(1);
 clf;
 %set(f, "paperorientation", "portrait")
 
-subplot(2, 1, 1)
-[c,h_contourf] = contourf(sd.rBins, sd.timeLags(1:maxlag), sd.sdCorr(1:maxlag,:,1),5);
+%subplot(2, 1, 1)
+%[c,h_contourf] = contourf(sd.rBins, sd.timeLags(1:maxlag), sd.sdCorr(1:maxlag,:,1));
+contourf(sd.rBins(1:end), sd.timeLags(1:10:maxlag), sd.sdCorr(1:10:maxlag,1:end,1));
 title(strcat("Correlation 1 - lag 1:", num2str(maxlag)));
 xlabel("r (nm)");
 ylabel("lag (ps)");
+colorbar();
 
-subplot(2, 1, 2)
-h_mesh = mesh(sd.rBins, sd.timeLags(1:maxlag), sd.sdCorr(1:maxlag,:,1));
-xlabel("r (nm)");
-ylabel("lag (ps)");
+%subplot(2, 1, 2)
+%h_mesh = mesh(sd.rBins, sd.timeLags(1:maxlag), sd.sdCorr(1:maxlag,:,1));
+%xlabel("r (nm)");
+%ylabel("lag (ps)");
 
 %print(strcat('sdCorr1', '-E4E4-S1-', num2str(maxlag), '.eps'), '-deps', '-color', '-S800,1200');
-print(strcat('sdCorr1', '-E6E5-S2-', num2str(maxlag), '.png'), '-dpng', '-color', '-S800,1200');
+print(strcat('sdCorr1', '-E6E5-S2-', num2str(maxlag), '-new2.png'), '-dpng', '-color', '-S1200,800');
+%print(strcat('test', num2str(maxlag), '.png'), '-dpng', '-color', '-S1200,800');
 
 
 %set(p1, "linewidth", 3);
