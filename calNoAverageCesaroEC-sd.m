@@ -128,4 +128,4 @@ for j = [1:length(rBins)]
 endfor
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
+save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "rBins", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");

@@ -35,6 +35,7 @@ for n = [1:numMD]
     md(:, :, 2:1+data.numIonTypes**2, n) = data.ecSDCorrNoAverageCesaro;
 endfor
 timeLags = data.timeLags;
+rBins = data.rBins;
 clear("data");
 
 if (numMD > 1)
@@ -90,8 +91,9 @@ else
   slopeSD = 0;
 endif
 
-save(strcat('ecNoAverageCesaro-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+%save(strcat('ecNoAverageCesaro-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
+save(strcat(dataBaseName, num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "rBins", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 %#numPlots = 1 + numIonTypes + numIonTypes*numIonTypes;
 %
 %# standard error for selected values
