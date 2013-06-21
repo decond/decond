@@ -6,7 +6,7 @@ MODFLAG = -J
 
 SRCDIR = ./src/
 #OBJDIR = ./obj/
-MODDIR = ./mod
+MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
