@@ -464,6 +464,7 @@ contains
     call create_octave(htraj, outFilename)
     call write_octave_scalar(htraj, "timestep", timestep)
     call write_octave_vec(htraj, "charge", dble(charge))
+    call write_octave_vec(htraj, "cell", cell)
     call write_octave_vec(htraj, "timeLags", timeLags)
     call write_octave_vec(htraj, "rBins", rBins)
     call write_octave_mat3(htraj, "sdCorr", sdCorr)
