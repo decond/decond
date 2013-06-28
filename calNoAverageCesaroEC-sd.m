@@ -11,17 +11,17 @@ ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
 
 if (nargin() < 3)
-    error("Usage: $calNoAverageCesaroEC-sd.m <filename.sdCorr> <maxLag -1=max (step)> <systemVolume(nm^3)> [deltaStep] \n\
+    error("Usage: $calNoAverageCesaroEC-sd.m <filename.sdCorr> <maxLag -1=max (step)> [deltaStep] \n\
 where <filename> is used for both input and output: filename.sd and filename.xvg,\n\
 optional deltaStep is for integrating the sdCorr every deltaStep, default is 1.");
 else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
-    volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
+%    volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);
-    if (nargin() > 3)
-        deltaStep = round(str2num(argv(){4}))
+    if (nargin() > 2)
+        deltaStep = round(str2num(argv(){3}))
         if (deltaStep <= 0)
             deltaStep = 1;
         endif
@@ -30,9 +30,10 @@ else
     endif
 endif
 
-#.sdCorr file contains timestep, charge(), numAtoms(), timeLags(), rBins(), and sdCorr()
+#.sdCorr file contains timestep, charge(), numAtoms(), timeLags(), cell(), rBins(), and sdCorr()
 load(filename);
 
+volume = (cell(1)*cell(2)*cell(3)) * (1.0E-9)**3; #(m3);
 numIonTypes = length(charge);
 numIonTypePairs = numIonTypes**2;
 

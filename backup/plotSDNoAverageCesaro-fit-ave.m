@@ -16,7 +16,7 @@ set(0, "defaultlinelinewidth", 4);
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 1;
+numMD = 10;
 
 %initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
 %timeLags = initialize.timeLags;
@@ -27,15 +27,23 @@ function index = zipIndexPair(idx1, idx2)
     index = (idx1 - 1) * numIonTypes + idx2;
 endfunction
 
+for n = [1:numMD]
+    load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)), "rBins");
+    num_rBins(n) = length(rBins);
+endfor
+num_rBins_min = min(num_rBins)
+clear("rBins");
+clear("num_rBins");
+
 # md(sdCorr_timeLag, sdCorr_rBin, sdCorrIonTypePairIndex, fileIndex)
 for n = [1:numMD]
-#    data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
-    data = load(strcat(dataBaseName, num2str(deltaStep)));
-    md(:, :, 1, n) = data.ecSDTotalNoAverageCesaro;
-    md(:, :, 2:1+data.numIonTypes**2, n) = data.ecSDCorrNoAverageCesaro;
+puts(cstrcat("n=", num2str(n), "\n"));
+    data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
+    md(:, :, 1, n) = data.ecSDTotalNoAverageCesaro(:, 1:num_rBins_min);
+    md(:, :, 2:1+data.numIonTypes**2, n) = data.ecSDCorrNoAverageCesaro(:, 1:num_rBins_min, :);
 endfor
 timeLags = data.timeLags;
-rBins = data.rBins;
+rBins = data.rBins(1:num_rBins_min);
 clear("data");
 
 if (numMD > 1)
@@ -68,8 +76,7 @@ endfor
 if (numMD > 1)
   # evaluate the uncertainty in the slope of the fitting line
   # reference: Numerical Recipes Chapter 15.2 (p.656)
-  for i = [1:numIonTypePairs] 
-    for j = [1:num_rBins]
+  for i = [1:numIonTypePairs] for j = [1:num_rBins]
       for r = [1:size(fitRange, 1)]
           rec_sig2 = 1 ./ (md_std(fitRange(r, 1):fitRange(r, 2), j, i) .^ 2);
           S(r, j, i) = sum(rec_sig2, 1);
@@ -91,9 +98,10 @@ else
   slopeSD = 0;
 endif
 
+save(strcat(dataBaseName, num2str(deltaStep), '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "rBins", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+
 %save(strcat('ecNoAverageCesaro-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
-save(strcat(dataBaseName, num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "rBins", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 %#numPlots = 1 + numIonTypes + numIonTypes*numIonTypes;
 %
 %# standard error for selected values
