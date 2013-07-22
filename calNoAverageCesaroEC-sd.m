@@ -10,7 +10,7 @@ basicCharge = 1.60217646E-19; #(Coulomb)
 ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
 
-if (nargin() < 3)
+if (nargin() < 2)
     error("Usage: $calNoAverageCesaroEC-sd.m <filename.sdCorr> <maxLag -1=max (step)> [deltaStep] \n\
 where <filename> is used for both input and output: filename.sd and filename.xvg,\n\
 optional deltaStep is for integrating the sdCorr every deltaStep, default is 1.");
