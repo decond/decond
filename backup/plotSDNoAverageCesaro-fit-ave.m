@@ -16,7 +16,7 @@ set(0, "defaultlinelinewidth", 4);
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 10;
+numMD = 50;
 
 %initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
 %timeLags = initialize.timeLags;
@@ -49,7 +49,7 @@ clear("data");
 if (numMD > 1)
   md_ave = squeeze(mean(md, 4));
   md_std = squeeze(std(md, 0, 4));
-  md_err = squeeze(std(md, 0, 4) ./ sqrt(numMD));  # standard error 
+  md_err = md_std ./ sqrt(numMD);  # standard error 
 else
   md_ave = md;
   md_std = 0;
@@ -60,8 +60,8 @@ clear("md");
 numIonTypePairs = size(md_ave, 3) #actually include total part (+1)
 num_rBins = size(md_ave, 2)
 
-%fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
-fitRange = [2, 4; 4, 6; 6, 8; 8, 10]; #ps
+fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
+%fitRange = [2, 4; 4, 6; 6, 8; 8, 10]; #ps
 fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
 
 # calculate slope for each segment of md_ave
