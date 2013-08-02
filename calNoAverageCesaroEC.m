@@ -39,7 +39,7 @@ if (numIonTypes != length(vCorr))
 vAutocorr: ", num2str(length(vAutocorr)), ", vCorr: ", num2str(length(vCorr))));
 endif
 
-# modifying data according deltaStep if it is greater than 1
+# modifying data according to deltaStep if it is greater than 1
 if (deltaStep > 1)
     timestep *= deltaStep;
     timeLags = timeLags(1:deltaStep:end);
