@@ -30,7 +30,7 @@ else
     endif
 endif
 
-#.sdCorr file contains timestep, charge(), numAtoms(), timeLags(), cell(), rBins(), and sdCorr()
+#.sdCorr file contains timestep, charge(), numAtoms(), timeLags(), cell(), rBins(), and sdCorr(), rho()
 load(filename);
 
 volume = (cell(1)*cell(2)*cell(3)) * (1.0E-9)**3; #(m3);
@@ -129,4 +129,4 @@ for j = [1:length(rBins)]
 endfor
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "rBins", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
+save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "rBins", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
