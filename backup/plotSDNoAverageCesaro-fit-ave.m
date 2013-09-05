@@ -16,7 +16,7 @@ set(0, "defaultlinelinewidth", 4);
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 50;
+numMD = 1;
 
 %initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
 %timeLags = initialize.timeLags;
@@ -24,7 +24,14 @@ numMD = 50;
 
 function index = zipIndexPair(idx1, idx2)
     global numIonTypes;
-    index = (idx1 - 1) * numIonTypes + idx2;
+%    index = (idx1 - 1) * numIonTypes + idx2;
+    # accept only the "upper-half" index pair, because cross-correlation should 
+    # be the same for (i,j) and (j,i)
+    if (idx1 > idx2)
+      error("Error - zipIndexPair: idx1 > idx2");
+    else
+      index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
+    endif
 endfunction
 
 for n = [1:numMD]
@@ -40,7 +47,7 @@ for n = [1:numMD]
 puts(cstrcat("n=", num2str(n), "\n"));
     data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
     md(:, :, 1, n) = data.ecSDTotalNoAverageCesaro(:, 1:num_rBins_min);
-    md(:, :, 2:1+data.numIonTypes**2, n) = data.ecSDCorrNoAverageCesaro(:, 1:num_rBins_min, :);
+    md(:, :, 2:1+data.numIonTypes*(data.numIonTypes+1)/2, n) = data.ecSDCorrNoAverageCesaro(:, 1:num_rBins_min, :);
 endfor
 timeLags = data.timeLags;
 rBins = data.rBins(1:num_rBins_min);
@@ -76,7 +83,8 @@ endfor
 if (numMD > 1)
   # evaluate the uncertainty in the slope of the fitting line
   # reference: Numerical Recipes Chapter 15.2 (p.656)
-  for i = [1:numIonTypePairs] for j = [1:num_rBins]
+  for i = [1:numIonTypePairs] 
+    for j = [1:num_rBins]
       for r = [1:size(fitRange, 1)]
           rec_sig2 = 1 ./ (md_std(fitRange(r, 1):fitRange(r, 2), j, i) .^ 2);
           S(r, j, i) = sum(rec_sig2, 1);

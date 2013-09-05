@@ -16,7 +16,7 @@ set(0, "defaultlinelinewidth", 4);
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 10;
+numMD = 50;
 
 initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
 numIonTypes = size(initialize.ecAutocorrNoAverageCesaro, 2);
@@ -25,7 +25,14 @@ clear initialize;
 
 function index = zipIndexPair(idx1, idx2)
     global numIonTypes;
-    index = (idx1 - 1) * numIonTypes + idx2;
+%    index = (idx1 - 1) * numIonTypes + idx2;
+    # accept only the "upper-half" index pair, because cross-correlation should 
+    # be the same for (i,j) and (j,i)
+    if (idx1 > idx2)
+      error("Error - zipIndexPair: idx1 > idx2");
+    else
+      index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
+    endif
 endfunction
 
 # packing and distributing data to a single md array
@@ -34,7 +41,7 @@ for n = [1:numMD]
     data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
     md(n, 1, :) = data.ecTotalNoAverageCesaro;
     for i = [1:numIonTypes]
-        for j = [1:numIonTypes]
+        for j = [i:numIonTypes]
             if (i == j)
                 md(n, 1+i, :) = data.ecAutocorrNoAverageCesaro(:, i);
             endif
@@ -104,7 +111,9 @@ slope_b = (S .* Sxy - Sx .* Sy) ./ Delta
 slopeSD = sqrt(S ./ Delta);
 # slopeSD(fitRange, corrIndex)
 
-# calculate slope for each segment of each md
+save(strcat(dataBaseName, num2str(deltaStep), '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+
+%# calculate slope for each segment of each md
 %fitRange .*= 1000;
 %for n = [1:numMD]
 %    for r = [1:size(fitRange, 1)]
@@ -125,39 +134,41 @@ slopeSD = sqrt(S ./ Delta);
 #numPlots = 1 + numIonTypes + numIonTypes*numIonTypes;
 
 # standard error for selected values
-errFrameInterval = floor(5000 / skip / deltaStep);
+errFrameInterval = floor(20000 / skip / deltaStep);
 errFrames = [1:errFrameInterval:length(timeLags)]';
 
 
 f1 = figure(1);
 clf;
 hold on;
-errOffset = floor(200 / skip / deltaStep);
+#errOffset = floor(200 / skip / deltaStep);
+errOffset = 0
 
 for i = [1:size(md_ave, 2)]
     drawFrames = errFrames .+ (i-1)*errOffset;
     drawFrames = drawFrames(drawFrames <= length(timeLags));
     if (i == 6)
-#        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0.6, 0]);
-        p(i).errorbar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i));
-        set(p(i).errorbar(1), "color", [0, 0.6, 0]);
-    elseif (i == 7)
-#        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0, 0]);
-        p(i).errorbar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i));
-        set(p(i).errorbar(1), "color", [0, 0, 0]);
+        p(i) = plot(timeLags, md_ave(:,i), "-", "color", [0, 0.6, 0]);
+        ebar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i));
+        set(ebar, "color", [0, 0.6, 0], "linestyle", "none");
+%    elseif (i == 7)
+%#        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0, 0]);
+%        p(i).errorbar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i));
+%        set(p(i).errorbar(1), "color", [0, 0, 0]);
     else
         plotFormat = strcat("-", num2str(i));
         errorbarFormat = strcat("~", num2str(i));
-        p(i).errorbar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i), errorbarFormat);
-#        p(i).plot = plot(timeLags, md_ave(:,i), plotFormat);
+        ebar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i), errorbarFormat);
+        set(ebar, "linestyle", "none");
+        p(i) = plot(timeLags, md_ave(:,i), plotFormat);
     endif
 endfor
 
-legend("Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Na", "Cross Cl-Cl", "location", "northwest");
+legend(p, {"Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl"}, "location", "northwest");
 
 left = 25;
 h_space = 20;
-top = 972;
+top = 1272;
 v_space = 44;
 for i = [1:size(md_ave, 2)]
     for r = [1:size(fitRange, 1)]
@@ -176,7 +187,7 @@ title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl so
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Non-averaged partial sum (ps*S/m)");
-axis([0,100,-600, 1000]);
+axis([0,100,-400, 1300]);
 
 print(strcat('ecNoAverageCesaro-', 'ave-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');
 hold off
@@ -193,24 +204,25 @@ endfor
 f2 = figure(2);
 %clf;
 hold on;
-stdOffset = floor(100 / skip / deltaStep);
+%stdOffset = floor(100 / skip / deltaStep);
+stdOffset = 0;
 
 for i = [1:size(md_ave, 2)]
     drawFrames = stdFrames .+ (i-1)*stdOffset;
     if (i == 6)
-        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
+        ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
         set(p(i).errorbar(1), "color", [0, 0.6, 0]);
-    elseif (i == 7)
-        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
-        set(p(i).errorbar(1), "color", [0, 0, 0]);
+%    elseif (i == 7)
+%        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
+%        set(p(i).errorbar(1), "color", [0, 0, 0]);
     else
         plotFormat = strcat("-", num2str(i));
         errorbarFormat = strcat("~", num2str(i));
-        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i), errorbarFormat);
+        ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i), errorbarFormat);
     endif
 endfor
 
-legend("Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Na", "Cross Cl-Cl", "location", "northwest");
+legend("Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl", "location", "northwest");
 
 %left = 25;
 %h_space = 20;
@@ -233,6 +245,6 @@ title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl so
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Electrical conductivity (S/m)");
-axis([0,100,-5, 10]);
+axis([0,100,-5, 13]);
 
 print(strcat('ecNoAverageCesaro-', 'ave-slope-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');

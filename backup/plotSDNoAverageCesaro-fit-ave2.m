@@ -11,7 +11,7 @@ clear all;
 global numIonTypes;
 
 if (nargin() < 4)
-    error("Usage: $plotNoAverageCesaro.m <dataFilename> <numMD> <skip> <dt>")
+    error("Usage: $plotSDNoAverageCesaro-fit-ave2.m <dataFilename> <numMD> <skip> <dt> [num_rBins]")
 endif
 
 dataFilename = argv(){1}
@@ -24,6 +24,10 @@ endif
 skip = str2num(argv(){3}) #skipped interval in sdCorr data
 deltaStep = str2num(argv(){4})
 
+if (nargin() > 4)
+  num_rBins = str2num(argv(){5});
+endif
+
 set(0, "defaultlinelinewidth", 4);
 
 function index = zipIndexPair(idx1, idx2)
@@ -31,21 +35,31 @@ function index = zipIndexPair(idx1, idx2)
     index = (idx1 - 1) * numIonTypes + idx2;
 endfunction
 
-puts("Loading data files to determine rBins\n");
 for n = [1:numMD]
-    puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
-    dataPath{n} = strcat("./md", num2str(n-1), "/", dataFilename);
-    if (n == numMD)
-      load(dataPath{n}, "numIonTypes", "timeLags", "rBins");
-    else
-      load(dataPath{n}, "rBins");
-    endif
-    num_rBins_tmp(n) = length(rBins);
+  dataPath{n} = strcat("./md", num2str(n-1), "/", dataFilename);
 endfor
-num_rBins = min(num_rBins_tmp)
-clear("num_rBins_tmp");
+
+if (exist("num_rBins", "var") != 1)
+  puts("Loading data files to determine rBins\n");
+  for n = [1:numMD]
+      puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
+      if (n == numMD)
+        load(dataPath{n}, "numIonTypes", "timeLags", "rBins");
+      else
+        load(dataPath{n}, "rBins");
+      endif
+      num_rBins_tmp(n) = length(rBins);
+  endfor
+  num_rBins = min(num_rBins_tmp)
+  clear("num_rBins_tmp");
+else
+  puts(cstrcat("Loading the 1st MD data to determine basic information...\n"));
+  puts(cstrcat("Loading MD data #", num2str(1), "...\n"));
+  load(dataPath{1}, "numIonTypes", "timeLags", "rBins");
+endif 
 rBins = rBins(1:num_rBins);
-numIonTypePairs = 1+numIonTypes**2; #actually include total part (+1)
+
+numIonTypePairs = 1+(numIonTypes*(numIonTypes+1))/2; #actually include total part (+1)
 
 # md(sdCorr_timeLag, sdCorr_rBin, sdCorrIonTypePairIndex, fileIndex)
 # calculate md_sum to get md_ave
@@ -67,8 +81,8 @@ md_std = zeros(length(timeLags), num_rBins, numIonTypePairs);
 for n = [1:numMD]
     puts(cstrcat("md_std: n=", num2str(n), "\n"));
     tmpData = load(dataPath{n}, "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
-    md_std(:, :, 1) = md_std(:, :, 1) .+ (tmpData.ecSDTotalNoAverageCesaro(:, 1:num_rBins) .- md_ave(:,:,1)).^2;
-    md_std(:, :, 2:numIonTypePairs) = md_std(:, :, 2:numIonTypePairs) + (tmpData.ecSDCorrNoAverageCesaro(:, 1:num_rBins, :) .- md_ave(:,:,2:numIonTypePairs)).^2;
+    md_std(:, :, 1) .+= (tmpData.ecSDTotalNoAverageCesaro(:, 1:num_rBins) .- md_ave(:,:,1)).^2;
+    md_std(:, :, 2:numIonTypePairs) .+= (tmpData.ecSDCorrNoAverageCesaro(:, 1:num_rBins, :) .- md_ave(:,:,2:numIonTypePairs)).^2;
 endfor
 md_std = sqrt(md_std ./ (numMD - 1));
 md_err = md_std ./ sqrt(numMD); # standard error
