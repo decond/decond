@@ -76,7 +76,14 @@ t = [0:maxLag];
 
 function index = zipIndexPair(idx1, idx2)
     global numIonTypes;
-    index = (idx1 - 1) * numIonTypes + idx2;
+%    index = (idx1 - 1) * numIonTypes + idx2;
+    # accept only the "upper-half" index pair, because cross-correlation should 
+    # be the same for (i,j) and (j,i)
+    if (idx1 > idx2)
+      error("Error - zipIndexPair: idx1 > idx2");
+    else
+      index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
+    endif
 endfunction
 
 %for T = [0:maxLag]
@@ -115,14 +122,33 @@ function ec = cumIntegrateEC(corrData, maxLag)
 endfunction
 
 ecTotal = zeros(maxLag+1, 1); 
+%for i = [1:numIonTypes]
+%    ecAutocorr(:, i) = charge(i) * charge(i) * cumIntegrateEC(vAutocorr{i}, maxLag);
+%    ecAutocorrNoAverageCesaro(:, i) = cumtrapz(ecAutocorr(:, i)) * timestep;
+%    ecTotal .+= ecAutocorr(:, i);
+%    for j = [1:numIonTypes]
+%        ecCorr(:, zipIndexPair(i,j)) = charge(i) * charge(j) * cumIntegrateEC(vCorr{i,j}, maxLag);
+%        ecCorrNoAverageCesaro(:, zipIndexPair(i,j)) = cumtrapz(ecCorr(:, zipIndexPair(i,j))) * timestep;
+%        ecTotal .+= ecCorr(:, zipIndexPair(i,j));
+%    endfor
+%endfor
 for i = [1:numIonTypes]
     ecAutocorr(:, i) = charge(i) * charge(i) * cumIntegrateEC(vAutocorr{i}, maxLag);
     ecAutocorrNoAverageCesaro(:, i) = cumtrapz(ecAutocorr(:, i)) * timestep;
     ecTotal .+= ecAutocorr(:, i);
-    for j = [1:numIonTypes]
-        ecCorr(:, zipIndexPair(i,j)) = charge(i) * charge(j) * cumIntegrateEC(vCorr{i,j}, maxLag);
+    for j = [i:numIonTypes]
+        if (i == j)
+          tmpCorr = vCorr{i,j};
+        else
+          tmpCorr = (vCorr{i,j}+vCorr{j,i})/2;
+        endif
+        ecCorr(:, zipIndexPair(i,j)) = charge(i) * charge(j) * cumIntegrateEC(tmpCorr, maxLag);
         ecCorrNoAverageCesaro(:, zipIndexPair(i,j)) = cumtrapz(ecCorr(:, zipIndexPair(i,j))) * timestep;
-        ecTotal .+= ecCorr(:, zipIndexPair(i,j));
+        if (i == j)
+          ecTotal .+= ecCorr(:, zipIndexPair(i,j));
+        else
+          ecTotal .+= ecCorr(:, zipIndexPair(i,j)).*2;
+        endif
     endfor
 endfor
 ecTotalNoAverageCesaro = cumtrapz(ecTotal) * timestep;

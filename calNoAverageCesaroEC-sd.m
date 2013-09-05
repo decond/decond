@@ -74,6 +74,18 @@ function index = zipIndexPair(idx1, idx2)
     index = (idx1 - 1) * numIonTypes + idx2;
 endfunction
 
+function index = zipIndexPair2(idx1, idx2)
+    global numIonTypes;
+%    index = (idx1 - 1) * numIonTypes + idx2;
+    # accept only the "upper-half" index pair, because cross-correlation should 
+    # be the same for (i,j) and (j,i)
+    if (idx1 > idx2)
+      error("Error - zipIndexPair: idx1 > idx2");
+    else
+      index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
+    endif
+endfunction
+
 %for T = [0:maxLag]
 %    ecTotal(T+1) = 0;
 %    for i = [1:numIonTypes]
@@ -99,11 +111,11 @@ endfunction
 %endfor
 %ecTotalNoAverageCesaro = ecTotalNoAverageCesaro';
 
-function [type1, type2] = unzipIonTypePairs(pairIndex)
-    global numIonTypes;
-    type1 = floor((pairIndex-1) / numIonTypes) + 1;
-    type2 = mod(pairIndex-1, numIonTypes) + 1;
-endfunction
+%function [type1, type2] = unzipIonTypePairs(pairIndex)
+%    global numIonTypes;
+%    type1 = floor((pairIndex-1) / numIonTypes) + 1;
+%    type2 = mod(pairIndex-1, numIonTypes) + 1;
+%endfunction
 
 function ec = cumIntegrateEC(sdCorrData, maxLag)
     global kB beta basicCharge ps nm volume timestep t;
@@ -116,13 +128,21 @@ function ec = cumIntegrateEC(sdCorrData, maxLag)
 endfunction
 
 ecSDTotal = zeros(maxLag+1, length(rBins)); 
-for i = [1:numIonTypePairs]
+%for i = [1:numIonTypePairs]
+for i = [1:numIonTypes]
+  for k = [i:numIonTypes]
     for j = [1:length(rBins)]
-        [ionType1, ionType2] = unzipIonTypePairs(i);
-        ecSDCorr(:, j, i) = charge(ionType1) * charge(ionType2) * cumIntegrateEC(sdCorr(:,j,i), maxLag);
-        ecSDCorrNoAverageCesaro(:, j, i) = cumtrapz(ecSDCorr(:, j, i)) * timestep;
+%        [ionType1, ionType2] = unzipIonTypePairs(i);
+        idx(1) = zipIndexPair(i, k);
+        idx(2) = zipIndexPair(k, i);
+        idx2 = zipIndexPair2(i, k);
+%        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)).*rho(j, idx(1)) + sdCorr(:, j, idx(2)).*rho(j, idx(2))) / 2; 
+        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
+        ecSDCorr(:, j, idx2) = charge(i) * charge(k) * cumIntegrateEC(ecSDCorr(:, j, idx2), maxLag);
+        ecSDCorrNoAverageCesaro(:, j, idx2) = cumtrapz(ecSDCorr(:, j, idx2)) * timestep;
     endfor
     ecSDTotal .+= ecSDCorr(:, :, i);
+  endfor
 endfor
 for j = [1:length(rBins)]
     ecSDTotalNoAverageCesaro(:, j) = cumtrapz(ecSDTotal(:, j)) * timestep;
