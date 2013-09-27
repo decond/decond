@@ -177,14 +177,14 @@ program spatialDecompose
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
-            if (tmp_i > 0)
+            if (tmp_i > 0) then
               sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
             end if
           end do
         end do
         do t = 1, numFrameRead
           tmp_i = rBinIndex(t)
-          if (tmp_i > 0)
+          if (tmp_i > 0) then
             rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
           end if
         end do
