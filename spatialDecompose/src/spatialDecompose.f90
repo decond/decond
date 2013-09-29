@@ -11,15 +11,16 @@ program spatialDecompose
   integer :: atomTypePairIndex, tmp_i, skip
   integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
   character(len=10) :: tmp_str
-  real(8) :: cell(3), timestep, rBinWidth, tmp_r
+  real(8) :: cell(3), timestep, rBinWidth, tmp_r, volume
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), rho_dv(:,:), g(:, :), sdCorr(:, :, :), rBins(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
+  real(8), parameter :: PI = 3.1415926535897932384626433832795028
 
   is_periodic = .true.
 
@@ -146,12 +147,12 @@ program spatialDecompose
   end if 
   sdCorr = 0d0
 
-  allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
+  allocate(rho_dv(num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
-    write(*,*) "Allocation failed: rho"
+    write(*,*) "Allocation failed: rho_dv"
     call exit(1)
   end if 
-  rho = 0d0
+  rho_dv = 0d0
 
   allocate(rBinIndex(numFrameRead), stat=stat)
   if (stat /= 0) then
@@ -185,7 +186,7 @@ program spatialDecompose
         do t = 1, numFrameRead
           tmp_i = rBinIndex(t)
           if (tmp_i > 0) then
-            rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
+            rho_dv(tmp_i, atomTypePairIndex) = rho_dv(tmp_i, atomTypePairIndex) + 1d0
           end if
         end do
       end if
@@ -202,7 +203,7 @@ program spatialDecompose
     call exit(1)
   end if 
 
-  rho = rho / numFrameRead
+  rho_dv = rho_dv / numFrameRead
   sdCorr = sdCorr / 3d0
 
   norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
@@ -210,8 +211,8 @@ program spatialDecompose
     sdCorr(:,i,n) = sdCorr(:,i,n) / norm
   end forall
 !  forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
-!    where (rho > 0d0)
-!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
+!    where (rho_dv > 0d0)
+!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho_dv(:, n)
 !    end where
 !  end forall
   
@@ -219,20 +220,59 @@ program spatialDecompose
 
   do n = 1, numAtomType*numAtomType
     do j = 1, num_rBin
-      if (rho(j, n) > 0d0) then
-          sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
+      if (rho_dv(j, n) > 0d0) then
+          sdCorr(:,j,n) = sdCorr(:,j,n) / rho_dv(j, n)
       else if (any(abs(sdCorr(:,j,n)) > 0d0)) then
-        !rho is zero, sdCorr should also be zero
-        write(*,*) "error: rho(",j,",",n,") = ", rho(j,n)
+        !rho_dv is zero, sdCorr should also be zero
+        write(*,*) "error: rho_dv(",j,",",n,") = ", rho_dv(j,n)
         write(*,*) "but sdCorr(:,", j, ",", n, ") are not all zero"
         call exit(1)
       end if
     end do
   end do
 
-!  where (isnan(sdCorr))
-!    sdCorr = 0
-!  end where
+
+  allocate(rBins(num_rBin), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rBins"
+    call exit(1)
+  end if 
+  rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+
+  allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: rho"
+    call exit(1)
+  end if 
+  rho = 0d0
+
+  ! rho is density, so divided by the infinitesimal volume
+  forall (k = 1:num_rBin)
+!  rho(:, k) = rho_dv(:, k) / (4d0 * PI * rBins**2 * rBinWidth)
+    rho(:, k) = rho_dv(:, k) / (4d0/3d0 * PI * ([ (i, i = 1, num_rBin) ]**3 - &
+                                            &[ (i, i = 0, num_rBin - 1) ]**3) * rBinWidth**3)
+  end forall
+
+  volume = cell(1)*cell(2)*cell(3)
+  ! Move the division of volume here so that rho becomes an intensive variable
+  ! which is the pair density at r
+  rho = rho / volume
+
+  ! rho(r) is connected to g(r) by
+  !   g(r) = rho_IK(r) / (rho_I * rho_K)
+  ! where rho_I and rho_K are bulk densities of the I-th and K-th ionic species respectively
+  allocate(g(num_rBin, numAtomType*numAtomType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: g"
+    call exit(1)
+  end if 
+  g = rho * volume**2
+  do i = 1, numAtomType
+    do j = 1, numAtomType
+      atomTypePairIndex = (i-1)*numAtomType + j
+      g(:, atomTypePairIndex) = rho(:, atomTypePairIndex) / (numAtom(i) * numAtom(j))
+    end do
+  end do
 
   !output results
   call output()
@@ -299,7 +339,7 @@ contains
     use octave_save
     implicit none
     type(handle) :: htraj
-    real(8), allocatable :: timeLags(:), rBins(:)
+    real(8), allocatable :: timeLags(:)
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -308,13 +348,6 @@ contains
     end if 
     timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
     
-    allocate(rBins(num_rBin), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: rBins"
-      call exit(1)
-    end if 
-    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
-
     call create_octave(htraj, outFilename)
     call write_octave_scalar(htraj, "timestep", timestep)
     call write_octave_vec(htraj, "charge", dble(charge))
@@ -322,7 +355,9 @@ contains
     call write_octave_vec(htraj, "timeLags", timeLags)
     call write_octave_vec(htraj, "rBins", rBins)
     call write_octave_mat3(htraj, "sdCorr", sdCorr)
+    call write_octave_mat2(htraj, "rho_dv", rho_dv)
     call write_octave_mat2(htraj, "rho", rho)
+    call write_octave_mat2(htraj, "g", g)
     call close_octave(htraj)
   end subroutine output
 
