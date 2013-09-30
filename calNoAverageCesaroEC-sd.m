@@ -127,7 +127,17 @@ function ec = cumIntegrateEC(sdCorrData, maxLag)
     endif
 endfunction
 
-ecSDTotal = zeros(maxLag+1, length(rBins)); 
+function D = cumIntegrateD(sdCorrData, maxLag)
+    global kB beta basicCharge ps nm volume timestep t;
+    if (length(sdCorrData) == 1 && maxLag > 0)
+        #there is only one ion so no mutual-sdcorr
+        D = 0;
+    else
+        D = cumtrapz(t(1:maxLag+1)', sdCorrData(1:maxLag+1)) * timestep * nm**2 / ps;
+    endif
+endfunction
+
+%ecSDTotal = zeros(maxLag+1, length(rBins)); 
 %for i = [1:numIonTypePairs]
 for i = [1:numIonTypes]
   for k = [i:numIonTypes]
@@ -137,16 +147,18 @@ for i = [1:numIonTypes]
         idx(2) = zipIndexPair(k, i);
         idx2 = zipIndexPair2(i, k);
 %        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)).*rho(j, idx(1)) + sdCorr(:, j, idx(2)).*rho(j, idx(2))) / 2; 
-        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
-        ecSDCorr(:, j, idx2) = charge(i) * charge(k) * cumIntegrateEC(ecSDCorr(:, j, idx2), maxLag);
-        ecSDCorrNoAverageCesaro(:, j, idx2) = cumtrapz(ecSDCorr(:, j, idx2)) * timestep;
+        D(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
+%        ecSDCorr(:, j, idx2) = charge(i) * charge(k) * cumIntegrateEC(ecSDCorr(:, j, idx2), maxLag);
+        D(:, j, idx2) = cumIntegrateD(D(:, j, idx2), maxLag);
+        D_noAveCesaro(:, j, idx2) = cumtrapz(D(:, j, idx2)) * timestep;
     endfor
-    ecSDTotal .+= ecSDCorr(:, :, i);
+%    ecSDTotal .+= ecSDCorr(:, :, i);
   endfor
 endfor
-for j = [1:length(rBins)]
-    ecSDTotalNoAverageCesaro(:, j) = cumtrapz(ecSDTotal(:, j)) * timestep;
-endfor
+%for j = [1:length(rBins)]
+%    ecSDTotalNoAverageCesaro(:, j) = cumtrapz(ecSDTotal(:, j)) * timestep;
+%endfor
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "numIonTypes", "timestep", "timeLags", "rBins", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
+%save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
+save(strcat(baseFilename, ".DNoAverageCesaro-dt-", num2str(deltaStep)), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho", "D", "D_noAveCesaro");
