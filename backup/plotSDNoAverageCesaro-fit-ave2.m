@@ -44,7 +44,7 @@ if (exist("num_rBins", "var") != 1)
   for n = [1:numMD]
       puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
       if (n == numMD)
-        load(dataPath{n}, "numIonTypes", "timeLags", "rBins");
+        load(dataPath{n}, "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho");
       else
         load(dataPath{n}, "rBins");
       endif
@@ -55,11 +55,11 @@ if (exist("num_rBins", "var") != 1)
 else
   puts(cstrcat("Loading the 1st MD data to determine basic information...\n"));
   puts(cstrcat("Loading MD data #", num2str(1), "...\n"));
-  load(dataPath{1}, "numIonTypes", "timeLags", "rBins");
+  load(dataPath{1}, "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho");
 endif 
 rBins = rBins(1:num_rBins);
 
-numIonTypePairs = 1+(numIonTypes*(numIonTypes+1))/2; #actually include total part (+1)
+numIonTypePairs = (numIonTypes*(numIonTypes+1))/2; 
 
 # md(sdCorr_timeLag, sdCorr_rBin, sdCorrIonTypePairIndex, fileIndex)
 # calculate md_sum to get md_ave
@@ -67,9 +67,8 @@ puts("Loading data files to determine md_sum\n");
 md_sum = zeros(length(timeLags), num_rBins, numIonTypePairs);
 for n = [1:numMD]
     puts(cstrcat("md_sum: n=", num2str(n), "\n"));
-    tmpData = load(dataPath{n}, "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
-    md_sum(:, :, 1) = md_sum(:, :, 1) + tmpData.ecSDTotalNoAverageCesaro(:, 1:num_rBins);
-    md_sum(:, :, 2:numIonTypePairs) = md_sum(:, :, 2:numIonTypePairs) + tmpData.ecSDCorrNoAverageCesaro(:, 1:num_rBins, :);
+    tmpData = load(dataPath{n}, "D_noAveCesaro");
+    md_sum .+= tmpData.D_noAveCesaro(:, 1:num_rBins, :);
 endfor
 clear("tmpData");
 
@@ -80,14 +79,14 @@ clear("md_sum");
 md_std = zeros(length(timeLags), num_rBins, numIonTypePairs);
 for n = [1:numMD]
     puts(cstrcat("md_std: n=", num2str(n), "\n"));
-    tmpData = load(dataPath{n}, "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro");
-    md_std(:, :, 1) .+= (tmpData.ecSDTotalNoAverageCesaro(:, 1:num_rBins) .- md_ave(:,:,1)).^2;
-    md_std(:, :, 2:numIonTypePairs) .+= (tmpData.ecSDCorrNoAverageCesaro(:, 1:num_rBins, :) .- md_ave(:,:,2:numIonTypePairs)).^2;
+    tmpData = load(dataPath{n}, "D_noAveCesaro");
+    md_std .+= (tmpData.D_noAveCesaro(:, 1:num_rBins, :) .- md_ave).^2;
 endfor
 md_std = sqrt(md_std ./ (numMD - 1));
 md_err = md_std ./ sqrt(numMD); # standard error
 
 
+%********** Fitting **********
 fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
 %fitRange = [2, 4; 4, 6; 6, 8; 8, 10]; #ps
 fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
@@ -122,7 +121,7 @@ Delta = S .* Sxx - Sx .* Sx;
 slope_b = (S .* Sxy - Sx .* Sy) ./ Delta;
 slopeSD = sqrt(S ./ Delta);
 
-save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "rBins", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
 %save(strcat('ecNoAverageCesaro-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
