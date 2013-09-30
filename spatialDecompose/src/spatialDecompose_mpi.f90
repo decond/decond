@@ -393,6 +393,7 @@ contains
     integer :: n, numAtom_acc
 !    integer, save :: numAtomType = size(numAtom)
 
+    getAtomTypeIndex = -1
     numAtom_acc = 0
     do n = 1, numAtomType
       numAtom_acc = numAtom_acc + numAtom(n)
