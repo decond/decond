@@ -10,7 +10,7 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) $(OMPFLAGS)
+FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) $(OMPFLAGS) -O2
 
 PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp 
 
