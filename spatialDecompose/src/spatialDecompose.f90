@@ -247,11 +247,11 @@ program spatialDecompose
   rho = 0d0
 
   ! rho is density, so divided by the infinitesimal volume
-  forall (k = 1:num_rBin)
+  do k = 1, numAtomType*numAtomType
 !  rho(:, k) = rho_dv(:, k) / (4d0 * PI * rBins**2 * rBinWidth)
-    rho(:, k) = rho_dv(:, k) / (4d0/3d0 * PI * ([ (i, i = 1, num_rBin) ]**3 - &
+      rho(:, k) = rho_dv(:, k) / (4d0/3d0 * PI * ([ (i, i = 1, num_rBin) ]**3 - &
                                             &[ (i, i = 0, num_rBin - 1) ]**3) * rBinWidth**3)
-  end forall
+  end do
 
   volume = cell(1)*cell(2)*cell(3)
   ! Move the division of volume here so that rho becomes an intensive variable
