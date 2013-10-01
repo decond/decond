@@ -215,7 +215,8 @@ program spatialDecompose_mpi
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
-  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
+  ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
+  num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
   if (myrank == root) write(*,*) "num_rBin = ", num_rBin
 
   !spatial decomposition correlation
@@ -259,14 +260,14 @@ program spatialDecompose_mpi
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
-            if (tmp_i > 0) then
+            if (tmp_i <= num_rBin) then
               sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
             end if
           end do
         end do
         do t = 1, numFrameRead
           tmp_i = rBinIndex(t)
-          if (tmp_i > 0) then
+          if (tmp_i <= num_rBin) then
             rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
           end if
         end do
@@ -382,9 +383,10 @@ contains
     where (rBinIndex == 0)
       rBinIndex = 1
     end where
-    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
-      rBinIndex = -1
-    end where
+!    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
+!    where (rBinIndex > num_rBin)
+!      rBinIndex = -1
+!    end where
   end subroutine getBinIndex
 
   integer function getAtomTypeIndex(i, numAtom)
