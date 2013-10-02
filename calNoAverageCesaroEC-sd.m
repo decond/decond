@@ -148,10 +148,10 @@ for i = [1:numIonTypes]
         idx2 = zipIndexPair2(i, k);
 %        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)).*rho(j, idx(1)) + sdCorr(:, j, idx(2)).*rho(j, idx(2))) / 2; 
         if (idx(1) != idx(2))
-          rho2 = (rho(:, idx(1)) + rho(:, idx(2))) / 2;
+          rho2(:, idx2) = (rho(:, idx(1)) + rho(:, idx(2))) / 2;
           D(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
         else
-          rho2 = rho(:, idx(1));
+          rho2(:, idx2) = rho(:, idx(1));
           D(:, j, idx2) = sdCorr(:, j, idx(1)); 
         endif
 %        ecSDCorr(:, j, idx2) = charge(i) * charge(k) * cumIntegrateEC(ecSDCorr(:, j, idx2), maxLag);
