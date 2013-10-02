@@ -26,7 +26,6 @@ endfunction
 # md(sdCorr_timeLag, sdCorr_rBin, sdCorrIonTypePairIndex, fileIndex)
 load(strcat(dataFilename));
 md = D_noAveCesaro(:, :, :);
-timeLags = data.timeLags;
 
 numIonTypePairs = size(md, 3) #actually include total part (+1)
 num_rBins = size(md, 2)
@@ -44,4 +43,4 @@ for i = [1:numIonTypePairs]
   endfor
 endfor
 
-save(strcat(dataFilename, '.fit'), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho", "md", "slope");
+save(strcat(dataFilename, '.fit'), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho2", "md", "slope");
