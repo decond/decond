@@ -44,7 +44,7 @@ if (exist("num_rBins", "var") != 1)
   for n = [1:numMD]
       puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
       if (n == numMD)
-        load(dataPath{n}, "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho");
+        load(dataPath{n}, "charge", "numIonTypes", "timestep", "timeLags", "rBins");
       else
         load(dataPath{n}, "rBins");
       endif
@@ -53,9 +53,10 @@ if (exist("num_rBins", "var") != 1)
   num_rBins = min(num_rBins_tmp)
   clear("num_rBins_tmp");
 else
+  puts(cstrcat("num_rBins is given: ", num2str(num_rBins), "\n")); 
   puts(cstrcat("Loading the 1st MD data to determine basic information...\n"));
   puts(cstrcat("Loading MD data #", num2str(1), "...\n"));
-  load(dataPath{1}, "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho");
+  load(dataPath{1}, "charge", "numIonTypes", "timestep", "timeLags", "rBins");
 endif 
 rBins = rBins(1:num_rBins);
 
@@ -65,24 +66,41 @@ numIonTypePairs = (numIonTypes*(numIonTypes+1))/2;
 # calculate md_sum to get md_ave
 puts("Loading data files to determine md_sum\n");
 md_sum = zeros(length(timeLags), num_rBins, numIonTypePairs);
+volume_sum = 0;
+rho2_sum = 0;
 for n = [1:numMD]
     puts(cstrcat("md_sum: n=", num2str(n), "\n"));
-    tmpData = load(dataPath{n}, "D_noAveCesaro");
+    tmpData = load(dataPath{n}, "cell", "rho2", "D_noAveCesaro");
+    volume_sum += prod(tmpData.cell);
+    rho2_sum += tmpData.rho2(1:num_rBins, :); 
     md_sum .+= tmpData.D_noAveCesaro(:, 1:num_rBins, :);
 endfor
 clear("tmpData");
 
+volume_ave = volume_sum ./ numMD;
+rho2_ave = rho2_sum ./ numMD;
 md_ave = md_sum ./ numMD;
 clear("md_sum");
+clear("rho2_sum");
+clear("volume_sum");
 
-# calculate md_std
+# calculate std
+puts("Loading data files to determine ave and std\n");
+volume_std = 0;
 md_std = zeros(length(timeLags), num_rBins, numIonTypePairs);
+rho2_std = zeros(num_rBins, numIonTypePairs); 
 for n = [1:numMD]
     puts(cstrcat("md_std: n=", num2str(n), "\n"));
-    tmpData = load(dataPath{n}, "D_noAveCesaro");
+    tmpData = load(dataPath{n}, "cell", "rho2", "D_noAveCesaro");
+    volume_std .+= (prod(tmpData.cell) - volume_ave).^2;
+    rho2_std .+= (tmpData.rho2(1:num_rBins, :) .- rho2_ave).^2;
     md_std .+= (tmpData.D_noAveCesaro(:, 1:num_rBins, :) .- md_ave).^2;
 endfor
+volume_std = sqrt(volume_std ./ (numMD - 1));
+rho2_std = sqrt(rho2_std ./ (numMD - 1));
 md_std = sqrt(md_std ./ (numMD - 1));
+volume_err = volume_std ./ sqrt(numMD); # standard error
+rho2_err = rho2_std ./ sqrt(numMD); # standard error
 md_err = md_std ./ sqrt(numMD); # standard error
 
 
@@ -121,7 +139,10 @@ Delta = S .* Sxx - Sx .* Sx;
 slope_b = (S .* Sxy - Sx .* Sy) ./ Delta;
 slopeSD = sqrt(S ./ Delta);
 
-save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins", "rho", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "charge",\
+     "numIonTypes", "timestep", "timeLags", "rBins", "volume_ave",\
+     "volume_std", "volume_err", "rho2_ave", "rho2_std", "rho2_err",\
+     "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
 %save(strcat('ecNoAverageCesaro-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
