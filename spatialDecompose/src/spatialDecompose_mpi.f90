@@ -2,7 +2,7 @@ program spatialDecompose_mpi
   use mpi
   use g96
   implicit none
-  integer, parameter :: num_parArg = 6, stdout = 6
+  integer, parameter :: num_parArg = 8, stdout = 6
   integer, parameter :: num_argPerData = 2
   integer :: num_dataArg, i, j, k, n, totNumAtom, t
   character(len=128) :: outFilename 
@@ -44,9 +44,10 @@ program spatialDecompose_mpi
     is_periodic = .true.
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
       write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
-                  &<numatom1> <charge1> [<numatom2> <charge2>...]"
+                  &<numDomain_r> <numDomain_c> <numatom1> <charge1> [<numatom2> <charge2>...]"
       write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
       write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
+      write(*,*) "Note: numDomain_r and numDomain_c can be 0 and let the program decide (may not be the best)."
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -69,6 +70,12 @@ program spatialDecompose_mpi
   call get_command_argument(6, tmp_str)
   read(tmp_str, *) rBinWidth
 
+  call get_command_argument(7, tmp_str) 
+  read(tmp_str, *) numDomain_r
+
+  call get_command_argument(8, tmp_str) 
+  read(tmp_str, *) numDomain_c
+
   numAtomType = num_dataArg / num_argPerData
 
   !rank root output parameters read
@@ -79,6 +86,8 @@ program spatialDecompose_mpi
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
     write(*,*) "numAtomType = ", numAtomType
+    write(*,*) "numDomain_r = ", numDomain_r
+    write(*,*) "numDomain_c = ", numDomain_c
   end if
 
   allocate(numAtom(numAtomType), stat=stat)
@@ -109,11 +118,28 @@ program spatialDecompose_mpi
 
   !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
   !numAtomPerDomain_r * numDomain_r ~= totNumAtom
-  numDomain_c = nint(sqrt(dble(nprocs)))
-  do while(mod(nprocs, numDomain_c) /= 0)
-    numDomain_c = numDomain_c - 1
-  end do
-  numDomain_r = nprocs / numDomain_c
+  if (numDomain_r == 0 .and. numDomain_c == 0) then
+    numDomain_c = nint(sqrt(dble(nprocs)))
+    do while(mod(nprocs, numDomain_c) /= 0)
+      numDomain_c = numDomain_c - 1
+    end do
+    numDomain_r = nprocs / numDomain_c
+  else if (numDomain_r > 0) then
+    numDomain_c = nprocs / numDomain_r
+  else if (numDomain_c > 0) then
+    numDomain_c = nprocs / numDomain_r
+  else
+    write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c 
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
+  end if
+
+  if (numDomain_r * numDomain_c /= nprocs) then
+    write(*,*) "Domain decomposition failed: ", numDomain_r, " x ", numDomain_c, " /= ", nprocs
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
+  end if 
+
   numAtomPerDomain_r = totNumAtom / numDomain_r
   numAtomPerDomain_c = totNumAtom / numDomain_c
   r_start = mod(myrank, numDomain_r) * numAtomPerDomain_r + 1
