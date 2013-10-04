@@ -4,10 +4,10 @@ clear all;
 global numIonTypes;
 
 if (nargin() < 3)
-    error("Usage: $plotNoAverageCesaro.m <dataBaseName> <skip> <dt>")
+    error("Usage: $plotNoAverageCesaro.m <dataFilename> <skip> <dt>")
 endif
 
-dataBaseName = argv(){1}
+dataFilename = argv(){1}
 skip = str2num(argv(){2}) #skipped interval in vCorr data
 deltaStep = str2num(argv(){3})
 
@@ -16,9 +16,9 @@ set(0, "defaultlinelinewidth", 4);
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 50;
+numMD = 1;
 
-initialize = load(strcat("./md0/", dataBaseName, num2str(deltaStep)));
+initialize = load(strcat("./md0/", dataFilename));
 numIonTypes = size(initialize.ecAutocorrNoAverageCesaro, 2);
 timeLags = initialize.timeLags;
 clear initialize;
@@ -38,7 +38,7 @@ endfunction
 # packing and distributing data to a single md array
 # md(fileIndex, corrIndex, corrData)
 for n = [1:numMD]
-    data = load(strcat("./md", num2str(n-1), "/", dataBaseName, num2str(deltaStep)));
+    data = load(strcat("./md", num2str(n-1), "/", dataFilename));
     md(n, 1, :) = data.ecTotalNoAverageCesaro;
     for i = [1:numIonTypes]
         for j = [i:numIonTypes]
@@ -91,27 +91,31 @@ for i = [1:size(md_ave, 2)]
     endfor
 endfor
 
-# evaluate the uncertainty in the slope of the fitting line
-# reference: Numerical Recipes Chapter 15.2 (p.656)
-for i = [1:size(md_ave, 2)]
-    for r = [1:size(fitRange, 1)]
-        rec_sig2 = 1 ./ (md_std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
-        S(r, i) = sum(rec_sig2, 1);
-        Sx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* rec_sig2, 1); 
-        Sxx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)).^2 .* rec_sig2, 1); 
-        Sy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
-        Syy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
-        Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
-    endfor
-endfor
-Delta = S .* Sxx - Sx .* Sx;
+if (numMD > 1)
+  # evaluate the uncertainty in the slope of the fitting line
+  # reference: Numerical Recipes Chapter 15.2 (p.656)
+  for i = [1:size(md_ave, 2)]
+      for r = [1:size(fitRange, 1)]
+          rec_sig2 = 1 ./ (md_std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
+          S(r, i) = sum(rec_sig2, 1);
+          Sx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* rec_sig2, 1); 
+          Sxx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)).^2 .* rec_sig2, 1); 
+          Sy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
+          Syy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
+          Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
+      endfor
+  endfor
+  Delta = S .* Sxx - Sx .* Sx;
 
-# output slope for double check
-slope_b = (S .* Sxy - Sx .* Sy) ./ Delta
-slopeSD = sqrt(S ./ Delta);
-# slopeSD(fitRange, corrIndex)
+  # output slope for double check
+  slope_b = (S .* Sxy - Sx .* Sy) ./ Delta
+  slopeSD = sqrt(S ./ Delta);
+  # slopeSD(fitRange, corrIndex)
+else
+  slopeSD = 0;
+endif
 
-save(strcat(dataBaseName, num2str(deltaStep), '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
 
 %# calculate slope for each segment of each md
 %fitRange .*= 1000;
@@ -189,7 +193,7 @@ xlabel("partial sum upper limit (ps)");
 ylabel("Non-averaged partial sum (ps*S/m)");
 axis([0,100,-400, 1300]);
 
-print(strcat('ecNoAverageCesaro-', 'ave-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');
+print(strcat(dataFilename, '.fit.ave-', num2str(numMD), '.eps'), '-deps', '-color');
 hold off
 %axis([0,0.1,0,1.5]);
 %print('ecNoAverageCesaro-zoom.eps', '-deps', '-color');
@@ -247,4 +251,4 @@ xlabel("partial sum upper limit (ps)");
 ylabel("Electrical conductivity (S/m)");
 axis([0,100,-5, 13]);
 
-print(strcat('ecNoAverageCesaro-', 'ave-slope-skip-', num2str(skip), '-dt-', num2str(deltaStep), '.eps'), '-deps', '-color');
+print(strcat(dataFilename, '.fit.slope-ave-', num2str(numMD), '.eps'), '-deps', '-color');
