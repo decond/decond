@@ -12,7 +12,7 @@ OUTDIR = ./out/
 
 FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) $(OMPFLAGS) -O2
 
-PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp 
+PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -38,6 +38,12 @@ spatialDecompose : spatialDecompose.o utility.o g96.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
 spatialDecompose.o : spatialDecompose.f90 utility.o g96.o octave_save.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
+bridge: bridge.o utility.o g96.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+bridge.o : bridge.f90 utility.o g96.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 # Library ===================================
