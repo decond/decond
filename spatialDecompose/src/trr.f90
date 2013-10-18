@@ -51,19 +51,19 @@ contains
     real(8) :: box_params(10), dummy_data(3)
 
     read(htraj%iohandle) intro_words
-    write(*,*) intro_words(13:24)
+!    write(*,*) intro_words(13:24)
     read(htraj%iohandle) data_present
     is_data_present = (data_present /= 0)
-    write(*,*) "data_present (x v f) = (", is_data_present, ")"
+!    write(*,*) "data_present (x v f) = (", is_data_present, ")"
     read(htraj%iohandle) natom
-    write(*,*) "natom = ", natom
+!    write(*,*) "natom = ", natom
     read(htraj%iohandle) frame_step
-    write(*,*) "frame_step = ", frame_step
+!    write(*,*) "frame_step = ", frame_step
     read(htraj%iohandle) time
-    write(*,*) "frame_time = ", time
+!    write(*,*) "frame_time = ", time
     read(htraj%iohandle) box_params
     cell(1:3) = box_params(2:10:4)
-    write(*,*) "cell = ", cell
+!    write(*,*) "cell = ", cell
 
     ! read coordinates
     if (is_data_present(1)) then
