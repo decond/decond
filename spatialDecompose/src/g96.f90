@@ -44,7 +44,7 @@ contains
   end subroutine close_trajectory
 
   ! Read trajectory and returns [crd] as a coordinates, and [cell] as a
-  ! periodic cell, represented in Angstrom.
+  ! periodic cell, represented in nanometer.
   ! [status] is non-zero if any error occurs. In such a case, [crd] and
   ! [cell] may be an arbitrary value if the trajectory does not contain
   ! cell information.
