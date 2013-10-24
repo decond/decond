@@ -15,3 +15,5 @@
 */mod/*
 bin/*
 *.DS_Store
+*.out
+*.mod
