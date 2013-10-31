@@ -1,5 +1,5 @@
 program fftw_test
-  use fftw3
+  use fftw
   implicit none
   real(C_DOUBLE), dimension(16) :: a, b, c
   complex(C_DOUBLE_COMPLEX), dimension(9) :: aa, bb, cc
