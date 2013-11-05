@@ -10,7 +10,9 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) $(OMPFLAGS) -O2
+FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) -O2
+FFTWDIR = /usr/
+#FFTWDIR = $(HOME)/local/fftw-3.3.2/
 
 PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge com corr_test
 
@@ -47,16 +49,16 @@ bridge: bridge.o utility.o g96.o octave_save.o
 bridge.o : bridge.f90 utility.o g96.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-com: com.o utility.o trr.o octave_save.o
+com : com.o utility.o trr.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
 com.o : com.f90 utility.o trr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-corr_test: corr_test.o correlation.o fftw.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) -L$(HOME)/local/fftw-3.3.2/lib -lfftw3 -lm
+corr_test : corr_test.o correlation.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) -L$(FFTWDIR)lib -lfftw3 -lm
 
-corr_test.o : corr_test.f90 
+corr_test.o : corr_test.f90 correlation.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 # Library ===================================
@@ -72,11 +74,11 @@ trr.o : trr.f90 utility.o
 utility.o : utility.f90
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-correlation.o : correlation.f90
+correlation.o : correlation.f90 fftw.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(HOME)/local/fftw-3.3.2/include
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)include
 #==================================================
 .PHONY: clean
 clean :
