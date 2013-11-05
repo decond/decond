@@ -8,6 +8,7 @@ module correlation
 
 contains
   function corr_vec1(vec, maxlag)
+  ! strangely this function cannot be run on sigma, memory problem occurs!
     implicit none
     real(C_DOUBLE), dimension(2*maxlag+1) :: corr_vec1
     real(C_DOUBLE), dimension(:), intent(in) :: vec
@@ -132,8 +133,6 @@ contains
     vec2_postpad(1:n) = vec2
     vec2_postpad(n+1:m) = 0d0
 
-!write(*,*) "vec1_prepad=",vec1_prepad
-!write(*,*) "vec2_postpad=",vec2_postpad
     call fftw_execute_dft_r2c(plan1, vec1_prepad, vec1_prepad_c)
     call fftw_execute_dft_r2c(plan2, vec2_postpad, vec2_postpad_c)
 
