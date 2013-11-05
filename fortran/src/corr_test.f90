@@ -6,12 +6,14 @@ program corr_test
 
   a = [1,2,3,4,5]
   b = [1,3,5,7,9]
-  write(*,*) "1st"
-  write(*,*) corr(a, b, maxlag)
-  write(*,*) "2nd"
-  write(*,*) corr(b, a, maxlag)
+!  write(*,*) "Run 1"
 !  write(*,*) corr(a, b, maxlag)
-!  write(*,*) corr(d, maxlag)
+!  write(*,*) "Run 2"
+!  write(*,*) corr(b, a, maxlag)
+  write(*,*) "Run 3"
+  write(*,*) corr(a, maxlag)
+  write(*,*) "Run 4"
+  write(*,*) corr(a, a, maxlag)
 
 contains
   function nextpow2(n)
