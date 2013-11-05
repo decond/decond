@@ -29,7 +29,7 @@ spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.
 	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
 spatialDecompose_openmp.o : spatialDecompose_openmp.f90 utility.o g96.o octave_save.o
-	$(FCMPI) $(OMPFLAGS) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+	$(FC) $(OMPFLAGS) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 spatialDecompose_mpi : spatialDecompose_mpi.o utility.o g96.o octave_save.o
 	$(FCMPI) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
