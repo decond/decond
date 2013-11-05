@@ -3,7 +3,7 @@ module correlation
   implicit none
 
   interface corr
-    procedure corr_vec1, corr_vec2, corr_mat
+    module procedure corr_vec1, corr_vec2, corr_mat
   end interface
 
 contains
