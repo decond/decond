@@ -1,11 +1,8 @@
 program corr_test
   use correlation
   implicit none
-  real(C_DOUBLE), dimension(5) :: a, b, c
-  complex(C_DOUBLE_COMPLEX), dimension(5) :: aa, bb, cc
-  type(C_PTR) :: plan1, plan2, plan3
+  real(C_DOUBLE), dimension(5) :: a, b
   integer, parameter :: maxlag = 3
-  integer :: m
 
   a = [1,2,3,4,5]
   b = [1,3,5,7,9]
