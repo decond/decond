@@ -10,10 +10,10 @@ program spatialDecompose
   type(handle) :: dataFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numAtomType
   integer :: atomTypePairIndex, tmp_i, atomPairIndex, typei, typej, atomi, atomj
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:), vv(:)
+  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
   character(len=10) :: numFrame_str, maxLag_str, rBinWidth_str, charge_str, numAtom_str
   real(8) :: cell(3), timestep, rBinWidth
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
+  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
