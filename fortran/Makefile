@@ -11,8 +11,8 @@ MODDIR = ./mod/
 OUTDIR = ./out/
 
 FCFLAGS = -Wall $(MODFLAG)$(MODDIR) -I$(MODDIR) -O2
-FFTWDIR = /usr/
-#FFTWDIR = $(HOME)/local/fftw-3.3.2/
+#FFTWDIR = /usr/
+FFTWDIR = $(HOME)/local/
 
 PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge com corr_test
 
