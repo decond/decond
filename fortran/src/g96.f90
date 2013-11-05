@@ -23,7 +23,8 @@ contains
     open(unit=newunit(htraj%iohandle), file=fname, action="READ", form="FORMATTED")
     read(htraj%iohandle, *) line
     if (line /= key_title) then
-      stop "incorrect g96 format: no " // key_title
+      write(*,*) "incorrect g96 format: no " // key_title
+      call exit(1)
     end if
     read(htraj%iohandle, *) line
     do while (line /= key_end)
@@ -63,14 +64,16 @@ contains
     
     read(htraj%iohandle, *, err = 901, end = 900) line
     if (line /= key_timestep) then
-      stop "incorrect g96 format: no " // key_timestep
+      write(*,*) "incorrect g96 format: no " // key_timestep
+      call exit(1)
     end if
     read(htraj%iohandle, *, err = 901, end = 900) dummy_i, time
     read(htraj%iohandle, *, err = 901, end = 900) !END
 
     read(htraj%iohandle, *, err = 901, end = 900) line
     if (line /= key_positionred .and. line /= key_position) then
-      stop "incorrect g96 format: no " // key_positionred // " nor " // key_position
+      write(*,*) "incorrect g96 format: no " // key_positionred // " nor " // key_position
+      call exit(1)
     end if
     do i = 1, natom
       read(htraj%iohandle, "(3F15.9)", err = 901, end = 900) crd(:, i)
@@ -79,7 +82,8 @@ contains
 
     read(htraj%iohandle, *, err = 901, end = 900) line
     if (line /= key_velocityred .and. line /= key_velocity) then
-      stop "Currently velocity information is mandatory: " // key_velocityred // " or " // key_velocity
+      write(*,*) "Currently velocity information is mandatory: " // key_velocityred // " or " // key_velocity
+      call exit(1)
     end if
     do i = 1, natom
       read(htraj%iohandle, "(3F15.9)", err = 901, end = 900) vel(:, i)
@@ -92,7 +96,8 @@ contains
         read(htraj%iohandle, "(3F15.9)", err = 901, end = 900) cell
         read(htraj%iohandle, *, err = 901, end = 900) !END
       else
-        stop "Trajectory with PBC should contain information of cell size"
+        write(*,*) "Trajectory with PBC should contain information of cell size"
+        call exit(1)
       end if
     end if
 
