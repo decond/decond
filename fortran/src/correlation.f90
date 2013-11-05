@@ -9,16 +9,66 @@ module correlation
 contains
   function corr_vec1(vec, maxlag)
     implicit none
-    real(C_DOUBLE), dimension(maxlag+1) :: corr_vec1
+    real(C_DOUBLE), dimension(2*maxlag+1) :: corr_vec1
     real(C_DOUBLE), dimension(:), intent(in) :: vec
     integer, intent(in) :: maxlag
+    integer, save :: n, m, k, maxlag_save
+    real(C_DOUBLE), dimension(:), pointer, save :: vec_postpad, cor
+    complex(C_DOUBLE_COMPLEX), dimension(:), pointer, save :: vec_postpad_c, cor_c
+    type(C_PTR), save :: p, pcor, p_c, pcor_c
+    type(C_PTR), save :: plan1, plan2
+    logical, save :: first_entry = .true.
 
-    corr_vec1 = vec(1:maxlag+1)
+    if (first_entry) then
+      nullify(vec_postpad)
+      n = 0
+      maxlag_save = 0
+      first_entry = .false.
+    end if
+
+    if ((.not. associated(vec_postpad)) .or. (n /= size(vec)) .or. (maxlag /= maxlag_save)) then
+      maxlag_save = maxlag
+      n = size(vec)
+
+      ! free previous memory
+      call fftw_free(p)
+      call fftw_free(pcor)
+      call fftw_free(p_c)
+      call fftw_free(pcor_c)
+
+      ! memory allocation
+      m = n + maxlag
+      p = fftw_alloc_real(int(m, C_SIZE_T))
+      pcor = fftw_alloc_real(int(m, C_SIZE_T))
+      call c_f_pointer(p, vec_postpad, [m])
+      call c_f_pointer(pcor, cor, [m])
+
+      k = m / 2 + 1
+      p_c = fftw_alloc_complex(int(k, C_SIZE_T))
+      pcor_c = fftw_alloc_complex(int(k, C_SIZE_T))
+      call c_f_pointer(p_c, vec_postpad_c, [k])
+      call c_f_pointer(pcor_c, cor_c, [k])
+
+      ! fftw plan
+      plan1 = fftw_plan_dft_r2c_1d(m, vec_postpad, vec_postpad_c, FFTW_MEASURE)
+      plan2 = fftw_plan_dft_c2r_1d(m, cor_c, cor, FFTW_MEASURE)
+    endif
+
+    ! data initialization
+    vec_postpad(1:n) = vec
+    vec_postpad(n+1:m) = 0d0
+
+    call fftw_execute_dft_r2c(plan1, vec_postpad, vec_postpad_c)
+    cor_c = vec_postpad_c * dconjg(vec_postpad_c)
+    call fftw_execute_dft_c2r(plan2, cor_c, cor)
+    corr_vec1(1:maxlag) = cor(maxlag+1:2:-1)
+    corr_vec1(maxlag+1:) = cor(1:maxlag+1)
+    corr_vec1 = corr_vec1 / m
   end function
 
   function corr_vec2(vec1, vec2, maxlag)
     implicit none
-    real(C_DOUBLE), dimension(1+ 2*maxlag) :: corr_vec2
+    real(C_DOUBLE), dimension(2*maxlag+1) :: corr_vec2
     real(C_DOUBLE), dimension(:), intent(in) :: vec1, vec2
     integer, intent(in) :: maxlag
     integer, save :: n, m, k, maxlag_save
@@ -27,17 +77,14 @@ contains
     type(C_PTR), save :: p1, p2, pcor, p1_c, p2_c, pcor_c
     type(C_PTR), save :: plan1, plan2, plan3
     logical, save :: first_entry = .true.
+
     if (first_entry) then
       nullify(vec1_prepad)
-!      nullify(vec2_postpad)
-!      nullify(vec1_prepad_c)
-!      nullify(vec2_postpad_c)
-!      nullify(cor)
-!      nullify(cor_c)
       n = 0
       maxlag_save = 0
       first_entry = .false.
     end if
+
     if ((.not. associated(vec1_prepad)) .or. (n /= size(vec1)) .or. (maxlag /= maxlag_save)) then
       maxlag_save = maxlag
       n = size(vec1)
