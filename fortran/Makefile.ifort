@@ -33,28 +33,28 @@ oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o trr.o octave_save.o
 oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o trr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
+spatialDecompose_openmp : spatialDecompose_openmp.o utility.o trr.o octave_save.o
 	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
-spatialDecompose_openmp.o : spatialDecompose_openmp.f90 utility.o g96.o octave_save.o
+spatialDecompose_openmp.o : spatialDecompose_openmp.f90 utility.o trr.o octave_save.o
 	$(FC) $(OMPFLAGS) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-spatialDecompose_mpi : spatialDecompose_mpi.o utility.o g96.o octave_save.o
+spatialDecompose_mpi : spatialDecompose_mpi.o utility.o trr.o octave_save.o
 	$(FCMPI) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
-spatialDecompose_mpi.o : spatialDecompose_mpi.f90 utility.o g96.o octave_save.o
+spatialDecompose_mpi.o : spatialDecompose_mpi.f90 utility.o trr.o octave_save.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-spatialDecompose : spatialDecompose.o utility.o g96.o octave_save.o
+spatialDecompose : spatialDecompose.o utility.o trr.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
-spatialDecompose.o : spatialDecompose.f90 utility.o g96.o octave_save.o
+spatialDecompose.o : spatialDecompose.f90 utility.o trr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-bridge: bridge.o utility.o g96.o octave_save.o
+bridge: bridge.o utility.o trr.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
-bridge.o : bridge.f90 utility.o g96.o octave_save.o
+bridge.o : bridge.f90 utility.o trr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 com : com.o utility.o trr.o octave_save.o

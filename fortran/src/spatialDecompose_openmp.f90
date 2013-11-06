@@ -1,6 +1,6 @@
 program spatialDecompose
   use omp_lib
-  use g96
+  use trr
   implicit none
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
@@ -31,7 +31,7 @@ program spatialDecompose
 
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "usage: $spatialDecompose <outfile> <infile.g96> <numframe> <maxlag> <rbinwidth(nm)> &
+    write(*,*) "usage: $spatialDecompose <outfile> <infile.trr> <numframe> <maxlag> <rbinwidth(nm)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
     call exit(1)
   end if
@@ -40,7 +40,7 @@ program spatialDecompose
   write(*,*) "outfile = ", outfilename
 
   call get_command_argument(2, dataFilename)
-  write(*,*) "inFile.g96 = ", dataFilename
+  write(*,*) "inFile.trr = ", dataFilename
 
   call get_command_argument(3, numFrame_str) ! in the unit of frame number
   read(numFrame_str, *) numFrame 
