@@ -13,8 +13,10 @@ OUTDIR = ./out/
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/local/
+FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
 
-PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge com corr_test
+PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge \
+          com corr_test oneTwoDecompose
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -25,6 +27,12 @@ vpath %.f90 $(SRCDIR)
 all : $(PROGRAM)
 
 # ---------------------------
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o trr.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
+
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o trr.o octave_save.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
 spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
 	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
@@ -56,7 +64,7 @@ com.o : com.f90 utility.o trr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 corr_test : corr_test.o correlation.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) -L$(FFTWDIR)lib -lfftw3 -lm
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
 
 corr_test.o : corr_test.f90 correlation.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
