@@ -136,7 +136,8 @@ program spatialDecompose
   deallocate(vel_tmp)
   deallocate(time)
 
-  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
+!  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
+  num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
   write(*,*) "num_rBin = ", num_rBin
   allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
@@ -172,7 +173,7 @@ program spatialDecompose
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
         !get the index for different atomType pair (ex. Na-Na, Na-Cl, Cl-Na, Cl-Cl)
         atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
-        do k = 1, maxLag+1      
+        do k = 1, maxLag+1
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
@@ -264,7 +265,7 @@ contains
         deallocate(pp)
       end if
       last_size = size(p1,2)
-      allocate(pp(last_size, size(p1,2)))
+      allocate(pp(size(p1,1), last_size))
     end if
     pp = abs(p1 - p2)
     pp = wrap(pp, cellLength)
@@ -272,9 +273,9 @@ contains
     where (rBinIndex == 0)
       rBinIndex = 1
     end where
-    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
-      rBinIndex = -1
-    end where
+!    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
+!      rBinIndex = -1
+!    end where
   end subroutine getBinIndex
 
   integer function getAtomTypeIndex(i, numAtom)
