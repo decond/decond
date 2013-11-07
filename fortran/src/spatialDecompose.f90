@@ -139,6 +139,7 @@ program spatialDecompose
 !  num_rBin = ceiling(cell(1) / 2d0 / rBinWidth)
   num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
   write(*,*) "num_rBin = ", num_rBin
+
   allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: sdCorr"
@@ -251,22 +252,8 @@ contains
     real(8), intent(in) :: p1(:,:), p2(:,:), cellLength, rBinWidth
     !p1(dim,timeFrame)
     integer, intent(out) :: rBinIndex(:)
-!    real(8) :: pp(size(p1,1), size(p1,2))
-!                  ^^^^^^^^^^^^^^^^^^^^^
-!  This way the compiler will use the memory in "stack"
-!  which results in segmentation fault when data size is too large
-!  so use the following allocation method, instead
-    real(8), save, allocatable :: pp(:, :)
-    integer, save :: last_size = -1
-
-    ! if number of timeFrames changes, re-allocate pp
-    if (last_size /= size(p1, 2)) then
-      if (last_size > 0) then
-        deallocate(pp)
-      end if
-      last_size = size(p1,2)
-      allocate(pp(size(p1,1), last_size))
-    end if
+    real(8) :: pp(size(p1,1), size(p1,2))
+    
     pp = abs(p1 - p2)
     pp = wrap(pp, cellLength)
     rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
