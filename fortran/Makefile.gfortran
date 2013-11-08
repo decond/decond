@@ -1,5 +1,6 @@
 # Defining variables ===============================
-FC = gfortran
+#FC = gfortran
+FC = gfortran44
 FCMPI = mpif90
 OMPFLAGS = -fopenmp
 MODFLAG = -J
@@ -10,27 +11,30 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = $(MODFLAG)$(MODDIR) -O2
+FCFLAGS = $(MODFLAG)$(MODDIR) -O2 -I $(MODDIR)
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/local/
 FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
 
-PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge \
-          com corr_test oneTwoDecompose
+PROGRAM = spatialDecompose bridge com corr_test oneTwoDecompose
+
+PROGRAM_PAR= spatialDecompose_mpi spatialDecompose_openmp
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
 #vpath % $(OUTDIR)
 
 # Program ==================================
-.PHONY : all 
-all : $(PROGRAM)
+.PHONY : all par
+all : $(PROGRAM) $(PROGRAM_PAR)
+ser: $(PROGRAM)
+par : $(PROGRAM_PAR)
 
 # ---------------------------
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o trr.o octave_save.o
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o g96.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
 
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o trr.o octave_save.o
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o g96.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
@@ -57,10 +61,10 @@ bridge: bridge.o utility.o g96.o octave_save.o
 bridge.o : bridge.f90 utility.o g96.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-com : com.o utility.o trr.o octave_save.o
+com : com.o utility.o g96.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
 
-com.o : com.f90 utility.o trr.o octave_save.o
+com.o : com.f90 utility.o g96.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 corr_test : corr_test.o correlation.o

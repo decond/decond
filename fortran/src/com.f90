@@ -1,5 +1,5 @@
 program com
-  use trr
+  use g96
   implicit none
   integer, parameter :: num_parArg = 4
   integer, parameter :: num_argPerData = 2
@@ -32,7 +32,7 @@ program com
   !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "Usage: $com <outfile> <infile.trr> <numFrameToRead> <skip> &
+    write(*,*) "Usage: $com <outfile> <infile.g96> <numFrameToRead> <skip> &
                 &<numatom1> <mass1> [<numatom2> <mass2> ...]"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     call exit(1)
@@ -42,7 +42,7 @@ program com
   write(*,*) "outfile = ", outFilename
 
   call get_command_argument(2, dataFilename)
-  write(*,*) "inFile.trr = ", dataFilename
+  write(*,*) "inFile.g96 = ", dataFilename
 
   call get_command_argument(3, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 

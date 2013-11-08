@@ -1,5 +1,5 @@
 program oneTwoDecompose
-  use trr
+  use g96
   use correlation
   implicit none
   integer, parameter :: num_parArg = 5
@@ -25,7 +25,7 @@ program oneTwoDecompose
   !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxLag (-1=max)> &
+    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxLag (-1=max)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     write(*,*) "Note: maxLag is counted in terms of the numFrameToRead."
@@ -36,7 +36,7 @@ program oneTwoDecompose
   write(*,*) "outfile = ", outFilename
 
   call get_command_argument(2, dataFilename)
-  write(*,*) "inFile.trr= ", dataFilename
+  write(*,*) "inFile.g96= ", dataFilename
 
   call get_command_argument(3, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 
