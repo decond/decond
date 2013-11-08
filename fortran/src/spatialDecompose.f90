@@ -1,5 +1,5 @@
 program spatialDecompose
-  use trr
+  use g96
   implicit none
   integer, parameter :: num_parArg = 6
   integer, parameter :: num_argPerData = 2
@@ -26,7 +26,7 @@ program spatialDecompose
   !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "Usage: $spatialdecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
+    write(*,*) "Usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
@@ -37,7 +37,7 @@ program spatialDecompose
   write(*,*) "outfile = ", outFilename
 
   call get_command_argument(2, dataFilename)
-  write(*,*) "inFile.trr = ", dataFilename
+  write(*,*) "inFile.g96 = ", dataFilename
 
   call get_command_argument(3, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 

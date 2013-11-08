@@ -1,6 +1,6 @@
 program spatialDecompose_mpi
   use mpi
-  use trr
+  use g96
   implicit none
   integer, parameter :: num_parArg = 8, stdout = 6
   integer, parameter :: num_argPerData = 2
@@ -43,7 +43,7 @@ program spatialDecompose_mpi
   if (myrank == root) then
     is_periodic = .true.
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage: $spatialdecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
+      write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                   &<numDomain_r> <numDomain_c> <numatom1> <charge1> [<numatom2> <charge2>...]"
       write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
       write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
@@ -81,7 +81,7 @@ program spatialDecompose_mpi
   !rank root output parameters read
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
-    write(*,*) "inFile.trr = ", dataFilename
+    write(*,*) "inFile.g96 = ", dataFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
