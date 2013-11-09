@@ -3,21 +3,21 @@
 clear all
 format long
 
-if (nargin() < 3)
-    error(cstrcat("Usage: $average-sdCorr.m <dataFilename> <numMD> <skip> [num_rBins]\n",\
+if (nargin() < 2)
+    error(cstrcat("Usage: $average-sdCorr.m <dataFilename> <numMD> [num_rBins]\n",\
                    "num_rBins: minimum number of rBins can be entered if known"));
 endif
 
 dataFilename = argv(){1}
 numMD = str2num(argv(){2})
-skip = str2num(argv(){3}) #skipped interval in sdCorr data
+%skip = str2num(argv(){3}) #skipped interval in sdCorr data
 
 for n = [1:numMD]
     dataPath{n} = strcat("./md", num2str(n-1), "/", dataFilename);
 endfor
 
-if (nargin() > 3)
-    num_rBins = str2num(argv(){4})
+if (nargin() > 2)
+    num_rBins = str2num(argv(){3})
 else
     puts("Loading data files to determine num_rBins...\n");
     for n = [1:numMD]
