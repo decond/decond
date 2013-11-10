@@ -18,3 +18,4 @@ bin/*
 *.out
 *.mod
 *.swp
+.nfs*
