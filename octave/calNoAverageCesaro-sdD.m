@@ -30,7 +30,7 @@ else
     endif
 endif
 
-#.sdCorr file contains timestep, charge(), numAtoms(), timeLags(), cell(), rBins(), and sdCorr(), rho()
+#.sdCorr file contains timestep, charge(), numAtom(), timeLags(), cell(), rBins(), and sdCorr(), rho()
 load(filename);
 
 volume = (cell(1)*cell(2)*cell(3)) * (1.0E-9)**3; #(m3);
@@ -80,7 +80,7 @@ function index = zipIndexPair2(idx1, idx2)
     # accept only the "upper-half" index pair, because cross-correlation should 
     # be the same for (i,j) and (j,i)
     if (idx1 > idx2)
-      error("Error - zipIndexPair: idx1 > idx2");
+      error("Error in zipIndexPair2: idx1 > idx2");
     else
       index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
     endif
@@ -127,13 +127,13 @@ function ec = cumIntegrateEC(sdCorrData, maxLag)
     endif
 endfunction
 
-function D = cumIntegrateD(sdCorrData, maxLag)
-    global kB beta basicCharge ps nm volume timestep t;
+function sdD = cumIntegrateD(sdCorrData, maxLag)
+    global ps nm timestep t;
     if (length(sdCorrData) == 1 && maxLag > 0)
         #there is only one ion so no mutual-sdcorr
-        D = 0;
+        sdD = 0;
     else
-        D = cumtrapz(t(1:maxLag+1)', sdCorrData(1:maxLag+1)) * timestep * nm**2 / ps;
+        sdD = cumtrapz(t(1:maxLag+1)', sdCorrData(1:maxLag+1)) * timestep * nm**2 / ps;
     endif
 endfunction
 
@@ -149,14 +149,14 @@ for i = [1:numIonTypes]
 %        ecSDCorr(:, j, idx2) = (sdCorr(:, j, idx(1)).*rho(j, idx(1)) + sdCorr(:, j, idx(2)).*rho(j, idx(2))) / 2; 
         if (idx(1) != idx(2))
           rho2(:, idx2) = (rho(:, idx(1)) + rho(:, idx(2))) / 2;
-          D(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
+          sdD(:, j, idx2) = (sdCorr(:, j, idx(1)) + sdCorr(:, j, idx(2))) / 2; 
         else
           rho2(:, idx2) = rho(:, idx(1));
-          D(:, j, idx2) = sdCorr(:, j, idx(1)); 
+          sdD(:, j, idx2) = sdCorr(:, j, idx(1)); 
         endif
 %        ecSDCorr(:, j, idx2) = charge(i) * charge(k) * cumIntegrateEC(ecSDCorr(:, j, idx2), maxLag);
-        D(:, j, idx2) = cumIntegrateD(D(:, j, idx2), maxLag);
-        D_noAveCesaro(:, j, idx2) = cumtrapz(D(:, j, idx2)) * timestep;
+        sdD(:, j, idx2) = cumIntegrateD(sdD(:, j, idx2), maxLag);
+        sdD_noAveCesaro(:, j, idx2) = cumtrapz(sdD(:, j, idx2)) * timestep;
     endfor
 %    ecSDTotal .+= ecSDCorr(:, :, i);
   endfor
@@ -169,6 +169,6 @@ timeLags = [0:maxLag]' * timestep;
 %save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)),\
 %      "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins",\
 %      "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
-save(strcat(baseFilename, ".DNoAverageCesaro-dt-", num2str(deltaStep)), \
-     "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins",\
-     "rho2", "D", "D_noAveCesaro");
+save(strcat(baseFilename, ".sdDNoAverageCesaro-dt-", num2str(deltaStep)), \
+     "charge", "numIonTypes", "numAtom", "cell", "timestep", "timeLags", "rBins",\
+     "rho2", "sdD", "sdD_noAveCesaro");

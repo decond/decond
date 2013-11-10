@@ -1,108 +1,94 @@
 #!/home/kmtu/bin/octave -qf
 
 clear all;
-global numIonTypes;
+global numIonTypes constant;
+constant.kB = 1.3806488E-23; #(J K-1)
+constant.beta = 1.0/(constant.kB*300); #(J-1)
+constant.basicCharge = 1.60217646E-19; #(Coulomb)
+constant.ps = 1.0E-12; #(s)
+constant.nm = 1.0E-9; #(m)
 
 if (nargin() < 3)
-    error("Usage: $plotNoAverageCesaro.m <dataFilename> <skip> <dt>")
+    error("Usage: $fitAveNoAverageCesaro-ND.m <dataFilename> <numMD> <skip> <dt>")
 endif
 
 dataFilename = argv(){1}
-skip = str2num(argv(){2}) #skipped interval in vCorr data
-deltaStep = str2num(argv(){3})
+numMD = str2num(argv(){2})
+skip = str2num(argv(){3}) #skipped interval in vCorr data
+deltaStep = str2num(argv(){4})
 
 set(0, "defaultlinelinewidth", 4);
 
 %md.dc = load("md-lag20000.dcNoAverageCesaro" );
 %md3.dc = load("md3-lag20000.dcNoAverageCesaro" );
 
-numMD = 1;
+load(strcat("./md0/", dataFilename));
+%numIonTypes
+%timeLags
 
-initialize = load(strcat("./md0/", dataFilename));
-numIonTypes = size(initialize.ecAutocorrNoAverageCesaro, 2);
-timeLags = initialize.timeLags;
-clear initialize;
-
-function index = zipIndexPair(idx1, idx2)
+function index = zipIndexPair2(idx1, idx2)
     global numIonTypes;
 %    index = (idx1 - 1) * numIonTypes + idx2;
     # accept only the "upper-half" index pair, because cross-correlation should 
     # be the same for (i,j) and (j,i)
     if (idx1 > idx2)
-      error("Error - zipIndexPair: idx1 > idx2");
+      error("Error - zipIndexPair2: idx1 > idx2");
     else
       index = (idx1 - 1) * numIonTypes + idx2 - (idx1-1);
     endif
 endfunction
 
+numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+md = zeros(length(timeLags), numIonTypes + numIonTypePairs, numMD);
 # packing and distributing data to a single md array
-# md(fileIndex, corrIndex, corrData)
 for n = [1:numMD]
-    data = load(strcat("./md", num2str(n-1), "/", dataFilename));
-    md(n, 1, :) = data.ecTotalNoAverageCesaro;
-    for i = [1:numIonTypes]
-        for j = [i:numIonTypes]
-            if (i == j)
-                md(n, 1+i, :) = data.ecAutocorrNoAverageCesaro(:, i);
-            endif
-            crossCorrIndex = zipIndexPair(i,j);
-            md(n, 1+numIonTypes+crossCorrIndex, :) = data.ecCorrNoAverageCesaro(:, crossCorrIndex);
-        endfor
-    endfor
-%    md_ave.ec.ecTotalNoAverageCesaro += md(n).ec.ecTotalNoAverageCesaro;
-%    md_ave.ec.ecAutocorrNoAverageCesaro += md(n).ec.ecAutocorrNoAverageCesaro;
-%    md_ave.ec.ecCorrNoAverageCesaro += md(n).ec.ecCorrNoAverageCesaro;
+    data_tmp = load(strcat("./md", num2str(n-1), "/", dataFilename));
+    md(:, 1:numIonTypes, n) = data_tmp.autoNDNoAverageCesaro;
+    md(:, numIonTypes+1:end, n) = data_tmp.crossNDNoAverageCesaro;
+    volume_data(n) = prod(data_tmp.cell);
 endfor
+clear("data_tmp");
 
-%f1 = figure(1);
-%clf;
-%hold on;
-%p1.na = plot(md.dc.timeLags, md.dc.dcNoAverageCesaro(:,1), "-1");
-%p1.cl = plot(md.dc.timeLags, md.dc.dcNoAverageCesaro(:,2), "-2");
-%p2.na = plot(md3.dc.timeLags, md3.dc.dcNoAverageCesaro(:,1), "-3");
-%p2.cl = plot(md3.dc.timeLags, md3.dc.dcNoAverageCesaro(:,2), "-4");
-%
-%set([p1.na, p1.cl, p2.na, p2.cl], "linewidth", 4);
-%
-%title("Non-averaged Cesaro sum for diffusion coefficients of 1m NaCl solution");
-%legend("{/Symbol D}t = 5 fs, Na+", "{/Symbol D}t = 5 fs, Cl-", "{/Symbol D}t = 1 fs, Na+", "{/Symbol D}t = 1 fs, Cl-");
-%xlabel("partial sum upper limit (ps)");
-%ylabel("Non-averaged partial sum (m^2/s)");
-%axis([0,100, 0, 3e-7]);
-%
-%print('dcNoAverageCesaro.eps', '-deps', '-color');
-%
-%axis([0,0.1,0,2.5e-10]);
-%print('dcNoAverageCesaro-zoom.eps', '-deps', '-color');
-
-# md_ave(corrAve, corrIndex);
-# md_std(corrStd, corrIndex);
-md_ave = squeeze(mean(md, 1))';
-md_std = squeeze(std(md, 0, 1))';
-md_err = squeeze(std(md, 0, 1) ./ sqrt(numMD))';  # standard error 
+# data.ave(length(timeLags), corrIndex);
+# data.std(length(timeLags), corrIndex);
+if (numMD > 1)
+  data.ave = mean(md, 3);
+  data.std = std(md, 0, 3);
+  data.err = data.std ./ sqrt(numMD);  # standard error 
+  volume.ave = mean(volume_data);
+  volume.std = std(volume_data);
+  volume.err = volume.std ./ sqrt(numMD);
+else
+  data.ave = md;
+  data.std = data.ave*0;
+  data.err = data.ave*0;
+  volume.ave = volume_data;
+  volume.std = volume.ave*0;
+  volume.err = volume.ave*0;
+endif
 
 fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
 fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
 
-# calculate slope for each segment of md_ave
-for i = [1:size(md_ave, 2)]
+# calculate slope for each segment of data.ave
+for i = [1:size(data.ave, 2)]
     for r = [1:size(fitRange, 1)]
-        slope(r,i) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), md_ave(fitRange(r, 1):fitRange(r, 2), i), 1)(1);
+        slope(r,i) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), data.ave(fitRange(r, 1):fitRange(r, 2), i), 1)(1);
     endfor
 endfor
 
 if (numMD > 1)
   # evaluate the uncertainty in the slope of the fitting line
   # reference: Numerical Recipes Chapter 15.2 (p.656)
-  for i = [1:size(md_ave, 2)]
+  for i = [1:size(data.ave, 2)]
       for r = [1:size(fitRange, 1)]
-          rec_sig2 = 1 ./ (md_std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
+          rec_sig2 = 1 ./ (data.std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
           S(r, i) = sum(rec_sig2, 1);
           Sx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* rec_sig2, 1); 
           Sxx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)).^2 .* rec_sig2, 1); 
-          Sy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
-          Syy(r, i) = sum(md_ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
-          Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* md_ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
+          Sy(r, i) = sum(data.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
+          Syy(r, i) = sum(data.ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
+          Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* data.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
       endfor
   endfor
   Delta = S .* Sxx - Sx .* Sx;
@@ -112,10 +98,11 @@ if (numMD > 1)
   slopeSD = sqrt(S ./ Delta);
   # slopeSD(fitRange, corrIndex)
 else
-  slopeSD = 0;
+  slopeSD = slope*0;
 endif
 
-save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
+save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",\
+     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "data", "slope", "slopeSD");
 
 %# calculate slope for each segment of each md
 %fitRange .*= 1000;
@@ -148,12 +135,12 @@ hold on;
 #errOffset = floor(200 / skip / deltaStep);
 errOffset = 0
 
-for i = [1:size(md_ave, 2)]
+for i = [1:size(data.ave, 2)]
     drawFrames = errFrames .+ (i-1)*errOffset;
     drawFrames = drawFrames(drawFrames <= length(timeLags));
     if (i == 6)
-        p(i) = plot(timeLags, md_ave(:,i), "-", "color", [0, 0.6, 0]);
-        ebar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i));
+        p(i) = plot(timeLags, data.ave(:,i), "-", "color", [0, 0.6, 0]);
+        ebar = errorbar(timeLags(drawFrames), data.ave(drawFrames,i), data.err(drawFrames,i));
         set(ebar, "color", [0, 0.6, 0], "linestyle", "none");
 %    elseif (i == 7)
 %#        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0, 0]);
@@ -162,9 +149,9 @@ for i = [1:size(md_ave, 2)]
     else
         plotFormat = strcat("-", num2str(i));
         errorbarFormat = strcat("~", num2str(i));
-        ebar = errorbar(timeLags(drawFrames), md_ave(drawFrames,i), md_err(drawFrames,i), errorbarFormat);
+        ebar = errorbar(timeLags(drawFrames), data.ave(drawFrames,i), data.err(drawFrames,i), errorbarFormat);
         set(ebar, "linestyle", "none");
-        p(i) = plot(timeLags, md_ave(:,i), plotFormat);
+        p(i) = plot(timeLags, data.ave(:,i), plotFormat);
     endif
 endfor
 
@@ -174,7 +161,7 @@ left = 25;
 h_space = 20;
 top = 1272;
 v_space = 44;
-for i = [1:size(md_ave, 2)]
+for i = [1:size(data.ave, 2)]
     for r = [1:size(fitRange, 1)]
         text(left + (r-1)*h_space, top - (i-1)*v_space, num2str(slope(r, i)));
     endfor
@@ -193,7 +180,7 @@ xlabel("partial sum upper limit (ps)");
 ylabel("Non-averaged partial sum (ps*S/m)");
 axis([0,100,-400, 1300]);
 
-print(strcat(dataFilename, '.fit.ave-', num2str(numMD), '.eps'), '-deps', '-color');
+print(strcat(dataFilename, '-ave', num2str(numMD), '.eps'), '-deps', '-color');
 hold off
 %axis([0,0.1,0,1.5]);
 %print('ecNoAverageCesaro-zoom.eps', '-deps', '-color');
@@ -211,7 +198,7 @@ hold on;
 %stdOffset = floor(100 / skip / deltaStep);
 stdOffset = 0;
 
-for i = [1:size(md_ave, 2)]
+for i = [1:size(data.ave, 2)]
     drawFrames = stdFrames .+ (i-1)*stdOffset;
     if (i == 6)
         ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
@@ -251,4 +238,4 @@ xlabel("partial sum upper limit (ps)");
 ylabel("Electrical conductivity (S/m)");
 axis([0,100,-5, 13]);
 
-print(strcat(dataFilename, '.fit.slope-ave-', num2str(numMD), '.eps'), '-deps', '-color');
+print(strcat(dataFilename, '-slope-ave', num2str(numMD), '.eps'), '-deps', '-color');
