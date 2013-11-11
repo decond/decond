@@ -112,7 +112,7 @@ if (numMD > 1)
   slopeSD = sqrt(S ./ Delta);
   # slopeSD(fitRange, corrIndex)
 else
-  slopeSD = 0;
+  slopeSD = slope*0;
 endif
 
 save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "numIonTypes", "timeLags", "md_ave", "md_std", "md_err", "slope", "slopeSD");
@@ -215,7 +215,7 @@ for i = [1:size(md_ave, 2)]
     drawFrames = stdFrames .+ (i-1)*stdOffset;
     if (i == 6)
         ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
-        set(p(i).errorbar(1), "color", [0, 0.6, 0]);
+        set(ebar, "color", [0, 0.6, 0]);
 %    elseif (i == 7)
 %        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
 %        set(p(i).errorbar(1), "color", [0, 0, 0]);
