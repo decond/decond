@@ -49,19 +49,19 @@ for n = [1:numMD]
 endfor
 clear("data_tmp");
 
-# data.ave(length(timeLags), corrIndex);
-# data.std(length(timeLags), corrIndex);
+# NDNoAveCesaro.ave(length(timeLags), corrIndex);
+# NDNoAveCesaro.std(length(timeLags), corrIndex);
 if (numMD > 1)
-  data.ave = mean(md, 3);
-  data.std = std(md, 0, 3);
-  data.err = data.std ./ sqrt(numMD);  # standard error 
+  NDNoAveCesaro.ave = mean(md, 3);
+  NDNoAveCesaro.std = std(md, 0, 3);
+  NDNoAveCesaro.err = NDNoAveCesaro.std ./ sqrt(numMD);  # standard error 
   volume.ave = mean(volume_data);
   volume.std = std(volume_data);
   volume.err = volume.std ./ sqrt(numMD);
 else
-  data.ave = md;
-  data.std = data.ave*0;
-  data.err = data.ave*0;
+  NDNoAveCesaro.ave = md;
+  NDNoAveCesaro.std = NDNoAveCesaro.ave*0;
+  NDNoAveCesaro.err = NDNoAveCesaro.ave*0;
   volume.ave = volume_data;
   volume.std = volume.ave*0;
   volume.err = volume.ave*0;
@@ -70,39 +70,53 @@ endif
 fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
 fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
 
-# calculate slope for each segment of data.ave
-for i = [1:size(data.ave, 2)]
+# calculate slope for each segment of NDNoAveCesaro.ave to get ND
+for i = [1:size(NDNoAveCesaro.ave, 2)]
     for r = [1:size(fitRange, 1)]
-        slope(r,i) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), data.ave(fitRange(r, 1):fitRange(r, 2), i), 1)(1);
+        ND(r,i) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), NDNoAveCesaro.ave(fitRange(r, 1):fitRange(r, 2), i), 1)(1);
     endfor
 endfor
 
 if (numMD > 1)
   # evaluate the uncertainty in the slope of the fitting line
   # reference: Numerical Recipes Chapter 15.2 (p.656)
-  for i = [1:size(data.ave, 2)]
+  for i = [1:size(NDNoAveCesaro.ave, 2)]
       for r = [1:size(fitRange, 1)]
-          rec_sig2 = 1 ./ (data.std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
+          rec_sig2 = 1 ./ (NDNoAveCesaro.std(fitRange(r, 1):fitRange(r, 2), i) .^ 2);
           S(r, i) = sum(rec_sig2, 1);
           Sx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* rec_sig2, 1); 
           Sxx(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)).^2 .* rec_sig2, 1); 
-          Sy(r, i) = sum(data.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
-          Syy(r, i) = sum(data.ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
-          Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* data.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
+          Sy(r, i) = sum(NDNoAveCesaro.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1);
+          Syy(r, i) = sum(NDNoAveCesaro.ave(fitRange(r, 1):fitRange(r, 2), i).^2 .* rec_sig2, 1);
+          Sxy(r, i) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* NDNoAveCesaro.ave(fitRange(r, 1):fitRange(r, 2), i) .* rec_sig2, 1); 
       endfor
   endfor
   Delta = S .* Sxx - Sx .* Sx;
 
   # output slope for double check
   slope_b = (S .* Sxy - Sx .* Sy) ./ Delta
-  slopeSD = sqrt(S ./ Delta);
-  # slopeSD(fitRange, corrIndex)
+  ND_err = sqrt(S ./ Delta);
+  # ND_err(fitRange, corrIndex)
 else
-  slopeSD = slope*0;
+  ND_err = ND*0;
 endif
 
+qq(1:numIonTypes) = 1;
+for i = [1:numIonTypes]
+  for j = [i:numIonTypes]
+    qq(numIonTypes + zipIndexPair2(i,j)) = charge(i)*charge(j);
+  endfor
+endfor
+
+constant.ND2EC = qq*constant.beta * constant.basicCharge^2 / (volume.ave*(constant.nm^3));
 save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",\
-     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "data", "slope", "slopeSD");
+     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err");
+
+#For drawing:
+NDNoAveCesaro.ave .*= constant.ND2EC;
+NDNoAveCesaro.err .*= constant.ND2EC;
+ND .*= constant.ND2EC;
+ND_err .*= constant.ND2EC;
 
 %# calculate slope for each segment of each md
 %fitRange .*= 1000;
@@ -133,14 +147,14 @@ f1 = figure(1);
 clf;
 hold on;
 #errOffset = floor(200 / skip / deltaStep);
-errOffset = 0
+errOffset = 0;
 
-for i = [1:size(data.ave, 2)]
+for i = [1:size(NDNoAveCesaro.ave, 2)]
     drawFrames = errFrames .+ (i-1)*errOffset;
     drawFrames = drawFrames(drawFrames <= length(timeLags));
     if (i == 6)
-        p(i) = plot(timeLags, data.ave(:,i), "-", "color", [0, 0.6, 0]);
-        ebar = errorbar(timeLags(drawFrames), data.ave(drawFrames,i), data.err(drawFrames,i));
+        p(i) = plot(timeLags, NDNoAveCesaro.ave(:,i), "-", "color", [0, 0.6, 0]);
+        ebar = errorbar(timeLags(drawFrames), NDNoAveCesaro.ave(drawFrames,i), NDNoAveCesaro.err(drawFrames,i));
         set(ebar, "color", [0, 0.6, 0], "linestyle", "none");
 %    elseif (i == 7)
 %#        p(i).plot = plot(timeLags, md_ave(:,i), "-", "color", [0, 0, 0]);
@@ -149,21 +163,21 @@ for i = [1:size(data.ave, 2)]
     else
         plotFormat = strcat("-", num2str(i));
         errorbarFormat = strcat("~", num2str(i));
-        ebar = errorbar(timeLags(drawFrames), data.ave(drawFrames,i), data.err(drawFrames,i), errorbarFormat);
+        ebar = errorbar(timeLags(drawFrames), NDNoAveCesaro.ave(drawFrames,i), NDNoAveCesaro.err(drawFrames,i), errorbarFormat);
         set(ebar, "linestyle", "none");
-        p(i) = plot(timeLags, data.ave(:,i), plotFormat);
+        p(i) = plot(timeLags, NDNoAveCesaro.ave(:,i), plotFormat);
     endif
 endfor
 
-legend(p, {"Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl"}, "location", "northwest");
+legend(p, {"Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl"}, "location", "northwest");
 
 left = 25;
 h_space = 20;
 top = 1272;
 v_space = 44;
-for i = [1:size(data.ave, 2)]
+for i = [1:size(NDNoAveCesaro.ave, 2)]
     for r = [1:size(fitRange, 1)]
-        text(left + (r-1)*h_space, top - (i-1)*v_space, num2str(slope(r, i)));
+        text(left + (r-1)*h_space, top - (i-1)*v_space, num2str(ND(r, i)));
     endfor
 endfor
 
@@ -198,22 +212,22 @@ hold on;
 %stdOffset = floor(100 / skip / deltaStep);
 stdOffset = 0;
 
-for i = [1:size(data.ave, 2)]
+for i = [1:size(NDNoAveCesaro.ave, 2)]
     drawFrames = stdFrames .+ (i-1)*stdOffset;
     if (i == 6)
-        ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
+        ebar = errorbar(timeLags(drawFrames), ND(:,i), ND_err(:,i));
         set(p(i).errorbar(1), "color", [0, 0.6, 0]);
 %    elseif (i == 7)
-%        p(i).errorbar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i));
+%        p(i).errorbar = errorbar(timeLags(drawFrames), ND(:,i), ND_err(:,i));
 %        set(p(i).errorbar(1), "color", [0, 0, 0]);
     else
         plotFormat = strcat("-", num2str(i));
         errorbarFormat = strcat("~", num2str(i));
-        ebar = errorbar(timeLags(drawFrames), slope(:,i), slopeSD(:,i), errorbarFormat);
+        ebar = errorbar(timeLags(drawFrames), ND(:,i), ND_err(:,i), errorbarFormat);
     endif
 endfor
 
-legend("Total", "Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl", "location", "northwest");
+legend("Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl", "location", "northwest");
 
 %left = 25;
 %h_space = 20;
