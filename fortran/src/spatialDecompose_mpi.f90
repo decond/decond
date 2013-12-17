@@ -323,16 +323,16 @@ program spatialDecompose_mpi
       call exit(1)
     end if 
     do i = 1, nprocs - 1
-      call mpi_recv(sdCorr_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
-      call mpi_recv(rho_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
+      call mpi_recv(sdCorr_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+      call mpi_recv(rho_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
       sdCorr = sdCorr + sdCorr_tmp
       rho = rho + rho_tmp
     end do
     deallocate(sdCorr_tmp)
     deallocate(rho_tmp)
   else
-    call mpi_send(sdCorr, size(sdCorr), mpi_double_precision, root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
-    call mpi_send(rho, size(rho), mpi_double_precision, root, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE)
+    call mpi_send(sdCorr, size(sdCorr), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
+    call mpi_send(rho, size(rho), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
