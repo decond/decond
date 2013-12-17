@@ -1,6 +1,6 @@
 # Defining variables ===============================
-#FC = gfortran
-FC = gfortran44
+#FC = gfortran44
+FC = gfortran
 FCMPI = mpif90
 OMPFLAGS = -fopenmp
 MODFLAG = -J
@@ -18,19 +18,25 @@ FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
 
 PROGRAM = spatialDecompose bridge com corr_test oneTwoDecompose
 
-PROGRAM_PAR= spatialDecompose_mpi spatialDecompose_openmp
+PROGRAM_PAR= spatialDecompose_mpi spatialDecompose_openmp test_mpi
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
 #vpath % $(OUTDIR)
 
 # Program ==================================
-.PHONY : all par
-all : $(PROGRAM) $(PROGRAM_PAR)
+.PHONY : all ser par
+all : ser par
 ser: $(PROGRAM)
 par : $(PROGRAM_PAR)
 
 # ---------------------------
+test_mpi: test_mpi.o
+	$(FCMPI) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+test_mpi.o : test_mpi.f90 
+	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
 oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o g96.o octave_save.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
 
