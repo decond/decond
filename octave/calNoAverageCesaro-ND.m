@@ -132,6 +132,7 @@ function ec = cumIntegrateEC(corrData, maxLag)
 endfunction
 
 function ND = cumIntegrateND(corrData, maxLag)
+% ND = number of ions x diffusion coefficient
     global ps nm timestep t;
     if (length(corrData) == 1 && maxLag > 0)
         #there is only one ion so no mutual-sdcorr
