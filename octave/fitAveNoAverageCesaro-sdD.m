@@ -49,7 +49,7 @@ if (exist("num_rBins", "var") != 1)
   for n = [1:numMD]
       puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
       if (n == numMD)
-        load(dataPath{n}, "charge", "numIonTypes", "timestep", "timeLags", "rBins");
+        load(dataPath{n}, "charge", "numIonTypes", "timestep", "timeLags", "rBins", "numAtom");
       else
         load(dataPath{n}, "rBins");
       endif
@@ -61,7 +61,7 @@ else
   puts(cstrcat("num_rBins is given: ", num2str(num_rBins), "\n")); 
   puts(cstrcat("Loading the 1st MD data to determine basic information...\n"));
   puts(cstrcat("Loading MD data #", num2str(1), "...\n"));
-  load(dataPath{1}, "charge", "numIonTypes", "timestep", "timeLags", "rBins");
+  load(dataPath{1}, "charge", "numIonTypes", "timestep", "timeLags", "rBins", "numAtom");
 endif 
 rBins = rBins(1:num_rBins);
 
