@@ -38,6 +38,13 @@ function index = zipIndexPair2(idx1, idx2)
     endif
 endfunction
 
+zz(1:numIonTypes) = 1;
+for i = [1:numIonTypes]
+  for j = [i:numIonTypes]
+    zz(numIonTypes + zipIndexPair2(i,j)) = charge(i)*charge(j);
+  endfor
+endfor
+
 numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
 md = zeros(length(timeLags), numIonTypes + numIonTypePairs, numMD);
 # packing and distributing data to a single md array
@@ -48,6 +55,7 @@ for n = [1:numMD]
     volume_data(n) = prod(data_tmp.cell);
 endfor
 clear("data_tmp");
+md_total = sum(md.*zz, 2);
 
 # NDNoAveCesaro.ave(length(timeLags), corrIndex);
 # NDNoAveCesaro.std(length(timeLags), corrIndex);
@@ -55,6 +63,11 @@ if (numMD > 1)
   NDNoAveCesaro.ave = mean(md, 3);
   NDNoAveCesaro.std = std(md, 0, 3);
   NDNoAveCesaro.err = NDNoAveCesaro.std ./ sqrt(numMD);  # standard error 
+
+  NDNoAveCesaro_total.ave = mean(md_total, 3);
+  NDNoAveCesaro_total.std = std(md_total, 0, 3);
+  NDNoAveCesaro_total.err = NDNoAveCesaro_total.std ./ sqrt(numMD);  # standard error 
+
   volume.ave = mean(volume_data);
   volume.std = std(volume_data);
   volume.err = volume.std ./ sqrt(numMD);
@@ -62,6 +75,11 @@ else
   NDNoAveCesaro.ave = md;
   NDNoAveCesaro.std = NDNoAveCesaro.ave*0;
   NDNoAveCesaro.err = NDNoAveCesaro.ave*0;
+
+  NDNoAveCesaro_total.ave = md_total;
+  NDNoAveCesaro_total.std = NDNoAveCesaro_total.ave*0;
+  NDNoAveCesaro_total.err = NDNoAveCesaro_total.ave*0;
+
   volume.ave = volume_data;
   volume.std = volume.ave*0;
   volume.err = volume.ave*0;
@@ -75,6 +93,9 @@ for i = [1:size(NDNoAveCesaro.ave, 2)]
     for r = [1:size(fitRange, 1)]
         ND(r,i) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), NDNoAveCesaro.ave(fitRange(r, 1):fitRange(r, 2), i), 1)(1);
     endfor
+endfor
+for r = [1:size(fitRange, 1)]
+    ND_total(r) = polyfit(timeLags(fitRange(r, 1):fitRange(r, 2)), NDNoAveCesaro_total.ave(fitRange(r, 1):fitRange(r, 2), 1), 1)(1);
 endfor
 
 if (numMD > 1)
@@ -97,26 +118,34 @@ if (numMD > 1)
   slope_b = (S .* Sxy - Sx .* Sy) ./ Delta
   ND_err = sqrt(S ./ Delta);
   # ND_err(fitRange, corrIndex)
+
+  for r = [1:size(fitRange, 1)]
+      rec_sig2_total = 1 ./ (NDNoAveCesaro_total.std(fitRange(r, 1):fitRange(r, 2), 1) .^ 2);
+      S_total(r) = sum(rec_sig2_total, 1);
+      Sx_total(r) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* rec_sig2_total, 1); 
+      Sxx_total(r) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)).^2 .* rec_sig2_total, 1); 
+      Sy_total(r) = sum(NDNoAveCesaro_total.ave(fitRange(r, 1):fitRange(r, 2), 1) .* rec_sig2_total, 1);
+      Syy_total(r) = sum(NDNoAveCesaro_total.ave(fitRange(r, 1):fitRange(r, 2), 1).^2 .* rec_sig2_total, 1);
+      Sxy_total(r) = sum(timeLags(fitRange(r, 1):fitRange(r, 2)) .* NDNoAveCesaro_total.ave(fitRange(r, 1):fitRange(r, 2), 1) .* rec_sig2_total, 1); 
+  endfor
+  Delta_total = S_total .* Sxx_total - Sx_total .* Sx_total;
+  ND_total_err = sqrt(S_total ./ Delta_total);
+
 else
   ND_err = ND*0;
+  ND_total_err = ND_total*0;
 endif
 
-qq(1:numIonTypes) = 1;
-for i = [1:numIonTypes]
-  for j = [i:numIonTypes]
-    qq(numIonTypes + zipIndexPair2(i,j)) = charge(i)*charge(j);
-  endfor
-endfor
-
-constant.ND2EC = qq*constant.beta * constant.basicCharge^2 / (volume.ave*(constant.nm^3));
+constant.ND2EC = constant.beta * constant.basicCharge^2 / (volume.ave*(constant.nm^3));
 save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",\
-     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err");
+     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err",\
+     "ND_total", "ND_total_err", "zz");
 
 #For drawing:
 NDNoAveCesaro.ave .*= constant.ND2EC;
 NDNoAveCesaro.err .*= constant.ND2EC;
-ND .*= constant.ND2EC;
-ND_err .*= constant.ND2EC;
+ND .*= zz*constant.ND2EC;
+ND_err .*= zz*constant.ND2EC;
 
 %# calculate slope for each segment of each md
 %fitRange .*= 1000;
