@@ -55,7 +55,14 @@ for n = [1:numMD]
     volume_data(n) = prod(data_tmp.cell);
 endfor
 clear("data_tmp");
+
 md_total = sum(md.*zz, 2);
+for i = [1:numIonTypes]
+  for j = [i+1:numIonTypes]
+    idx = numIonTypes + zipIndexPair2(i,j);
+    md_total += zz(idx)*md(:, idx, :);
+  endfor
+endfor
 
 # NDNoAveCesaro.ave(length(timeLags), corrIndex);
 # NDNoAveCesaro.std(length(timeLags), corrIndex);
