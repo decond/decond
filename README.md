@@ -1,4 +1,4 @@
 econd
 =====
 
-Calculate electrical conductivity from MD trajectories
+Calculate the electrical conductivity from MD trajectories
