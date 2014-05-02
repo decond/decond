@@ -18,8 +18,7 @@ else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
 %    volume = str2num(argv(){3}) * (1.0E-9)**3; #(m3)
-    extnamePos = rindex(filename, "."); #locate the position of the extension name
-    baseFilename = filename(1:extnamePos-1);
+    baseFilename = filename;
     if (nargin() > 2)
         deltaStep = round(str2num(argv(){3}))
         if (deltaStep <= 0)
@@ -30,10 +29,17 @@ else
     endif
 endif
 
-#.sdCorr file contains timestep, charge(), numAtom(), timeLags(), cell(), rBins(), and sdCorr(), rho()
+#.sdCorr file contains timestep, charge(), numAtom(), timeLags(), [cell(), volume_ave], rBins(), and sdCorr(), rho()
 load(filename);
 
-volume = (cell(1)*cell(2)*cell(3)) * (1.0E-9)**3; #(m3);
+if (!exist("cell", "var"))
+  cell = -1;
+  volume = volume_ave * (1.0E-9)**3; #(m3)
+elseif (!exist("volume_ave", "var"))
+  volume_ave = -1;
+  volume = prod(cell) * (1.0E-9)**3; #(m3)
+endif
+
 numIonTypes = length(charge);
 numIonTypePairs = numIonTypes**2;
 
@@ -166,9 +172,10 @@ endfor
 %endfor
 
 timeLags = [0:maxLag]' * timestep;
+
 %save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)),\
 %      "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins",\
 %      "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
 save(strcat(baseFilename, ".sdDNoAverageCesaro-dt-", num2str(deltaStep)), \
-     "charge", "numIonTypes", "numAtom", "cell", "timestep", "timeLags", "rBins",\
+     "charge", "numIonTypes", "numAtom", "cell", "volume_ave", "timestep", "timeLags", "rBins",\
      "rho2", "sdD", "sdD_noAveCesaro");
