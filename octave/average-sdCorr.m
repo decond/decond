@@ -39,7 +39,7 @@ puts("Loading data files to determine sdCorr_sum and rho_sum and other info\n");
 for n = [1:numMD]
     puts(cstrcat("sum: n=", num2str(n), "\n"));
     if (n == 1)
-        load(dataPath{n}, "timestep", "charge", "cell", "timeLags", "rBins", "sdCorr", "rho");
+        load(dataPath{n}, "timestep", "charge", "numAtom", "cell", "timeLags", "rBins", "sdCorr", "rho");
         rBins = rBins(1:num_rBins);
         numIonTypes = length(charge);
         volume_sum = cell(1)*cell(2)*cell(3);
@@ -66,6 +66,6 @@ rho_ave = rho_sum ./ numMD;
 clear("sdCorr_sum");
 clear("rho_sum");
 
-save(strcat(dataFilename, '.ave', num2str(numMD)), "timestep", "charge",\
+save(strcat(dataFilename, '.ave', num2str(numMD)), "timestep", "charge", "numAtom", \
      "volume_ave", "timeLags", "rBins", "sdCorr_ave", "rho_ave");
 
