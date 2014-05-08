@@ -28,12 +28,11 @@ rho = zeros(num_rBins, size(rho_ave, 2));
 for i = [1 : rBinWindow]
   idx_range = [i : rBinWindow : num_rBins * rBinWindow];
   rBins += rBins_source(idx_range);
-  sdCorr += sdCorr_ave(:, idx_range, :);
+  sdCorr += sdCorr_ave(:, idx_range, :) .* shiftdim(rho_ave(idx_range, :), -1);
   rho += rho_ave(idx_range, :);
 endfor
 rBins /= rBinWindow;
-sdCorr /= rBinWindow;
-rho /= rBinWindow;
+sdCorr ./= shiftdim(rho, -1);
 
 save(strcat(dataFilename, '-rBinWindow', num2str(rBinWindow)), "timestep", "charge",\
      "volume_ave", "numAtom", "timeLags", "rBins", "sdCorr", "rho");
