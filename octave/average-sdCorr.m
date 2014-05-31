@@ -4,7 +4,7 @@ clear all
 format long
 
 if (nargin() < 2)
-    error(cstrcat("Usage: $average-sdCorr.m <dataFilename> <numMD> [num_rBins]\n",\
+    error(cstrcat("Usage: $average-sdCorr.m <dataFilename> <numMD> [num_rBins]\n",
                    "num_rBins: minimum number of rBins can be entered if known"));
 endif
 
@@ -66,6 +66,6 @@ rho_ave = rho_sum ./ numMD;
 clear("sdCorr_sum");
 clear("rho_sum");
 
-save(strcat(dataFilename, '.ave', num2str(numMD)), "timestep", "charge", "numAtom", \
+save(strcat(dataFilename, '.ave', num2str(numMD)), "timestep", "charge", "numAtom",
      "volume_ave", "timeLags", "rBins", "sdCorr_ave", "rho_ave");
 
