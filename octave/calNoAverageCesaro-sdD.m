@@ -176,6 +176,6 @@ timeLags = [0:maxLag]' * timestep;
 %save(strcat(baseFilename, ".ecSDNoAverageCesaro-dt-", num2str(deltaStep)),\
 %      "charge", "numIonTypes", "cell", "timestep", "timeLags", "rBins",\
 %      "ecSDTotalNoAverageCesaro", "ecSDCorrNoAverageCesaro", "rho");
-save(strcat(baseFilename, ".sdDNoAverageCesaro-dt-", num2str(deltaStep)), \
-     "charge", "numIonTypes", "numAtom", "cell", "volume_ave", "timestep", "timeLags", "rBins",\
+save(strcat(baseFilename, ".sdDNoAverageCesaro-dt-", num2str(deltaStep)), 
+     "charge", "numIonTypes", "numAtom", "cell", "volume_ave", "timestep", "timeLags", "rBins",
      "rho2", "sdD", "sdD_noAveCesaro");

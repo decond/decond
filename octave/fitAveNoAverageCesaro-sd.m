@@ -155,7 +155,7 @@ sig_ILT = zeros(length(timeLags), num_rBins, numIonTypePairs);
 for i = [1:numIonTypes]
   for j = [i:numIonTypes]
     idx = zipIndexPair2(i,j);
-    sig_ILT(:, :, idx) = constant.beta * constant.basicCharge^2 * charge(i) * charge(j) * \
+    sig_ILT(:, :, idx) = constant.beta * constant.basicCharge^2 * charge(i) * charge(j) * ...
                     rho_dv(:, idx)' .* md.ave(:, :, idx);
   endfor
 endfor
@@ -204,13 +204,13 @@ if (numMD > 1)
   slope_b = (S .* Sxy - Sx .* Sy) ./ Delta;
   slopeSD = sqrt(S ./ Delta);
 
-  save(strcat(dataFilename, '-ave', num2str(numMD), '.allfit'), "constant", "charge",\
-       "numIonTypes", "numAtom", "timestep", "timeLags", "rBins", \
+  save(strcat(dataFilename, '-ave', num2str(numMD), '.allfit'), "constant", "charge",
+       "numIonTypes", "numAtom", "timestep", "timeLags", "rBins", 
        "volume", "rho2", "md", "sig_IL", "slope", "slopeSD");
 else
   slopeSD = 0;
-  save(strcat(dataFilename, '.allfit'), "constant", "charge",\
-       "numIonTypes", "numAtom", "timestep", "timeLags", "rBins", \
+  save(strcat(dataFilename, '.allfit'), "constant", "charge",
+       "numIonTypes", "numAtom", "timestep", "timeLags", "rBins", 
        "volume", "rho2", "md", "sig_IL", "slope", "slopeSD");
 endif
 

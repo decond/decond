@@ -144,8 +144,8 @@ else
 endif
 
 constant.ND2EC = constant.beta * constant.basicCharge^2 / (volume.ave*(constant.nm^3));
-save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",\
-     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err",\
+save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",
+     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err",
      "ND_total", "ND_total_err", "zz");
 
 #For drawing:
@@ -223,7 +223,7 @@ endfor
 %set(p4, "linewidth", 3);
 
 %title(strcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution - md", "-ave"));
-title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",\
+title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",
              "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
@@ -281,7 +281,7 @@ legend("Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl", "loc
 %set(p4, "linewidth", 3);
 
 %title(strcat("Electrical conductivity of 1m NaCl solution - md", "-ave"));
-title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",\
+title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",
              "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
