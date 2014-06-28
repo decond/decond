@@ -1,10 +1,11 @@
 program oneTwoDecompose
-  use g96
+  use utility, only : handle
+  use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   use correlation
   implicit none
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom, t
+  integer :: num_dataArg, i, j, k, n, totNumAtom, t, sysNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
@@ -25,7 +26,7 @@ program oneTwoDecompose
   !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxLag (-1=max)> &
+    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxLag (-1=max)> &
                 &<numatom1> <charge1> [<numatom2> <charge2>...]"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     write(*,*) "Note: maxLag is counted in terms of the numFrameToRead."
@@ -36,7 +37,7 @@ program oneTwoDecompose
   write(*,*) "outfile = ", outFilename
 
   call get_command_argument(2, dataFilename)
-  write(*,*) "inFile.g96= ", dataFilename
+  write(*,*) "inFile.trr= ", dataFilename
 
   call get_command_argument(3, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 
@@ -76,12 +77,15 @@ program oneTwoDecompose
   end do
   totNumAtom = sum(numAtom)
 
-  allocate(pos_tmp(3, totNumAtom), stat=stat)
+  sysNumAtom = get_natom(dataFilename)
+  write(*,*) "sysNumAtom=", sysNumAtom
+
+  allocate(pos_tmp(3, sysNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos_tmp"
     call exit(1)
   end if 
-  allocate(vel_tmp(3, totNumAtom), stat=stat)
+  allocate(vel_tmp(3, sysNumAtom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel_tmp"
     call exit(1)
@@ -100,15 +104,15 @@ program oneTwoDecompose
   numFrameRead = 0
   call open_trajectory(dataFileHandle, dataFilename)
   do i = 1, numFrame
-    call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+    call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
     if (stat /=0) then
       write(*,*) "Reading trajectory error"
       call exit(1)
     end if 
     numFrameRead = numFrameRead + 1
-    vel(:,i,:) = vel_tmp
+    vel(:,i,:) = vel_tmp(:, 1:totNumAtom)
     do j = 1, skip-1
-      call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+      call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
         write(*,*) "Reading trajectory error"
         call exit(1)
