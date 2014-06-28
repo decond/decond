@@ -24,6 +24,7 @@
 !
 
 module utility
+  use, intrinsic :: iso_c_binding
   implicit none
 
   type handle
@@ -58,6 +59,14 @@ contains
     end do
     if (present(unit)) unit=newunit
   end function newunit
+
+  function f2c_string(string)
+    implicit none
+    character(len=512, kind=C_CHAR) :: f2c_string
+    character(len=*, kind=C_CHAR) :: string
+    
+    f2c_string = trim(string) // char(0)
+  end function
 end module utility
   
 
