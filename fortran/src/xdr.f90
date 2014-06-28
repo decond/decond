@@ -22,8 +22,8 @@ module xdr
       type(C_PTR), value :: xd
       integer(C_INT), value :: natoms
       integer(C_INT) :: step
-      real(C_FLOAT) :: t, lambda
-      real(C_FLOAT) :: box(*), x(*), v(*), f(*)
+      real(C_DOUBLE) :: t, lambda
+      real(C_DOUBLE) :: box(*), x(*), v(*), f(*)
     end function
 
     type(C_PTR) function xdrfile_open(path, mode) bind(C)
@@ -95,9 +95,9 @@ contains
     integer, intent(out) :: status
 
     integer(C_INT) :: ret, step
-    real(C_FLOAT) :: t, lambda, box(3, 3)
-    real(C_FLOAT) :: x(size(crd, 1), size(crd, 2)), v(size(vel, 1), size(vel, 2))
-    real(C_FLOAT), allocatable :: f(:, :)
+    real(C_DOUBLE) :: t, lambda, box(3, 3)
+    real(C_DOUBLE) :: x(size(crd, 1), size(crd, 2)), v(size(vel, 1), size(vel, 2))
+    real(C_DOUBLE), allocatable :: f(:, :)
 
     integer :: i
 
