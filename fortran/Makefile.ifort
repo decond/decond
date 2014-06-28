@@ -15,6 +15,9 @@ FCFLAGS = $(MODFLAG) $(MODDIR) -O2
 FFTWDIR = $(HOME)/local/
 FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
 
+XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
+XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
+
 PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge \
           com corr_test oneTwoDecompose
 
@@ -27,10 +30,10 @@ vpath %.f90 $(SRCDIR)
 all : $(PROGRAM)
 
 # ---------------------------
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o g96.o octave_save.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o g96.o octave_save.o
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o octave_save.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
@@ -72,6 +75,9 @@ corr_test.o : corr_test.f90 correlation.o
 # Library ===================================
 octave_save.o : octave_save.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
+xdr.o : xdr.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 g96.o : g96.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
