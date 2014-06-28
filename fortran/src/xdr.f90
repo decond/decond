@@ -89,27 +89,23 @@ contains
     type(handle), intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
     logical, intent(in) :: is_periodic
-    real(8), intent(out) :: crd(3,natoms), vel(3,natoms)
+    real(C_DOUBLE), intent(out) :: crd(3,natoms), vel(3,natoms)
     real(8), intent(out) :: cell(3)
-    real(8), intent(out) :: time
+    real(C_DOUBLE), intent(out) :: time
     integer, intent(out) :: status
 
     integer(C_INT) :: ret, step
-    real(C_DOUBLE) :: t, lambda, box(3, 3)
-    real(C_DOUBLE) :: x(size(crd, 1), size(crd, 2)), v(size(vel, 1), size(vel, 2))
+    real(C_DOUBLE) :: lambda, box(3, 3)
     real(C_DOUBLE), allocatable :: f(:, :)
 
     integer :: i
 
-    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, t, lambda, box, x, v, f)
-    time = dble(t)
+    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
 
     do i = 1, 3
-      cell(i) = dble(box(i, i))
+      cell(i) = box(i, i)
     end do
 
-    crd = dble(x)
-    vel = dble(v)
     status = ret
   end subroutine read_trajectory
   
