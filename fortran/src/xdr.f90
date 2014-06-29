@@ -12,7 +12,7 @@ module xdr
     subroutine read_trr_natoms(filename, natoms) bind(C)
       use, intrinsic::iso_c_binding
       implicit none
-      character(len=*, kind=C_CHAR), intent(in) :: filename
+      character(len=1, kind=C_CHAR), dimension(*), intent(in) :: filename
       integer(C_INT), intent(out) :: natoms
     end subroutine
 
@@ -29,7 +29,7 @@ module xdr
     type(C_PTR) function xdrfile_open(path, mode) bind(C)
       use, intrinsic :: iso_c_binding
       implicit none
-      character(len=*, kind=C_CHAR) :: path, mode
+      character(len=1, kind=C_CHAR), dimension(*) :: path, mode
     end function
 
     integer function xdrfile_close(xfp) bind(C)

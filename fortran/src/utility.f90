@@ -62,10 +62,14 @@ contains
 
   function f2c_string(string)
     implicit none
-    character(len=512, kind=C_CHAR) :: f2c_string
-    character(len=*, kind=C_CHAR) :: string
+    character(len=*) :: string
+    character(len=1, kind=C_CHAR), dimension(len_trim(string)+1) :: f2c_string
+    integer :: i
     
-    f2c_string = trim(string) // char(0)
+    do i = 1, len_trim(string)+1
+      f2c_string(i) = string(i:i)
+    end do
+    f2c_string(len_trim(string)+1) = C_NULL_CHAR
   end function
 end module utility
   
