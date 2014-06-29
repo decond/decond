@@ -13,8 +13,8 @@ OUTDIR = ./out/
 
 FCFLAGS = $(MODFLAG)$(MODDIR) -O2 -I $(MODDIR) -fmax-stack-var-size=32768
 #FFTWDIR = /usr/
-FFTWDIR = $(HOME)/local/
-FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
+FFTWDIR = $(HOME)/local
+FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
 PROGRAM = spatialDecompose bridge com corr_test oneTwoDecompose
 
@@ -96,7 +96,7 @@ correlation.o : correlation.f90 fftw.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)include
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
 #==================================================
 .PHONY: clean
 clean :

@@ -12,8 +12,8 @@ OUTDIR = ./out/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 #FFTWDIR = /usr/
-FFTWDIR = $(HOME)/local/
-FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
+FFTWDIR = $(HOME)/local
+FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
@@ -92,7 +92,7 @@ correlation.o : correlation.f90 fftw.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)include
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
 #==================================================
 .PHONY: clean
 clean :
