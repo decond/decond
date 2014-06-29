@@ -11,7 +11,7 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = $(MODFLAG)$(MODDIR) -O2 -I $(MODDIR)
+FCFLAGS = $(MODFLAG)$(MODDIR) -O2 -I $(MODDIR) -fmax-stack-var-size=32768
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/local/
 FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm

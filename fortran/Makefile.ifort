@@ -10,7 +10,7 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = $(MODFLAG) $(MODDIR) -O2
+FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/local/
 FFTWLINK = -L$(FFTWDIR)lib -lfftw3 -lm
