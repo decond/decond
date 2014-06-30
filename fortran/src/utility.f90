@@ -27,8 +27,11 @@ module utility
   use, intrinsic :: iso_c_binding
   implicit none
 
+  integer, parameter :: LINE_LEN = 128
+
   type handle
      integer :: iohandle
+     character(len=LINE_LEN) :: filename
   end type handle
 
 contains
@@ -71,6 +74,38 @@ contains
     end do
     f2c_string(len_trim(string)+1) = C_NULL_CHAR
   end function
+
+  integer function count_record_in_string(string)
+    implicit none
+    character(len=*) :: string
+    character :: prev_c
+    integer :: cur
+    logical :: is_prev_record_ended_by_comma
+
+    count_record_in_string = 0
+    string = adjustl(string)
+    cur = 0
+    is_prev_record_ended_by_comma = .false.
+    prev_c = ' '
+
+    do cur = 1, len_trim(string)
+      select case (string(cur:cur))
+        case (',')
+          if (prev_c /= ' ' .or. cur == 1 .or. is_prev_record_ended_by_comma) then
+            count_record_in_string = count_record_in_string + 1
+            is_prev_record_ended_by_comma = .true.
+          end if
+        case (' ')
+          if (prev_c /= ' ' .and. prev_c /= ',') then
+            count_record_in_string = count_record_in_string + 1
+            is_prev_record_ended_by_comma = .false.
+          end if
+      end select
+      prev_c = string(cur:cur)
+    end do
+    if (prev_c /= ' ' .and. prev_c /= ',') then
+      count_record_in_string = count_record_in_string + 1
+    end if
+  end function
 end module utility
-  
 
