@@ -1,17 +1,19 @@
 program oneTwoDecompose
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
+  use top, only : open_top, close_top, read_top, system
   use correlation
   implicit none
-  integer, parameter :: num_parArg = 5
+  integer, parameter :: num_parArg = 6
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom, t, sysNumAtom
+  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
-  type(handle) :: dataFileHandle
-  integer :: numFrame, maxLag, stat, numAtomType, numFrameRead
-  integer :: idx1, idx2, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), norm(:)
+  character(len=128) :: topFilename
+  type(handle) :: dataFileHandle, topFileHandle
+  integer :: numFrame, maxLag, stat, numMolType, numFrameRead
+  integer :: idx1, idx2, tmp_i, skip, one_percent
+  integer, allocatable :: charge(:), norm(:), start_index(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :)
@@ -20,14 +22,16 @@ program oneTwoDecompose
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
   real(8), allocatable :: time(:), autoCorr(:,:), crossCorr(:,:), corr_tmp(:)
   logical :: is_periodic
+  type(system) :: sys
 
   is_periodic = .true.
 
   !Reading arguments and initialization
   num_dataarg = command_argument_count() - num_pararg
   if (num_dataarg < num_argperdata .or. mod(num_dataarg, num_argperdata) /= 0) then
-    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxLag (-1=max)> &
-                &<numatom1> <charge1> [<numatom2> <charge2>...]"
+    write(*,*) "Usage: $oneTwoDecompose <outfile> <infile.trr> <topfile.top> <numFrameToRead>&
+                <skip> <maxLag (-1=max)> <molecule1> <start_index> [<molecule2> <start_index>...]"
+    write(*,*) "Note: start_index is the 1st index of a moleculetype in the trajectory file"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     write(*,*) "Note: maxLag is counted in terms of the numFrameToRead."
     call exit(1)
@@ -39,43 +43,60 @@ program oneTwoDecompose
   call get_command_argument(2, dataFilename)
   write(*,*) "inFile.trr= ", dataFilename
 
-  call get_command_argument(3, tmp_str) ! in the unit of frame number
+  call get_command_argument(3, topFilename)
+  write(*,*) "topFilename= ", topFilename
+
+  call get_command_argument(4, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 
   write(*,*) "numFrame = ", numFrame
 
-  call get_command_argument(4, tmp_str) ! in the unit of frame number
+  call get_command_argument(5, tmp_str) ! in the unit of frame number
   read(tmp_str, *) skip
   write(*,*) "skip = ", skip
 
-  call get_command_argument(5, tmp_str) ! in the unit of frame number
+  call get_command_argument(6, tmp_str) ! in the unit of frame number
   read(tmp_str, *) maxLag
   if (maxLag < 0) then
       maxLag = numFrame - 1;
   endif
   write(*,*) "maxLag = ", maxLag 
 
-  numAtomType = num_dataArg / num_argPerData
-  write(*,*) "numAtomType = ", numAtomType
+  numMolType = num_dataArg / num_argPerData
+  write(*,*) "numMolType = ", numMolType
 
-  allocate(numAtom(numAtomType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: numAtom"
-    call exit(1)
-  end if 
-
-  allocate(charge(numAtomType), stat=stat)
+  allocate(charge(numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: charge"
     call exit(1)
   end if 
 
-  do n = 1, numAtomType
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, tmp_str) 
-    read(tmp_str, *) numAtom(n)
+  allocate(sys%mol(numMolType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: sys%mol"
+    call exit(1)
+  end if 
+
+  allocate(start_index(numMolType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: start_index"
+    call exit(1)
+  end if 
+
+  do n = 1, numMolType
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type)
+    write(*,*) "molName= ", sys%mol(n)%type
     call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-    read(tmp_str, *) charge(n)
+    read(tmp_str, *) start_index(n)
   end do
-  totNumAtom = sum(numAtom)
+
+  topFileHandle = open_top(topFilename)
+  call read_top(topFileHandle, sys)
+  call close_top(topFileHandle)
+
+  do n = 1, numMolType
+    charge(n) = sum(sys%mol(n)%atom(:)%charge)
+  end do
+  totNumMol = sum(sys%mol(:)%num)
 
   sysNumAtom = get_natom(dataFilename)
   write(*,*) "sysNumAtom=", sysNumAtom
@@ -95,7 +116,7 @@ program oneTwoDecompose
     write(*,*) "Allocation failed: time"
     call exit(1)
   end if 
-  allocate(vel(3, numFrame, totNumAtom), stat=stat)
+  allocate(vel(3, numFrame, totNumMol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel"
     call exit(1)
@@ -103,14 +124,16 @@ program oneTwoDecompose
 
   numFrameRead = 0
   call open_trajectory(dataFileHandle, dataFilename)
+  one_percent = nint(numFrame / 100d0)
   do i = 1, numFrame
+    if (mod(i, one_percent) == 0) write(*,*) "Reading... ", floor(dble(i) / one_percent), "%"
     call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
     if (stat /=0) then
       write(*,*) "Reading trajectory error"
       call exit(1)
     end if 
     numFrameRead = numFrameRead + 1
-    vel(:,i,:) = vel_tmp(:, 1:totNumAtom)
+    call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
     do j = 1, skip-1
       call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
@@ -130,14 +153,14 @@ program oneTwoDecompose
   deallocate(vel_tmp)
   deallocate(time)
 
-  allocate(autoCorr(maxLag+1, numAtomType), stat=stat)
+  allocate(autoCorr(maxLag+1, numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: autoCorr"
     call exit(1)
   end if 
   autoCorr = 0d0
 
-  allocate(crossCorr(maxLag+1, numAtomType*numAtomType), stat=stat)
+  allocate(crossCorr(maxLag+1, numMolType*numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: crossCorr"
     call exit(1)
@@ -152,9 +175,9 @@ program oneTwoDecompose
   corr_tmp = 0d0
 
   !autoCorr part
-  do i = 1, totNumAtom
+  do i = 1, totNumMol
 write(*,*) "autoCorr: ", i
-    idx1 = getAtomTypeIndex(i, numAtom)
+    idx1 = getMolTypeIndex(i, sys%mol(:)%num)
     do k = 1, 3
       corr_tmp = corr(vel(k, :, i), maxLag)
       autoCorr(:, idx1) = autoCorr(:, idx1) + corr_tmp(maxLag+1:)
@@ -162,12 +185,12 @@ write(*,*) "autoCorr: ", i
   end do
 
   !crossCorr part
-  do i = 1, totNumAtom
-    do j = i+1, totNumAtom
+  do i = 1, totNumMol
+    do j = i+1, totNumMol
 write(*,*) "crossCorr: ", i, j
       !get the index for different atomType pair (ex. Na-Na, Na-Cl, Cl-Na, Cl-Cl)
-      idx1 = getAtomTypePairIndex(i, j, numAtom)
-      idx2 = getAtomTypePairIndex(j, i, numAtom)
+      idx1 = getMolTypePairIndex(i, j, sys%mol(:)%num)
+      idx2 = getMolTypePairIndex(j, i, sys%mol(:)%num)
       do k = 1, 3
         corr_tmp = corr(vel(k, :, i), vel(k, :, j), maxLag)
         crossCorr(:, idx1) = crossCorr(:, idx1) + corr_tmp(maxLag+1:)
@@ -188,10 +211,10 @@ write(*,*) "crossCorr: ", i, j
   end if 
   norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
 
-  do i = 1, numAtomType
+  do i = 1, numMolType
       autoCorr(:, i) = autoCorr(:, i) / norm
   end do
-  do i = 1, numAtomType*numAtomType
+  do i = 1, numMolType*numMolType
     crossCorr(:, i) = crossCorr(:, i) / norm
   end do
   deallocate(norm)
@@ -201,33 +224,56 @@ write(*,*) "crossCorr: ", i, j
   stop
 
 contains
-  integer function getAtomTypeIndex(i, numAtom)
+  subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
-    integer, intent(in) :: i, numAtom(:)
-    integer :: n, numAtom_acc
-!    integer, save :: numAtomType = size(numAtom)
+    real(8), dimension(:, :), intent(out) :: com_v
+    real(8), dimension(:, :), intent(in) :: vel 
+    integer, dimension(:), intent(in) :: start_index
+    type(system), intent(in) :: sys
+    integer :: d, i, j, k, idx_begin, idx_end, idx_com
 
-    getAtomTypeIndex = -1
-    numAtom_acc = 0
-    do n = 1, numAtomType
-      numAtom_acc = numAtom_acc + numAtom(n)
-      if (i <= numAtom_acc) then
-        getAtomTypeIndex = n
+    com_v = 0d0
+    idx_com = 0
+    do i = 1, size(sys%mol)
+      do j = 1, sys%mol(i)%num
+        idx_begin = start_index(i) + (j-1) * size(sys%mol(i)%atom)
+        idx_end = idx_begin + size(sys%mol(i)%atom) - 1
+        idx_com = idx_com + 1
+        do d = 1, 3
+          com_v(d, idx_com) = com_v(d, idx_com) + &
+              sum(vel(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+        end do
+      end do
+    end do
+  end subroutine com_vel
+
+  integer function getMolTypeIndex(i, numMol)
+    implicit none
+    integer, intent(in) :: i, numMol(:)
+    integer :: n, numMol_acc
+!    integer, save :: numMolType = size(numMol)
+
+    getMolTypeIndex = -1
+    numMol_acc = 0
+    do n = 1, numMolType
+      numMol_acc = numMol_acc + numMol(n)
+      if (i <= numMol_acc) then
+        getMolTypeIndex = n
         return
       end if
     end do
-  end function getAtomTypeIndex
+  end function getMolTypeIndex
   
-  integer function getAtomTypePairIndex(i, j, numAtom)
+  integer function getMolTypePairIndex(i, j, numMol)
     implicit none
-    integer, intent(in) :: i, j, numAtom(:)
+    integer, intent(in) :: i, j, numMol(:)
     integer :: ii, jj
-!    integer, save :: numAtomType = size(numAtom)
+!    integer, save :: numMolType = size(numMol)
   
-    ii = getAtomTypeIndex(i, numAtom)
-    jj = getAtomTypeIndex(j, numAtom)
-    getAtomTypePairIndex = (ii-1)*numAtomType + jj
-  end function getAtomTypePairIndex
+    ii = getMolTypeIndex(i, numMol)
+    jj = getMolTypeIndex(j, numMol)
+    getMolTypePairIndex = (ii-1)*numMolType + jj
+  end function getMolTypePairIndex
 
   subroutine output()
     use octave_save
@@ -245,7 +291,7 @@ contains
     call create_octave(htraj, outFilename)
     call write_octave_scalar(htraj, "timestep", timestep)
     call write_octave_vec(htraj, "charge", dble(charge))
-    call write_octave_vec(htraj, "numAtom", dble(numAtom))
+    call write_octave_vec(htraj, "numMol", dble(sys%mol(:)%num))
     call write_octave_vec(htraj, "cell", cell)
     call write_octave_vec(htraj, "timeLags", timeLags)
     call write_octave_mat2(htraj, "autoCorr", autoCorr)
