@@ -30,10 +30,10 @@ vpath %.f90 $(SRCDIR)
 all : $(PROGRAM)
 
 # ---------------------------
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o octave_save.o
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o octave_save.o top.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o octave_save.o
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o octave_save.o top.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
 spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
@@ -75,6 +75,9 @@ corr_test.o : corr_test.f90 correlation.o
 # Library ===================================
 octave_save.o : octave_save.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+
+top.o : top.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 xdr.o : xdr.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
