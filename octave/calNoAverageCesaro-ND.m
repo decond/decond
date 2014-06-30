@@ -11,25 +11,25 @@ ps = 1.0E-12; #(s)
 nm = 1.0E-9; #(m)
 
 if (nargin() < 2)
-    error("Usage: $calCesaroEC.m <filename.vCorr> <maxLag -1=max (step)> [deltaStep] \n\
+    error("Usage: $calCesaroEC.m <filename.vCorr> <maxLag -1=max (step)> [intDelta] \n\
 where <filename> is used for both input and output: filename.vCorr and filename.xvg,\n\
-optional deltaStep is for integrating the vCorr every deltaStep, default is 1.");
+optional intDelta is for integrating the vCorr every intDelta, default is 1.");
 else
     filename = argv(){1};
     maxLag = str2num(argv(){2});
     extnamePos = rindex(filename, "."); #locate the position of the extension name
     baseFilename = filename(1:extnamePos-1);
     if (nargin() > 2)
-        deltaStep = round(str2num(argv(){3}))
-        if (deltaStep <= 0)
-            deltaStep = 1;
+        intDelta = round(str2num(argv(){3}))
+        if (intDelta <= 0)
+            intDelta = 1;
         endif
     else
-        deltaStep = 1
+        intDelta = 1
     endif
 endif
 
-#.vCorr file contains timestep, charge(), numAtom(), timeLags(), autoCorr(), and crossCorr(), cell()
+#.vCorr file contains timestep, charge(), numMol(), timeLags(), autoCorr(), and crossCorr(), cell()
 load(filename);
 volume = prod(cell)*(1.0E-9)**3; #(m3)
 
@@ -40,22 +40,22 @@ if (numIonTypes**2 != numIonTypes_check)
 autoCorr: ", num2str(numIonTypes), ", crossCorr: ", num2str(numIonTypes_check)));
 endif
 
-# modifying data according to deltaStep if it is greater than 1
-if (deltaStep > 1)
-    timestep *= deltaStep;
-    timeLags = timeLags(1:deltaStep:end);
+# modifying data according to intDelta if it is greater than 1
+if (intDelta > 1)
+    timestep *= intDelta;
+    timeLags = timeLags(1:intDelta:end);
     for i = [1:numIonTypes]
-        autoCorr_tmp(:,i) = autoCorr(1:deltaStep:end, i);
+        autoCorr_tmp(:,i) = autoCorr(1:intDelta:end, i);
     endfor
     for i = [1:numIonTypes**2]
-        crossCorr_tmp(:,i) = crossCorr(1:deltaStep:end, i);
+        crossCorr_tmp(:,i) = crossCorr(1:intDelta:end, i);
     endfor
     autoCorr = autoCorr_tmp;
     crossCorr = crossCorr_tmp;
     clear("autoCorr_tmp");
     clear("crossCorr_tmp");
     if (maxLag > 0)
-        maxLag = floor(maxLag / deltaStep);
+        maxLag = floor(maxLag / intDelta);
     endif
 endif
 
@@ -178,4 +178,4 @@ endfor
 %ecTotalNoAverageCesaro = cumtrapz(ecTotal) * timestep;
 
 timeLags = [0:maxLag]' * timestep;
-save(strcat(baseFilename, ".NDNoAverageCesaro-dt-", num2str(deltaStep)), "charge", "numIonTypes", "numAtom", "cell", "timestep", "timeLags", "autoNDNoAverageCesaro", "crossNDNoAverageCesaro");
+save(strcat(baseFilename, ".NDCesaro-intDelta-", num2str(intDelta)), "charge", "numIonTypes", "numMol", "cell", "timestep", "timeLags", "autoNDNoAverageCesaro", "crossNDNoAverageCesaro");

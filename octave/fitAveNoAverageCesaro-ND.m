@@ -9,13 +9,13 @@ constant.ps = 1.0E-12; #(s)
 constant.nm = 1.0E-9; #(m)
 
 if (nargin() < 3)
-    error("Usage: $fitAveNoAverageCesaro-ND.m <dataFilename> <numMD> <skip> <dt>")
+    error("Usage: $fitAveNoAverageCesaro-ND.m <dataFilename> <numMD> <dt (fs)> <intDelta>")
 endif
 
 dataFilename = argv(){1}
 numMD = str2num(argv(){2})
-skip = str2num(argv(){3}) #skipped interval in vCorr data
-deltaStep = str2num(argv(){4})
+dt = str2num(argv(){3}) #data interval in vCorr data (unit: fs)
+intStep = str2num(argv(){4})
 
 set(0, "defaultlinelinewidth", 4);
 
@@ -92,8 +92,8 @@ else
   volume.err = volume.ave*0;
 endif
 
-fitRange = [20, 40; 40, 60; 60, 80; 80, 100]; #ps
-fitRange *= floor(1000 / skip / deltaStep); #fs (frame)
+fitRange = [20, 40; 40, 60; 60, 80; 80, 100]*10; #ps
+fitRange *= floor(1000 / dt / intStep); #fs (frame)
 
 # calculate slope for each segment of NDNoAveCesaro.ave to get ND
 for i = [1:size(NDNoAveCesaro.ave, 2)]
@@ -145,7 +145,7 @@ endif
 
 constant.ND2EC = constant.beta * constant.basicCharge^2 / (volume.ave*(constant.nm^3));
 save(strcat(dataFilename, '-ave', num2str(numMD), '.fit'), "constant", "charge",
-     "numIonTypes", "numAtom", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err",
+     "numIonTypes", "numMol", "timestep", "timeLags", "volume", "NDNoAveCesaro", "ND", "ND_err",
      "ND_total", "ND_total_err", "zz");
 
 #For drawing:
@@ -175,14 +175,14 @@ ND_err .*= zz*constant.ND2EC;
 #numPlots = 1 + numIonTypes + numIonTypes*numIonTypes;
 
 # standard error for selected values
-errFrameInterval = floor(20000 / skip / deltaStep);
+errFrameInterval = floor(20000 / dt / intStep);
 errFrames = [1:errFrameInterval:length(timeLags)]';
 
 
 f1 = figure(1);
 clf;
 hold on;
-#errOffset = floor(200 / skip / deltaStep);
+#errOffset = floor(200 / dt / intStep);
 errOffset = 0;
 
 for i = [1:size(NDNoAveCesaro.ave, 2)]
@@ -224,7 +224,7 @@ endfor
 
 %title(strcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution - md", "-ave"));
 title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",
-             "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
+             "data interval = ", num2str(dt), ", integration interval = ", num2str(intStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Non-averaged partial sum (ps*S/m)");
@@ -245,7 +245,7 @@ endfor
 f2 = figure(2);
 %clf;
 hold on;
-%stdOffset = floor(100 / skip / deltaStep);
+%stdOffset = floor(100 / dt / intStep);
 stdOffset = 0;
 
 for i = [1:size(NDNoAveCesaro.ave, 2)]
@@ -282,7 +282,7 @@ legend("Auto Na+", "Auto Cl-", "Cross Na-Na", "Cross Na-Cl", "Cross Cl-Cl", "loc
 
 %title(strcat("Electrical conductivity of 1m NaCl solution - md", "-ave"));
 title(cstrcat("Non-averaged Cesaro sum for electrical conductivity of 1m NaCl solution\n",
-             "data interval = ", num2str(skip), ", integration interval = ", num2str(deltaStep)));
+             "data interval = ", num2str(dt), ", integration interval = ", num2str(intStep)));
 %legend("{/Symbol D}t = 1 fs");
 xlabel("partial sum upper limit (ps)");
 ylabel("Electrical conductivity (S/m)");
