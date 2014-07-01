@@ -16,17 +16,13 @@ constant.ps = 1.0E-12; #(s)
 constant.nm = 1.0E-9; #(m)
 
 if (nargin() < 4)
-    error("Usage: $fitAveNoAverageCesaro-sdD.m <dataFilename> <numMD> <skip> <dt> [num_rBins]")
+    error("Usage: $fitAveNoAverageCesaro-sdD.m <dataFilename> <numMD> <skip> <dt>")
 endif
 
 dataFilename = argv(){1}
 numMD = str2num(argv(){2})
 skip = str2num(argv(){3}) #skipped interval in sdCorr data
 deltaStep = str2num(argv(){4})
-
-if (nargin() > 4)
-  num_rBins = str2num(argv(){5});
-endif
 
 set(0, "defaultlinelinewidth", 4);
 
@@ -52,43 +48,35 @@ if (numMD > 1)
     dataPath{n} = strcat("./md", num2str(n-1), "/", dataFilename);
   endfor
 
-  if (exist("num_rBins", "var") != 1)
-    puts("Loading data files to determine rBins\n");
-    for n = [1:numMD]
-        puts(cstrcat("Loading MD data #", num2str(n), "...\n"));
-        if (n == numMD)
-          load(dataPath{n}, "charge", "numIonTypes", "timestep", "timeLags", "rBins", "numAtom");
-        else
-          load(dataPath{n}, "rBins");
-        endif
-        num_rBins_tmp(n) = length(rBins);
-    endfor
-    num_rBins = min(num_rBins_tmp)
-    clear("num_rBins_tmp");
-  else
-    puts(cstrcat("num_rBins is given: ", num2str(num_rBins), "\n")); 
-    puts(cstrcat("Loading the 1st MD data to determine basic information...\n"));
-    puts(cstrcat("Loading MD data #", num2str(1), "...\n"));
-    load(dataPath{1}, "charge", "numIonTypes", "timestep", "timeLags", "rBins", "numAtom");
-  endif 
-  rBins = rBins(1:num_rBins);
-
-  numIonTypePairs = (numIonTypes*(numIonTypes+1))/2; 
-
   # md(sdCorr_timeLag, sdCorr_rBin, sdCorrIonTypePairIndex, fileIndex)
   # calculate md.sum to get md.ave
-  puts("Loading data files to determine md.sum\n");
-  md.sum = zeros(length(timeLags), num_rBins, numIonTypePairs);
-  volume.sum = 0;
-  rho2.sum = 0;
-  for n = [1:numMD]
-      puts(cstrcat("md.sum: n=", num2str(n), "\n"));
-      tmpData = load(dataPath{n}, "cell", "rho2", "sdD_noAveCesaro");
+  puts("Loading data files...\n");
+  puts(cstrcat("n=", num2str(1), "\n"));
+  load(dataPath{1}, "cell", "rho2", "sdD_noAveCesaro", "charge", "numIonTypes", "timestep", "timeLags", "rBins", "numAtom");
+
+  numIonTypePairs = (numIonTypes*(numIonTypes+1))/2;
+  volume.sum = prod(cell);
+  rho2_tmp = rho2;
+  clear("rho2");
+  rho2.sum = rho2_tmp;
+  md.sum = sdD_noAveCesaro;
+  clear("sdD_noAveCesaro");
+  clear("rho2_tmp");
+
+  for n = [2:numMD]
+      puts(cstrcat("n=", num2str(n), "\n"));
+      tmpData = load(dataPath{n}, "rBins", "cell", "rho2", "sdD_noAveCesaro");
+      if (length(tmpData.rBins) < length(rBins))
+        rBins = tmpData.rBins;
+        rho2.sum = rho2.sum(1:length(rBins), :);
+        md.sum = md.sum(:, 1:length(rBins), :);
+      endif
       volume.sum += prod(tmpData.cell);
-      rho2.sum += tmpData.rho2(1:num_rBins, :); 
-      md.sum .+= tmpData.sdD_noAveCesaro(:, 1:num_rBins, :);
+      rho2.sum += tmpData.rho2(1:length(rBins), :);
+      md.sum .+= tmpData.sdD_noAveCesaro(:, 1:length(rBins), :);
   endfor
   clear("tmpData");
+  num_rBins = length(rBins)
 
   volume.ave = volume.sum ./ numMD;
   rho2.ave = rho2.sum ./ numMD;
@@ -98,10 +86,10 @@ if (numMD > 1)
   clear("volume.sum");
 
   # calculate std
-  puts("Loading data files to determine ave and std\n");
+  puts("Loading data files to determine std\n");
   volume.std = 0;
   md.std = zeros(length(timeLags), num_rBins, numIonTypePairs);
-  rho2.std = zeros(num_rBins, numIonTypePairs); 
+  rho2.std = zeros(num_rBins, numIonTypePairs);
   for n = [1:numMD]
       puts(cstrcat("md.std: n=", num2str(n), "\n"));
       tmpData = load(dataPath{n}, "cell", "rho2", "sdD_noAveCesaro");
