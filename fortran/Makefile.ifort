@@ -1,5 +1,6 @@
 # Defining variables ===============================
 FC = ifort
+H5FC = h5fc
 FCMPI = mpiifort
 OMPFLAGS = -openmp
 MODFLAG = -module
@@ -30,11 +31,11 @@ vpath %.f90 $(SRCDIR)
 all : $(PROGRAM)
 
 # ---------------------------
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o octave_save.o top.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
+	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o octave_save.o top.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
+	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
 	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
