@@ -313,8 +313,8 @@ program spatialDecompose_mpi
     call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   else
-    call mpi_reduce(sdCorr, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(rho, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(sdCorr, NULL(), size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(rho, NULL(), size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
