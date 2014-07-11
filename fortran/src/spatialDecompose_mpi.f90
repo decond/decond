@@ -1,10 +1,11 @@
 program spatialDecompose_mpi
   use mpi
-  use g96
+  use utility, only : handle
+  use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   implicit none
   integer, parameter :: num_parArg = 8, stdout = 6
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom, t
+  integer :: num_dataArg, i, j, k, n, totNumAtom, t, sysNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   type(handle) :: dataFileHandle
@@ -43,7 +44,7 @@ program spatialDecompose_mpi
   if (myrank == root) then
     is_periodic = .true.
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage: $spatialdecompose <outfile> <infile.g96> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
+      write(*,*) "usage: $spatialdecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
                   &<numDomain_r> <numDomain_c> <numatom1> <charge1> [<numatom2> <charge2>...]"
       write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
       write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
@@ -81,7 +82,7 @@ program spatialDecompose_mpi
   !rank root output parameters read
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
-    write(*,*) "inFile.g96 = ", dataFilename
+    write(*,*) "inFile.trr = ", dataFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
@@ -175,13 +176,16 @@ program spatialDecompose_mpi
   if (myrank == root) then
     write(*,*) "start reading trajectory..."
     starttime = MPI_Wtime()
-    allocate(pos_tmp(3, totNumAtom), stat=stat)
+    sysNumAtom = get_natom(dataFilename)
+    write(*,*) "sysNumAtom=", sysNumAtom
+
+    allocate(pos_tmp(3, sysNumAtom), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
-    allocate(vel_tmp(3, totNumAtom), stat=stat)
+    allocate(vel_tmp(3, sysNumAtom), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: vel_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -197,17 +201,17 @@ program spatialDecompose_mpi
     numFrameRead = 0
     call open_trajectory(dataFileHandle, dataFilename)
     do i = 1, numFrame
-      call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+      call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
       if (stat /= 0) then
         write(*,*) "Reading trajectory error"
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      pos(:,i,:) = pos_tmp
-      vel(:,i,:) = vel_tmp
+      pos(:,i,:) = pos_tmp(:, 1:totNumAtom)
+      vel(:,i,:) = vel_tmp(:, 1:totNumAtom)
       do j = 1, skip-1
-        call read_trajectory(dataFileHandle, totNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+        call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
         if (stat > 0) then
           write(*,*) "Reading trajectory error"
           call mpi_abort(MPI_COMM_WORLD, 1, ierr);
