@@ -276,10 +276,13 @@ contains
   end function getMolTypePairIndex
 
   subroutine output()
-    use octave_save
+    use H5DS
+    use H5LT
+    use HDF5
     implicit none
-    type(handle) :: htraj
-    real(8), allocatable :: timeLags(:), rBins(:)
+    real(8), allocatable :: timeLags(:)
+    integer :: ierr
+    integer(hid_t) :: fid, did1, did2, sid
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -288,15 +291,39 @@ contains
     end if 
     timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
     
-    call create_octave(htraj, outFilename)
-    call write_octave_scalar(htraj, "timestep", timestep)
-    call write_octave_vec(htraj, "charge", dble(charge))
-    call write_octave_vec(htraj, "numMol", dble(sys%mol(:)%num))
-    call write_octave_vec(htraj, "cell", cell)
-    call write_octave_vec(htraj, "timeLags", timeLags)
-    call write_octave_mat2(htraj, "autoCorr", autoCorr)
-    call write_octave_mat2(htraj, "crossCorr", crossCorr)
-    call close_octave(htraj)
+    call H5open_f(ierr)
+
+    ! create a HDF5 file 
+    call H5Fcreate_f(outFilename, H5F_ACC_TRUNC_F, fid, ierr)
+
+    ! create and write dataset
+    call H5LTset_attribute_double_f(fid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
+    call H5LTset_attribute_int_f(fid, "/", "charge", charge, size(charge, kind=size_t), ierr)
+    call H5LTset_attribute_int_f(fid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
+    call H5LTset_attribute_double_f(fid, "/", "cell", cell, size(cell, kind=size_t), ierr)
+
+
+    call H5LTmake_dataset_double_f(fid, "autoCorr", 2, &
+        [size(autoCorr, 1, kind=hsize_t), size(autoCorr, 2, kind=hsize_t)], autoCorr, ierr)
+    call H5Dopen_f(fid, "autoCorr", did1, ierr)
+
+    call H5LTmake_dataset_double_f(fid, "crossCorr", 2, &
+        [size(crossCorr, 1, kind=hsize_t), size(crossCorr, 2, kind=hsize_t)], crossCorr, ierr)
+    call H5Dopen_f(fid, "crossCorr", did2, ierr)
+
+
+    call H5LTmake_dataset_double_f(fid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
+    call H5Dopen_f(fid, "timeLags", sid, ierr)
+
+    ! attach to 1st dimension
+    call H5DSattach_scale_f(did1, sid, 1, ierr)
+    call H5DSattach_scale_f(did2, sid, 1, ierr)
+
+    call H5Dclose_f(sid, ierr)
+    call H5Dclose_f(did1, ierr)
+    call H5Dclose_f(did2, ierr)
+    call H5Fclose_f(fid, ierr)
+    call H5close_f(ierr)
   end subroutine output
 
 end program oneTwoDecompose
