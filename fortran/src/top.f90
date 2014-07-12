@@ -3,7 +3,7 @@ module top
   implicit none
 
   private
-  public :: open_top, close_top, read_top, system
+  public :: open_top, close_top, read_top, system, print_sys
   
   character(len=*), parameter :: LINE_LEN_STR = "128"
   character(len=1), dimension(2), parameter :: COMMENT_CHAR = [";", "#"]
@@ -56,20 +56,6 @@ contains
         if (sys%mol(i)%type == sys_top%mol(j)%type) then
           sys%mol(i) = sys_top%mol(j)
         end if
-      end do
-    end do
-
-    write(*,*) "[ molecules ]"
-    do i = 1, size(sys%mol)
-      write(*, *) adjustl(trim(sys%mol(i)%type)), sys%mol(i)%num
-    end do
-    do i = 1, size(sys%mol)
-      write(*,*) "[ moleculetype ]"
-      write(*, *) adjustl(trim(sys%mol(i)%type))
-      write(*,*) "[ atoms ]"
-      write(*,*) "type  mass  charge"
-      do j = 1, size(sys%mol(i)%atom)
-        write(*,*) trim(sys%mol(i)%atom(j)%type), " ", sys%mol(i)%atom(j)%mass, sys%mol(i)%atom(j)%charge
       end do
     end do
   end subroutine read_top
@@ -385,6 +371,25 @@ contains
       end if
     end do
   end subroutine remove_comment
+
+  subroutine print_sys(sys)
+    implicit none
+    type(system) :: sys
+    integer :: i, j
+    write(*,*) "[ molecules ]"
+    do i = 1, size(sys%mol)
+      write(*, *) adjustl(trim(sys%mol(i)%type)), sys%mol(i)%num
+    end do
+    do i = 1, size(sys%mol)
+      write(*,*) "[ moleculetype ]"
+      write(*, *) adjustl(trim(sys%mol(i)%type))
+      write(*,*) "[ atoms ]"
+      write(*,*) "type  mass  charge"
+      do j = 1, size(sys%mol(i)%atom)
+        write(*,*) trim(sys%mol(i)%atom(j)%type), " ", sys%mol(i)%atom(j)%mass, sys%mol(i)%atom(j)%charge
+      end do
+    end do
+  end subroutine print_sys
 end module top
 
 !program test
