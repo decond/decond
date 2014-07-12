@@ -17,7 +17,7 @@ program spatialDecompose_mpi
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
   !rho: (num_rBin, atomTypePairIndex)
   logical :: is_periodic
