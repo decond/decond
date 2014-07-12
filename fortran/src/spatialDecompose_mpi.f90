@@ -2,16 +2,18 @@ program spatialDecompose_mpi
   use mpi
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
+  use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
-  integer, parameter :: num_parArg = 8, stdout = 6
+  integer, parameter :: num_parArg = 9
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumAtom, t, sysNumAtom
+  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
-  type(handle) :: dataFileHandle
-  integer :: numFrame, maxLag, num_rBin, stat, numAtomType, numFrameRead
-  integer :: atomTypePairIndex, tmp_i, skip
-  integer, allocatable :: numAtom(:), charge(:), rBinIndex(:), norm(:)
+  character(len=128) :: topFilename
+  type(handle) :: dataFileHandle, topFileHandle
+  integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead
+  integer :: molTypePairIndex, tmp_i, skip
+  integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
@@ -19,13 +21,14 @@ program spatialDecompose_mpi
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
   real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
-  !sdCorr: spatially decomposed correlation (lag, rBin, atomTypePairIndex)
-  !rho: (num_rBin, atomTypePairIndex)
+  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
+  !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic
+  type(system) :: sys
 
   !MPI variables
   integer :: ierr, nprocs, myrank
-  integer:: numDomain_r, numDomain_c, numAtomPerDomain_r, numAtomPerDomain_c
+  integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
   real(8) :: starttime, endtime
@@ -44,8 +47,9 @@ program spatialDecompose_mpi
   if (myrank == root) then
     is_periodic = .true.
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage: $spatialdecompose <outfile> <infile.trr> <numFrameToRead> <skip> <maxlag> <rbinwidth(nm)> &
-                  &<numDomain_r> <numDomain_c> <numatom1> <charge1> [<numatom2> <charge2>...]"
+      write(*,*) "usage: $spatialdecompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
+                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
+                  <molecule1> <start_index1> [<molecule2> <start_index2>...]"
       write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
       write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
       write(*,*) "Note: numDomain_r and numDomain_c can be 0 and let the program decide (may not be the best)."
@@ -59,66 +63,84 @@ program spatialDecompose_mpi
 
   call get_command_argument(2, dataFilename)
 
-  call get_command_argument(3, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) numFrame 
+  call get_command_argument(3, topFilename)
 
   call get_command_argument(4, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) skip
+  read(tmp_str, *) numFrame 
 
   call get_command_argument(5, tmp_str) ! in the unit of frame number
+  read(tmp_str, *) skip
+
+  call get_command_argument(6, tmp_str) ! in the unit of frame number
   read(tmp_str, *) maxLag
 
-  call get_command_argument(6, tmp_str)
+  call get_command_argument(7, tmp_str)
   read(tmp_str, *) rBinWidth
 
-  call get_command_argument(7, tmp_str) 
+  call get_command_argument(8, tmp_str) 
   read(tmp_str, *) numDomain_r
 
-  call get_command_argument(8, tmp_str) 
+  call get_command_argument(9, tmp_str) 
   read(tmp_str, *) numDomain_c
 
-  numAtomType = num_dataArg / num_argPerData
+  numMolType = num_dataArg / num_argPerData
 
   !rank root output parameters read
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
     write(*,*) "inFile.trr = ", dataFilename
+    write(*,*) "topFile.trr = ", topFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
-    write(*,*) "numAtomType = ", numAtomType
+    write(*,*) "numMolType = ", numMolType
     write(*,*) "numDomain_r = ", numDomain_r
     write(*,*) "numDomain_c = ", numDomain_c
   end if
 
-  allocate(numAtom(numAtomType), stat=stat)
+  allocate(sys%mol(numMolType), stat=stat)
   if (stat /=0) then
-    write(*,*) "Allocation failed: numAtom"
+    write(*,*) "Allocation failed: sys%mol"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
 
-  allocate(charge(numAtomType), stat=stat)
+  allocate(charge(numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: charge"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
 
-  do n = 1, numAtomType
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, tmp_str) 
-    read(tmp_str, *) numAtom(n)
+  allocate(start_index(numMolType), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: start_index"
+    call exit(1)
+  end if 
+
+  do n = 1, numMolType
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
     call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-    read(tmp_str, *) charge(n)
+    read(tmp_str, *) start_index(n)
   end do
   if (myrank == root) then
-    write(*,*) "numAtom = ", numAtom
-    write(*,*) "charge = ", charge
+    write(*,*) "sys%mol%type = ", sys%mol%type
+    write(*,*) "start_index = ", start_index
   end if
-  totNumAtom = sum(numAtom)
+
+  !read topFile
+  topFileHandle = open_top(topFilename)
+  call read_top(topFileHandle, sys)
+  call close_top(topFileHandle)
+  if (myrank == root) call print_sys(sys)
+
+  do n = 1, numMolType
+    charge(n) = sum(sys%mol(n)%atom(:)%charge)
+  end do
+  totNumMol = sum(sys%mol(:)%num)
 
   !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
-  !numAtomPerDomain_r * numDomain_r ~= totNumAtom
+  !numMolPerDomain_r * numDomain_r ~= totNumMol
   if (numDomain_r == 0 .and. numDomain_c == 0) then
     numDomain_c = nint(sqrt(dble(nprocs)))
     do while(mod(nprocs, numDomain_c) /= 0)
@@ -141,15 +163,15 @@ program spatialDecompose_mpi
     call exit(1)
   end if 
 
-  numAtomPerDomain_r = totNumAtom / numDomain_r
-  numAtomPerDomain_c = totNumAtom / numDomain_c
-  r_start = mod(myrank, numDomain_r) * numAtomPerDomain_r + 1
-  r_end = r_start + numAtomPerDomain_r - 1
-  c_start = (myrank / numDomain_r) * numAtomPerDomain_c + 1
-  c_end = c_start + numAtomPerDomain_c - 1
+  numMolPerDomain_r = totNumMol / numDomain_r
+  numMolPerDomain_c = totNumMol / numDomain_c
+  r_start = mod(myrank, numDomain_r) * numMolPerDomain_r + 1
+  r_end = r_start + numMolPerDomain_r - 1
+  c_start = (myrank / numDomain_r) * numMolPerDomain_c + 1
+  c_end = c_start + numMolPerDomain_c - 1
   !check if myrank is at the ending boundary
-  if (mod(myrank, numDomain_r) == numDomain_r - 1) r_end = totNumAtom
-  if (myrank >= (numDomain_c - 1) * numDomain_r) c_end = totNumAtom
+  if (mod(myrank, numDomain_r) == numDomain_r - 1) r_end = totNumMol
+  if (myrank >= (numDomain_c - 1) * numDomain_r) c_end = totNumMol
   if (myrank == root) then
     write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c 
   end if
@@ -159,13 +181,13 @@ program spatialDecompose_mpi
 !  write(*,*)
 
   !prepare memory for all ranks
-  allocate(pos(3, numFrame, totNumAtom), stat=stat)
+  allocate(pos(3, numFrame, totNumMol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
-  allocate(vel(3, numFrame, totNumAtom), stat=stat)
+  allocate(vel(3, numFrame, totNumMol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -208,8 +230,10 @@ program spatialDecompose_mpi
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      pos(:,i,:) = pos_tmp(:, 1:totNumAtom)
-      vel(:,i,:) = vel_tmp(:, 1:totNumAtom)
+      call com_pos(pos(:, i, :), pos_tmp, start_index, sys)
+if (i == 1) write(*,*) pos(:, i, :)
+      call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
+if (i == 1) write(*,*) vel(:, i, :)
       do j = 1, skip-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
         if (stat > 0) then
@@ -238,8 +262,8 @@ program spatialDecompose_mpi
   !distribute trajectory data collectively
   if (myrank == root) write(*,*) "start broadcasting trajectory"
   starttime = MPI_Wtime()
-  call mpi_bcast(pos, 3*numFrame*totNumAtom, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
-  call mpi_bcast(vel, 3*numFrame*totNumAtom, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
+  call mpi_bcast(pos, 3*numFrame*totNumMol, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
+  call mpi_bcast(vel, 3*numFrame*totNumMol, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   call mpi_bcast(cell, 3, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   call mpi_bcast(numFrameRead, 1, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
   endtime = MPI_Wtime()
@@ -252,7 +276,7 @@ program spatialDecompose_mpi
   !spatial decomposition correlation
   if (myrank == root) write(*,*) "start spatial decomposition"
   starttime = MPI_Wtime()
-  allocate(sdCorr(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
+  allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: sdCorr"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -260,7 +284,7 @@ program spatialDecompose_mpi
   end if 
   sdCorr = 0d0
 
-  allocate(rho(num_rBin, numAtomType*numAtomType), stat=stat)
+  allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: rho"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -285,20 +309,20 @@ program spatialDecompose_mpi
     do i = r_start, r_end
       if (i /= j) then
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
-        atomTypePairIndex = getAtomTypePairIndex(i, j, numAtom)
+        molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
         do k = 1, maxLag+1      
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
             if (tmp_i <= num_rBin) then
-              sdCorr(k, tmp_i, atomTypePairIndex) = sdCorr(k, tmp_i, atomTypePairIndex) + vv(n)
+              sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
             end if
           end do
         end do
         do t = 1, numFrameRead
           tmp_i = rBinIndex(t)
           if (tmp_i <= num_rBin) then
-            rho(tmp_i, atomTypePairIndex) = rho(tmp_i, atomTypePairIndex) + 1d0
+            rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
           end if
         end do
       end if
@@ -314,13 +338,13 @@ program spatialDecompose_mpi
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
-    allocate(sdCorr_tmp(maxLag+1, num_rBin, numAtomType*numAtomType), stat=stat)
+    allocate(sdCorr_tmp(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdCorr_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
-    allocate(rho_tmp(num_rBin, numAtomType*numAtomType), stat=stat)
+    allocate(rho_tmp(num_rBin, numMolType*numMolType), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: rho_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -354,20 +378,20 @@ program spatialDecompose_mpi
     sdCorr = sdCorr / 3d0
 
     norm = [ (numFrameRead - (i-1), i = 1, maxLag+1) ]
-    forall (i = 1:num_rBin, n = 1:numAtomType*numAtomType )
+    forall (i = 1:num_rBin, n = 1:numMolType*numMolType )
       sdCorr(:,i,n) = sdCorr(:,i,n) / norm
     end forall
 
     deallocate(norm)
 
-!    forall (i = 1:maxLag+1, n = 1:numAtomType*numAtomType )
+!    forall (i = 1:maxLag+1, n = 1:numMolType*numMolType )
 !      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
 !    end forall
 !    where (isnan(sdCorr))
 !      sdCorr = 0
 !    end where
 
-    do n = 1, numAtomType*numAtomType
+    do n = 1, numMolType*numMolType
       do j = 1, num_rBin
         if (rho(j, n) > 0d0) then
             sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
@@ -419,33 +443,79 @@ contains
 !    end where
   end subroutine getBinIndex
 
-  integer function getAtomTypeIndex(i, numAtom)
+  integer function getMolTypeIndex(i, numMol)
     implicit none
-    integer, intent(in) :: i, numAtom(:)
-    integer :: n, numAtom_acc
-!    integer, save :: numAtomType = size(numAtom)
+    integer, intent(in) :: i, numMol(:)
+    integer :: n, numMol_acc
+!    integer, save :: numMolType = size(numMol)
 
-    getAtomTypeIndex = -1
-    numAtom_acc = 0
-    do n = 1, numAtomType
-      numAtom_acc = numAtom_acc + numAtom(n)
-      if (i <= numAtom_acc) then
-        getAtomTypeIndex = n
+    getMolTypeIndex = -1
+    numMol_acc = 0
+    do n = 1, numMolType
+      numMol_acc = numMol_acc + numMol(n)
+      if (i <= numMol_acc) then
+        getMolTypeIndex = n
         return
       end if
     end do
-  end function getAtomTypeIndex
+  end function getMolTypeIndex
   
-  integer function getAtomTypePairIndex(i, j, numAtom)
+  integer function getMolTypePairIndex(i, j, numMol)
     implicit none
-    integer, intent(in) :: i, j, numAtom(:)
+    integer, intent(in) :: i, j, numMol(:)
     integer :: ii, jj
-!    integer, save :: numAtomType = size(numAtom)
+!    integer, save :: numMolType = size(numMol)
   
-    ii = getAtomTypeIndex(i, numAtom)
-    jj = getAtomTypeIndex(j, numAtom)
-    getAtomTypePairIndex = (ii-1)*numAtomType + jj
-  end function getAtomTypePairIndex
+    ii = getMolTypeIndex(i, numMol)
+    jj = getMolTypeIndex(j, numMol)
+    getMolTypePairIndex = (ii-1)*numMolType + jj
+  end function getMolTypePairIndex
+
+  subroutine com_pos(com_p, pos, start_index, sys)
+    implicit none
+    real(8), dimension(:, :), intent(out) :: com_p
+    real(8), dimension(:, :), intent(in) :: pos 
+    integer, dimension(:), intent(in) :: start_index
+    type(system), intent(in) :: sys
+    integer :: d, i, j, k, idx_begin, idx_end, idx_com
+
+    com_p = 0d0
+    idx_com = 0
+    do i = 1, size(sys%mol)
+      do j = 1, sys%mol(i)%num
+        idx_begin = start_index(i) + (j-1) * size(sys%mol(i)%atom)
+        idx_end = idx_begin + size(sys%mol(i)%atom) - 1
+        idx_com = idx_com + 1
+        do d = 1, 3
+          com_p(d, idx_com) = com_p(d, idx_com) + &
+              sum(pos(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+        end do
+      end do
+    end do
+  end subroutine com_pos
+
+  subroutine com_vel(com_v, vel, start_index, sys)
+    implicit none
+    real(8), dimension(:, :), intent(out) :: com_v
+    real(8), dimension(:, :), intent(in) :: vel 
+    integer, dimension(:), intent(in) :: start_index
+    type(system), intent(in) :: sys
+    integer :: d, i, j, k, idx_begin, idx_end, idx_com
+
+    com_v = 0d0
+    idx_com = 0
+    do i = 1, size(sys%mol)
+      do j = 1, sys%mol(i)%num
+        idx_begin = start_index(i) + (j-1) * size(sys%mol(i)%atom)
+        idx_end = idx_begin + size(sys%mol(i)%atom) - 1
+        idx_com = idx_com + 1
+        do d = 1, 3
+          com_v(d, idx_com) = com_v(d, idx_com) + &
+              sum(vel(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+        end do
+      end do
+    end do
+  end subroutine com_vel
 
   subroutine output()
     use octave_save
@@ -472,7 +542,7 @@ contains
     call create_octave(htraj, outFilename)
     call write_octave_scalar(htraj, "timestep", timestep)
     call write_octave_vec(htraj, "charge", dble(charge))
-    call write_octave_vec(htraj, "numAtom", dble(numAtom))
+    call write_octave_vec(htraj, "numMol", dble(sys%mol(:)%num))
     call write_octave_vec(htraj, "cell", cell)
     call write_octave_vec(htraj, "timeLags", timeLags)
     call write_octave_vec(htraj, "rBins", rBins)
