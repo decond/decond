@@ -20,7 +20,7 @@ program spatialDecompose_mpi
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic
@@ -231,9 +231,7 @@ program spatialDecompose_mpi
       end if 
       numFrameRead = numFrameRead + 1
       call com_pos(pos(:, i, :), pos_tmp, start_index, sys)
-if (i == 1) write(*,*) pos(:, i, :)
       call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
-if (i == 1) write(*,*) vel(:, i, :)
       do j = 1, skip-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
         if (stat > 0) then
@@ -338,29 +336,11 @@ if (i == 1) write(*,*) vel(:, i, :)
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
-    allocate(sdCorr_tmp(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: sdCorr_tmp"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-    allocate(rho_tmp(num_rBin, numMolType*numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: rho_tmp"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-    do i = 1, nprocs - 1
-      call mpi_recv(sdCorr_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
-      call mpi_recv(rho_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
-      sdCorr = sdCorr + sdCorr_tmp
-      rho = rho + rho_tmp
-    end do
-    deallocate(sdCorr_tmp)
-    deallocate(rho_tmp)
+    call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   else
-    call mpi_send(sdCorr, size(sdCorr), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
-    call mpi_send(rho, size(rho), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(sdCorr, NULL(), size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(rho, NULL(), size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
