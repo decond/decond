@@ -7,7 +7,7 @@ program spatialDecompose_mpi
   integer, parameter :: num_parArg = 9
   integer, parameter :: num_argPerData = 2
   integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
-  character(len=128) :: outFilename 
+  character(len=128) :: outFilename
   character(len=128) :: dataFilename
   character(len=128) :: topFilename
   type(handle) :: dataFileHandle, topFileHandle
@@ -17,10 +17,10 @@ program spatialDecompose_mpi
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
-  !one frame data (dim=3, atom) 
+  !one frame data (dim=3, atom)
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), rho_tmp(:, :), sdCorr_tmp(:, :, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic
@@ -66,7 +66,7 @@ program spatialDecompose_mpi
   call get_command_argument(3, topFilename)
 
   call get_command_argument(4, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) numFrame 
+  read(tmp_str, *) numFrame
 
   call get_command_argument(5, tmp_str) ! in the unit of frame number
   read(tmp_str, *) skip
@@ -77,10 +77,10 @@ program spatialDecompose_mpi
   call get_command_argument(7, tmp_str)
   read(tmp_str, *) rBinWidth
 
-  call get_command_argument(8, tmp_str) 
+  call get_command_argument(8, tmp_str)
   read(tmp_str, *) numDomain_r
 
-  call get_command_argument(9, tmp_str) 
+  call get_command_argument(9, tmp_str)
   read(tmp_str, *) numDomain_c
 
   numMolType = num_dataArg / num_argPerData
@@ -91,7 +91,7 @@ program spatialDecompose_mpi
     write(*,*) "inFile.trr = ", dataFilename
     write(*,*) "topFile.trr = ", topFilename
     write(*,*) "numFrame= ", numFrame
-    write(*,*) "maxLag = ", maxLag 
+    write(*,*) "maxLag = ", maxLag
     write(*,*) "rBinWidth = ", rBinWidth
     write(*,*) "numMolType = ", numMolType
     write(*,*) "numDomain_r = ", numDomain_r
@@ -103,24 +103,24 @@ program spatialDecompose_mpi
     write(*,*) "Allocation failed: sys%mol"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
 
   allocate(charge(numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: charge"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
 
   allocate(start_index(numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: start_index"
     call exit(1)
-  end if 
+  end if
 
   do n = 1, numMolType
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type)
+    call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str)
     read(tmp_str, *) start_index(n)
   end do
   if (myrank == root) then
@@ -152,7 +152,7 @@ program spatialDecompose_mpi
   else if (numDomain_c > 0) then
     numDomain_c = nprocs / numDomain_r
   else
-    write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c 
+    write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if
@@ -161,7 +161,7 @@ program spatialDecompose_mpi
     write(*,*) "Domain decomposition failed: ", numDomain_r, " x ", numDomain_c, " /= ", nprocs
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
 
   numMolPerDomain_r = totNumMol / numDomain_r
   numMolPerDomain_c = totNumMol / numDomain_c
@@ -173,7 +173,7 @@ program spatialDecompose_mpi
   if (mod(myrank, numDomain_r) == numDomain_r - 1) r_end = totNumMol
   if (myrank >= (numDomain_c - 1) * numDomain_r) c_end = totNumMol
   if (myrank == root) then
-    write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c 
+    write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c
   end if
 !  write(*,*) "my rank =", myrank
 !  write(*,*) "r_start, r_end =", r_start, r_end
@@ -186,13 +186,13 @@ program spatialDecompose_mpi
     write(*,*) "Allocation failed: pos"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
   allocate(vel(3, numFrame, totNumMol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
 
   !read trajectory at root
   if (myrank == root) then
@@ -206,19 +206,19 @@ program spatialDecompose_mpi
       write(*,*) "Allocation failed: pos_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
     allocate(vel_tmp(3, sysNumAtom), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: vel_tmp"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
     allocate(time(numFrame), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: time"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
 
     numFrameRead = 0
     call open_trajectory(dataFileHandle, dataFilename)
@@ -228,7 +228,7 @@ program spatialDecompose_mpi
         write(*,*) "Reading trajectory error"
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
-      end if 
+      end if
       numFrameRead = numFrameRead + 1
       call com_pos(pos(:, i, :), pos_tmp, start_index, sys)
       call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
@@ -241,7 +241,7 @@ program spatialDecompose_mpi
         else if (stat < 0) then
           !end of file
           exit
-        end if 
+        end if
       end do
     end do
     call close_trajectory(dataFileHandle)
@@ -279,7 +279,7 @@ program spatialDecompose_mpi
     write(*,*) "Allocation failed: sdCorr"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
   sdCorr = 0d0
 
   allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
@@ -287,7 +287,7 @@ program spatialDecompose_mpi
     write(*,*) "Allocation failed: rho"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
   rho = 0d0
 
   allocate(rBinIndex(numFrameRead), stat=stat)
@@ -295,20 +295,20 @@ program spatialDecompose_mpi
     write(*,*) "Allocation failed: rBinIndex"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
 
   allocate(vv(numFrameRead))
   if (stat /=0) then
     write(*,*) "Allocation failed: vv"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
-  end if 
+  end if
   do j = c_start, c_end
     do i = r_start, r_end
       if (i /= j) then
         call getBinIndex(pos(:,:,i), pos(:,:,j), cell(1), rBinWidth, rBinIndex)
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
-        do k = 1, maxLag+1      
+        do k = 1, maxLag+1
           vv = sum(vel(:, k:numFrameRead, i) * vel(:, 1:numFrameRead-k+1, j), 1)
           do n = 1, numFrameRead-k+1
             tmp_i = rBinIndex(n)
@@ -336,11 +336,29 @@ program spatialDecompose_mpi
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
-    call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    allocate(sdCorr_tmp(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: sdCorr_tmp"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    allocate(rho_tmp(num_rBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rho_tmp"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    do i = 1, nprocs - 1
+      call mpi_recv(sdCorr_tmp, size(sdCorr), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+      call mpi_recv(rho_tmp, size(rho), mpi_double_precision, i, MPI_ANY_TAG, MPI_COMM_WORLD, MPI_STATUS_IGNORE, ierr)
+      sdCorr = sdCorr + sdCorr_tmp
+      rho = rho + rho_tmp
+    end do
+    deallocate(sdCorr_tmp)
+    deallocate(rho_tmp)
   else
-    call mpi_reduce(sdCorr, NULL(), size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(rho, NULL(), size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_send(sdCorr, size(sdCorr), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
+    call mpi_send(rho, size(rho), mpi_double_precision, root, 0, MPI_COMM_WORLD, ierr)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
@@ -352,7 +370,7 @@ program spatialDecompose_mpi
       write(*,*) "Allocation failed: norm"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
 
     rho = rho / numFrameRead
     sdCorr = sdCorr / 3d0
@@ -403,14 +421,14 @@ contains
       wrap = abs(wrap - l)
     end do
   end function wrap
-  
+
   subroutine getBinIndex(p1, p2, cellLength, rBinWidth, rBinIndex)
     implicit none
     real(8), intent(in) :: p1(:,:), p2(:,:), cellLength, rBinWidth
     !p1(dim,timeFrame)
     integer, intent(out) :: rBinIndex(:)
     real(8) :: pp(size(p1,1), size(p1,2))
-    
+
     pp = abs(p1 - p2)
     pp = wrap(pp, cellLength)
     rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
@@ -439,13 +457,13 @@ contains
       end if
     end do
   end function getMolTypeIndex
-  
+
   integer function getMolTypePairIndex(i, j, numMol)
     implicit none
     integer, intent(in) :: i, j, numMol(:)
     integer :: ii, jj
 !    integer, save :: numMolType = size(numMol)
-  
+
     ii = getMolTypeIndex(i, numMol)
     jj = getMolTypeIndex(j, numMol)
     getMolTypePairIndex = (ii-1)*numMolType + jj
@@ -454,7 +472,7 @@ contains
   subroutine com_pos(com_p, pos, start_index, sys)
     implicit none
     real(8), dimension(:, :), intent(out) :: com_p
-    real(8), dimension(:, :), intent(in) :: pos 
+    real(8), dimension(:, :), intent(in) :: pos
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     integer :: d, i, j, k, idx_begin, idx_end, idx_com
@@ -477,7 +495,7 @@ contains
   subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
     real(8), dimension(:, :), intent(out) :: com_v
-    real(8), dimension(:, :), intent(in) :: vel 
+    real(8), dimension(:, :), intent(in) :: vel
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     integer :: d, i, j, k, idx_begin, idx_end, idx_com
@@ -511,15 +529,15 @@ contains
       write(*,*) "Allocation failed: timeLags"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
     timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
-    
+
     allocate(rBins(num_rBin), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: rBins"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
-    end if 
+    end if
     rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
 
     call H5open_f(ierr)
