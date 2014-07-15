@@ -20,7 +20,7 @@ program spatialDecompose_mpi
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), dummy_null
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic
@@ -339,8 +339,8 @@ program spatialDecompose_mpi
     call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   else
-    call mpi_reduce(sdCorr, NULL(), size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(rho, NULL(), size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
