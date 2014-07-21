@@ -5,13 +5,12 @@ import numpy as np
 from scipy import integrate
 
 parser = argparse.ArgumentParser(description="Calcuate no-average Cesaro ND of oneTwoDecompose corr")
-parser.add_argument('corrData', help="<data.corr.h5>. "
-                                     "Base filename <data> is also used in output filename")
+parser.add_argument('corrData', help="oneTwoDecomposed correlation data file. <data.corr.h5>")
 parser.add_argument('--intDelta', type=int, default=1, help="integration delta step. Default = 1")
+parser.add_argument('-o', '--out', default='NDCesaro.h5', help="output file")
 args = parser.parse_args()
 
-intDelta = args.intDelta
-baseFilename = args.corrData.split('.')[0]
+outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 def zipIndexPair(idx_r, idx_c, size):
   """
@@ -34,9 +33,9 @@ with h5py.File(args.corrData, 'r') as f:
   timestep = f.attrs['timestep'][0]
   numMol = f.attrs['numMol']
 
-  timeLags = f['timeLags'][0::intDelta]
-  autoCorr = f['autoCorr'][:, 0::intDelta]
-  crossCorr = f['crossCorr'][:, 0::intDelta]
+  timeLags = f['timeLags'][0::args.intDelta]
+  autoCorr = f['autoCorr'][:, 0::args.intDelta]
+  crossCorr = f['crossCorr'][:, 0::args.intDelta]
   assert(autoCorr.shape[-1] == crossCorr.shape[-1])
 
   print("timestep = {}".format(timestep))
@@ -58,7 +57,6 @@ with h5py.File(args.corrData, 'r') as f:
                                 crossCorr[zipIndexPair(j, i, numIonTypes), :]) / 2, timeLags, initial = 0)
   crossNDCesaro = integrate.cumtrapz(crossNDCesaro, timeLags, initial = 0)
 
-  outFilename = "{}.NDCesaro-intDelta-{}.h5".format(baseFilename, intDelta)
   with h5py.File(outFilename, 'w') as outFile:
     for (name, value) in f.attrs.items():
       outFile.attrs[name] = value
