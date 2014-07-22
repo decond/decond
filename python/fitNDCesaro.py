@@ -102,6 +102,10 @@ if (numMD > 1):
     delta = S * Sxx - Sx * Sx
     slopeTotal_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
     NDTotal_err[str(fitBoundary)] = np.sqrt(S / delta)
+else:
+  for fitBoundary in args.fitRange:
+    ND_err[str(fitBoundary)] = 0.
+    NDTotal_err[str(fitBoundary)] = 0.
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)
