@@ -49,12 +49,11 @@ with h5py.File(args.corrData, 'r') as f:
   for i in range(numIonTypes):
     for j in range(i, numIonTypes):
       if (i == j):
-        crossNDCesaro[zipIndexPair2(i, j, numIonTypes), :] = \
-            integrate.cumtrapz(crossCorr[zipIndexPair(i, j, numIonTypes), :], timeLags, initial = 0)
+        crossNDCesaro[zipIndexPair2(i, j, numIonTypes), :] = crossCorr[zipIndexPair(i, j, numIonTypes), :]
       else:
-        crossNDCesaro[zipIndexPair2(i, j, numIonTypes), :] = \
-            integrate.cumtrapz((crossCorr[zipIndexPair(i, j, numIonTypes), :] +
-                                crossCorr[zipIndexPair(j, i, numIonTypes), :]) / 2, timeLags, initial = 0)
+        crossNDCesaro[zipIndexPair2(i, j, numIonTypes), :] = (crossCorr[zipIndexPair(i, j, numIonTypes), :] +
+                                                              crossCorr[zipIndexPair(j, i, numIonTypes), :]) / 2
+  crossNDCesaro = integrate.cumtrapz(crossNDCesaro, timeLags, initial = 0)
   crossNDCesaro = integrate.cumtrapz(crossNDCesaro, timeLags, initial = 0)
 
   with h5py.File(outFilename, 'w') as outFile:
