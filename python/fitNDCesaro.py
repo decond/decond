@@ -40,15 +40,15 @@ for n, data in enumerate(args.NDCesaroData):
         for j in range(i,numIonTypes):
           zz[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = charge[i] * charge[j]
       timeLags = f['timeLags'][:]
-      NDCesaroRaw = np.zeros([numMD, numIonTypes + numIonTypePairs, timeLags.size])
-      volumeRaw = np.zeros([numMD])
+      NDCesaroRaw = np.empty([numMD, numIonTypes + numIonTypePairs, timeLags.size])
+      volumeRaw = np.empty([numMD])
 
-    NDCesaroRaw[n, :numIonTypes, :] += f['autoNDCesaro']
-    NDCesaroRaw[n, numIonTypes:, :] += f['crossNDCesaro']
+    NDCesaroRaw[n, :numIonTypes, :] = f['autoNDCesaro']
+    NDCesaroRaw[n, numIonTypes:, :] = f['crossNDCesaro']
     volumeRaw[n] = f.attrs['cell'].prod()
 
 
-NDCesaroTotalRaw = np.sum(NDCesaroRaw * zz[:, np.newaxis], axis=1)
+NDCesaroTotalRaw = np.sum(NDCesaroRaw * np.sign(zz[:, np.newaxis]), axis=1)
 NDCesaroTotal = {}
 NDCesaroTotal['ave'] = np.mean(NDCesaroTotalRaw, axis=0)
 NDCesaroTotal['std'] = np.std(NDCesaroTotalRaw, axis=0)
@@ -92,15 +92,15 @@ if (numMD > 1):
 
   for fit, fitBoundary in zip(fitRange, args.fitRange):
     rec_sig2 = 1 / NDCesaroTotal['std'][fit] ** 2  # [timeLags]
-    S = np.sum(rec_sig2, 1) # scalar
-    Sx = np.sum(timeLags[fit] * rec_sig2, 1) # scalar
-    Sxx = np.sum(timeLags[fit]**2 * rec_sig2, 1) # scalar
-    Sy = np.sum(NDCesaroTotal['ave'][:, fit] * rec_sig2, 1) # scalar
-    Syy = np.sum(NDCesaroTotal['ave'][:, fit]**2 * rec_sig2, 1) # scalar
-    Sxy = np.sum(timeLags[fit] * NDCesaro['ave'][:, fit] * rec_sig2, 1) # scalar
+    S = np.sum(rec_sig2) # scalar
+    Sx = np.sum(timeLags[fit] * rec_sig2) # scalar
+    Sxx = np.sum(timeLags[fit]**2 * rec_sig2) # scalar
+    Sy = np.sum(NDCesaroTotal['ave'][fit] * rec_sig2) # scalar
+    Syy = np.sum(NDCesaroTotal['ave'][fit]**2 * rec_sig2) # scalar
+    Sxy = np.sum(timeLags[fit] * NDCesaroTotal['ave'][fit] * rec_sig2) # scalar
 
     delta = S * Sxx - Sx * Sx
-    slopeTotal_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
+    slope_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
     NDTotal_err[str(fitBoundary)] = np.sqrt(S / delta)
 else:
   for fitBoundary in args.fitRange:
