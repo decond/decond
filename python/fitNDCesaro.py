@@ -45,7 +45,7 @@ for n, data in enumerate(args.NDCesaroData):
 
     NDCesaroRaw[n, :numIonTypes, :] += f['autoNDCesaro']
     NDCesaroRaw[n, numIonTypes:, :] += f['crossNDCesaro']
-    volumeRaw[n] += f.attrs['cell'].prod()
+    volumeRaw[n] = f.attrs['cell'].prod()
 
 
 NDCesaroTotalRaw = np.sum(NDCesaroRaw * zz[:, np.newaxis], axis=1)
