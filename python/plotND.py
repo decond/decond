@@ -20,12 +20,12 @@ class Const:
   nm = 1.0E-9 #(m)
 
   def __init__(self, volume):
-    ND2EC = beta * basicCharge**2 / (volume*(nm**3))
+    self.nd2ecSI = self.beta * self.basicCharge**2 / (volume*(self.nm**3)) * self.nm**2 / self.ps
 
 def loadDictFromH5(h5g):
   dict = {}
   def func(k, v):
-    dict[k] = v
+    dict[k] = v[...]
   h5g.visititems(func)
   return dict
 
@@ -44,3 +44,5 @@ with h5py.File(args.NDCesaroFit) as f:
   ND_err = loadDictFromH5(f['ND_err'])
   NDTotal = loadDictFromH5(f['NDTotal'])
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
+  const = Const(volume['ave'])
+
