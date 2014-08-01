@@ -37,12 +37,14 @@ with h5py.File(args.NDCesaroFit) as f:
   charge = f.attrs['charge'][...]
   timeLags = f['timeLags'][...]
   zz = f['zz'][...]
-  volume = loadDictFromH5(f['volume'])
-  NDCesaro = loadDictFromH5(f['NDCesaro'])
-  NDCesaroTotal = loadDictFromH5(f['NDCesaroTotal'])
+  volume = f['volume'][...]
+  NDCesaro = f['NDCesaro'][...]
+  NDCesaro_err = f['NDCesaro_err'][...]
+  NDCesaroTotal = f['NDCesaroTotal'][...]
+  NDCesaroTotal_err = f['NDCesaroTotal_err'][...]
   ND = loadDictFromH5(f['ND'])
   ND_err = loadDictFromH5(f['ND_err'])
   NDTotal = loadDictFromH5(f['NDTotal'])
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
-  const = Const(volume['ave'])
+  const = Const(volume)
 
