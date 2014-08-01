@@ -68,14 +68,18 @@ dt = timeLags[1] - timeLags[0]
 fitRangeBoundary = (np.array(args.fitRange) / dt).astype(int)
 fitRange = [list(range(i, j)) for [i, j] in fitRangeBoundary]
 
+def getKeyFromFitBoundary(fitBoundary):
+  return '{}-{}'.format(*fitBoundary)
+
 ND = {}
 NDTotal = {}
 for fit, fitBoundary in zip(fitRange, args.fitRange):
-  ND[str(fitBoundary)] = np.polyfit(timeLags[fit], NDCesaro['ave'][:, fit].T, 1)[0, :]
-  NDTotal[str(fitBoundary)] = np.polyfit(timeLags[fit], NDCesaroTotal['ave'][fit], 1)[0]
+  ND[getKeyFromFitBoundary(fitBoundary)] = np.polyfit(timeLags[fit], NDCesaro['ave'][:, fit].T, 1)[0, :]
+  NDTotal[getKeyFromFitBoundary(fitBoundary)] = np.polyfit(timeLags[fit], NDCesaroTotal['ave'][fit], 1)[0]
 
 ND_err = {}
 NDTotal_err = {}
+
 if (numMD > 1):
   for fit, fitBoundary in zip(fitRange, args.fitRange):
     rec_sig2 = 1 / NDCesaro['std'][:, fit] ** 2  # [type, timeLags]
@@ -88,7 +92,7 @@ if (numMD > 1):
 
     delta = S * Sxx - Sx * Sx
     slope_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
-    ND_err[str(fitBoundary)] = np.sqrt(S / delta)
+    ND_err[getKeyFromFitBoundary(fitBoundary)] = np.sqrt(S / delta)
 
   for fit, fitBoundary in zip(fitRange, args.fitRange):
     rec_sig2 = 1 / NDCesaroTotal['std'][fit] ** 2  # [timeLags]
@@ -101,11 +105,11 @@ if (numMD > 1):
 
     delta = S * Sxx - Sx * Sx
     slope_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
-    NDTotal_err[str(fitBoundary)] = np.sqrt(S / delta)
+    NDTotal_err[getKeyFromFitBoundary(fitBoundary)] = np.sqrt(S / delta)
 else:
   for fitBoundary in args.fitRange:
-    ND_err[str(fitBoundary)] = 0.
-    NDTotal_err[str(fitBoundary)] = 0.
+    ND_err[getKeyFromFitBoundary(fitBoundary)] = 0.
+    NDTotal_err[getKeyFromFitBoundary(fitBoundary)] = 0.
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)
