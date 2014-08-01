@@ -34,11 +34,10 @@ for n, data in enumerate(args.sdDCesaroData):
       numIonTypes = numMol.size
       numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2;
       charge = f.attrs['charge']
-      zz = np.ones([numIonTypes + numIonTypePairs])
+      zzCross = np.ones([numIonTypePairs])
       for i in range(numIonTypes):
-        zz[i] = charge[i] ** 2
         for j in range(i,numIonTypes):
-          zz[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = charge[i] * charge[j]
+          zzCross[zipIndexPair2(i, j, numIonTypes)] = charge[i] * charge[j]
       timeLags = f['timeLags'][...]
       rBins = f['rBins'][...]
       sdDCesaroRaw = np.empty([numMD, numIonTypePairs, rBins.size, timeLags.size])
@@ -68,13 +67,16 @@ dt = timeLags[1] - timeLags[0]
 fitRangeBoundary = (np.array(args.fitRange) / dt).astype(int)
 fitRange = [list(range(i, j)) for [i, j] in fitRangeBoundary]
 
+def getKeyFromFitBoundary(fitBoundary):
+  return '{}-{}'.format(*fitBoundary)
+
 sdD = {}
 for fit, fitBoundary in zip(fitRange, args.fitRange):
-  sdD[str(fitBoundary)] = np.empty([numIonTypePairs, rBins.size])
+  sdD[getKeyFromFitBoundary(fitBoundary)] = np.empty([numIonTypePairs, rBins.size])
   for tp in range(numIonTypePairs):
     # I don't know why the array should not be transposed?
-    # sdD[str(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit].T, 1)[0, :]
-    sdD[str(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit], 1)[0, :]
+    # sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit].T, 1)[0, :]
+    sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit], 1)[0, :]
 
 sdD_err = {}
 if (numMD > 1):
@@ -89,11 +91,11 @@ if (numMD > 1):
 
     delta = S * Sxx - Sx * Sx
     slope_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
-    sdD_err[str(fitBoundary)] = np.sqrt(S / delta)
+    sdD_err[getKeyFromFitBoundary(fitBoundary)] = np.sqrt(S / delta)
 
 else:
   for fitBoundary in args.fitRange:
-    sdD_err[str(fitBoundary)] = 0.
+    sdD_err[getKeyFromFitBoundary(fitBoundary)] = 0.
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)
@@ -107,7 +109,7 @@ with h5py.File(args.sdDCesaroData[0], 'r') as f, h5py.File(args.out, 'w') as out
 
   outFile['timeLags'] = timeLags
   outFile['rBins'] = rBins
-  outFile['zz'] = zz
+  outFile['zzCross'] = zzCross
   outFile['volume'] = volume
   outFile['volume_err'] = volume_err
   outFile['sdDCesaro'] = sdDCesaro
