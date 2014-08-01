@@ -373,15 +373,7 @@ program spatialDecompose_mpi
 
     do n = 1, numMolType*numMolType
       do j = 1, num_rBin
-        if (rho(j, n) > 0d0) then
-            sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
-        else if (any(abs(sdCorr(:,j,n)) > 0d0)) then
-          !rho is zero, sdCorr should also be zero
-          write(*,*) "error: rho(",j,",",n,") = ", rho(j,n)
-          write(*,*) "but sdCorr(:,", j, ",", n, ") are not all zero"
-          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-          call exit(1)
-        end if
+        sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
       end do
     end do
 
