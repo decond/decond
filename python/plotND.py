@@ -20,7 +20,7 @@ class Const:
   nm = 1.0E-9 #(m)
 
   def __init__(self, volume):
-    self.nd2ecSI = self.beta * self.basicCharge**2 / (volume*(self.nm**3)) * self.nm**2 / self.ps
+    self.ND2ecSI = self.beta * self.basicCharge**2 / (volume*(self.nm**3)) * self.nm**2 / self.ps
 
 def loadDictFromH5(h5g):
   dict = {}
@@ -30,7 +30,7 @@ def loadDictFromH5(h5g):
   return dict
 
 
-with h5py.File(args.NDCesaroFit) as f:
+with h5py.File(args.NDCesaroFit, 'r') as f:
   numMol = f.attrs['numMol'][...]
   numIonTypes = numMol.size
   numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;

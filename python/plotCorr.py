@@ -9,7 +9,7 @@ parser.add_argument('corrData', help="correlation data file <oneTwoDecompose.cor
 parser.add_argument('-o', '--out', default='corr', help="output figure base filename")
 args = parser.parse_args()
 
-with h5py.File(args.corrData) as f:
+with h5py.File(args.corrData, 'r') as f:
   timeLags = f['timeLags'][...]
   autoCorr = f['autoCorr'][...]
   crossCorr = f['crossCorr'][...]
