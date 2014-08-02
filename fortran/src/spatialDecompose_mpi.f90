@@ -230,7 +230,7 @@ program spatialDecompose_mpi
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      call com_pos(pos(:, i, :), pos_tmp, start_index, sys)
+      call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
       call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
       do j = 1, skip-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
@@ -373,46 +373,34 @@ program spatialDecompose_mpi
 
     do n = 1, numMolType*numMolType
       do j = 1, num_rBin
-        if (rho(j, n) > 0d0) then
-            sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
-        else if (any(abs(sdCorr(:,j,n)) > 0d0)) then
-          !rho is zero, sdCorr should also be zero
-          write(*,*) "error: rho(",j,",",n,") = ", rho(j,n)
-          write(*,*) "but sdCorr(:,", j, ",", n, ") are not all zero"
-          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-          call exit(1)
-        end if
+        sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
       end do
     end do
 
     !output results
+    write(*,*) "start writing outputs"
+    starttime = MPI_Wtime()
     call output()
+    endtime = MPI_Wtime()
+    write(*,*) "finished writing outputs. It took ", endtime - starttime, " seconds"
   end if
 
   call mpi_finalize(ierr)
   stop
 
 contains
-  elemental real(8) function wrap(r, l)
+  subroutine getBinIndex(p1, p2, cell, rBinWidth, rBinIndex)
     implicit none
-    real(8), intent(in) :: r, l
-    real(8) :: half_l
-    half_l = l / 2.d0
-    wrap = r
-    do while (wrap > half_l)
-      wrap = abs(wrap - l)
-    end do
-  end function wrap
-  
-  subroutine getBinIndex(p1, p2, cellLength, rBinWidth, rBinIndex)
-    implicit none
-    real(8), intent(in) :: p1(:,:), p2(:,:), cellLength, rBinWidth
+    real(8), intent(in) :: p1(:,:), p2(:,:), cell(3), rBinWidth
     !p1(dim,timeFrame)
     integer, intent(out) :: rBinIndex(:)
     real(8) :: pp(size(p1,1), size(p1,2))
+    integer :: d
     
-    pp = abs(p1 - p2)
-    pp = wrap(pp, cellLength)
+    pp = p1 - p2
+    do d = 1, 3
+      pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
+    end do
     rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
     where (rBinIndex == 0)
       rBinIndex = 1
@@ -451,28 +439,53 @@ contains
     getMolTypePairIndex = (ii-1)*numMolType + jj
   end function getMolTypePairIndex
 
-  subroutine com_pos(com_p, pos, start_index, sys)
+  subroutine com_pos(com_p, pos, start_index, sys, cell)
     implicit none
     real(8), dimension(:, :), intent(out) :: com_p
     real(8), dimension(:, :), intent(in) :: pos 
+    real(8), dimension(:, :), allocatable :: pos_gathered
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com
+    real(8), dimension(3), intent(in) :: cell
+    integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
 
-    com_p = 0d0
     idx_com = 0
     do i = 1, size(sys%mol)
+      num_atom = size(sys%mol(i)%atom)
+      allocate(pos_gathered(3, num_atom), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: pos_gathered"
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end if
       do j = 1, sys%mol(i)%num
-        idx_begin = start_index(i) + (j-1) * size(sys%mol(i)%atom)
-        idx_end = idx_begin + size(sys%mol(i)%atom) - 1
+        idx_begin = start_index(i) + (j-1) * num_atom
+        idx_end = idx_begin + num_atom - 1
         idx_com = idx_com + 1
+        call gatherMolPos(pos_gathered, pos(:, idx_begin:idx_end), cell)
         do d = 1, 3
-          com_p(d, idx_com) = com_p(d, idx_com) + &
-              sum(pos(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+          com_p(d, idx_com) = sum(pos_gathered(d, :) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
         end do
       end do
+      deallocate(pos_gathered)
     end do
   end subroutine com_pos
+
+  subroutine gatherMolPos(pos_gathered, pos, cell)
+    implicit none
+    real(8), dimension(:, :), intent(out) :: pos_gathered
+    real(8), dimension(:, :), intent(in) :: pos
+    real(8), dimension(3), intent(in) :: cell
+    real(8), dimension(3) :: ref_pos
+    integer :: d
+
+    ref_pos = pos(:, 1)
+    do d = 1, 3
+      pos_gathered(d, :) = pos(d, :) - ref_pos(d)
+      pos_gathered(d, :) = ref_pos(d) + pos_gathered(d, :) - &
+                           nint(pos_gathered(d, :) / cell(d)) * cell(d)
+    end do
+  end subroutine gatherMolPos
 
   subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
