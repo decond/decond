@@ -32,6 +32,8 @@ program spatialDecompose_mpi
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
   real(8) :: starttime, endtime
+  integer :: r_start_offset, c_start_offset
+  integer :: residueMol_r, residueMol_c, num_r, num_c
 
   !initialize
   call mpi_init(ierr)
@@ -165,13 +167,42 @@ program spatialDecompose_mpi
 
   numMolPerDomain_r = totNumMol / numDomain_r
   numMolPerDomain_c = totNumMol / numDomain_c
-  r_start = mod(myrank, numDomain_r) * numMolPerDomain_r + 1
-  r_end = r_start + numMolPerDomain_r - 1
-  c_start = (myrank / numDomain_r) * numMolPerDomain_c + 1
-  c_end = c_start + numMolPerDomain_c - 1
-  !check if myrank is at the ending boundary
-  if (mod(myrank, numDomain_r) == numDomain_r - 1) r_end = totNumMol
-  if (myrank >= (numDomain_c - 1) * numDomain_r) c_end = totNumMol
+  residueMol_r = mod(totNumMol, numDomain_r)
+  residueMol_c = mod(totNumMol, numDomain_c)
+  if (mod(myrank, numDomain_r) < residueMol_r) then
+    r_start_offset = mod(myrank, numDomain_r)
+    num_r = numMolPerDomain_r + 1
+  else
+    r_start_offset = residueMol_r
+    num_r = numMolPerDomain_r
+  end if
+  if (myrank / numDomain_r < residueMol_c) then
+    c_start_offset = myrank / numDomain_r
+    num_c = numMolPerDomain_c + 1
+  else
+    c_start_offset = residueMol_c
+    num_c = numMolPerDomain_c
+  end if
+
+  r_start = mod(myrank, numDomain_r) * numMolPerDomain_r + 1 + r_start_offset
+  r_end = r_start + num_r - 1
+  c_start = (myrank / numDomain_r) * numMolPerDomain_c + 1 + c_start_offset
+  c_end = c_start + num_c - 1
+  !check if myrank is at the ending boundary and if indexes are coincident
+  if (mod(myrank, numDomain_r) == numDomain_r - 1) then
+    if (r_end /= totNumMol) then
+      write(*,*) "Error: r_end /= totNumMol"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+  end if
+  if (myrank >= (numDomain_c - 1) * numDomain_r) then
+    if (c_end /= totNumMol) then
+      write(*,*) "Error: c_end /= totNumMol"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+  end if
   if (myrank == root) then
     write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c 
   end if
