@@ -7,7 +7,7 @@ from scipy import integrate
 parser = argparse.ArgumentParser(description="Calcuate no-average Cesaro sdD from sdcorr file")
 parser.add_argument('sdcorrData', help="sd correlation data file. <data.sdcorr.h5>")
 parser.add_argument('--intDelta', type=int, default=1, help="integration delta step. Default = 1")
-parser.add_argument('-o', '--out', default='sdDCesaro.h5', help="output file")
+parser.add_argument('-o', '--out', default='sdDCesaro.h5', help="output file, default = 'sdDCesaro.h5'")
 args = parser.parse_args()
 
 outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'

@@ -5,7 +5,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitNDCesaro.py")
 parser.add_argument('NDCesaroFit', help="fitted ND results data file <NDCesaro.fit.h5>")
-parser.add_argument('-o', '--out', default='NDCesaro.fit', help="output figure base filename")
+parser.add_argument('-o', '--out', default='NDCesaro.fit', help="output figure base filename, default = 'NDCesaro.fit'")
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
 args = parser.parse_args()
 

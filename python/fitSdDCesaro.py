@@ -6,7 +6,7 @@ from scipy import integrate
 
 parser = argparse.ArgumentParser(description="Fit the no-average Cesaro of sdcorr calculated by calSdDCesaro.py")
 parser.add_argument('sdDCesaroData', nargs='+', help="no-average Cesaro data to be averaged and fit. <data.sdDCesaro.h5>")
-parser.add_argument('-o', '--out', default='sdDCesaro.fit.h5', help="output file")
+parser.add_argument('-o', '--out', default='sdDCesaro.fit.h5', help="output file, default = 'sdDCesaro.fit.h5'")
 parser.add_argument('-r', '--fitRange', nargs=2, type=float, metavar=('BEGIN', 'END'),
                     action='append', required=True, help="fitting range in ps. Multiple ranges are allowed")
 args = parser.parse_args()

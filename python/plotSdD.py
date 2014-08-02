@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitSdDCesaro.py and fitNDCesaro.py")
 parser.add_argument('-ND', '--NDCesaroFit', required=True, help="fitted ND results data file <NDCesaro.fit.h5>")
 parser.add_argument('-sdD', '--sdDCesaroFit', required=True, help="fitted sdD results data file <sdDCesaro.fit.h5>")
-parser.add_argument('-o', '--out', default='sdDCesaro.fit', help="output figure base filename")
+parser.add_argument('-o', '--out', default='sdDCesaro.fit', help="output figure base filename, default = 'sdDCesaro.fit'")
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
 args = parser.parse_args()
 

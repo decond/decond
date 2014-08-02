@@ -5,7 +5,7 @@ import numpy as np
 
 parser = argparse.ArgumentParser(description="Average oneTwoDecompose correlation")
 parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <oneTwoDecompose.corr.h5>")
-parser.add_argument('-o', '--out', default='corr.ave.h5', help="output file")
+parser.add_argument('-o', '--out', default='corr.ave.h5', help="output file, default = 'corr.ave.h5'")
 args = parser.parse_args()
 
 outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'

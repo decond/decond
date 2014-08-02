@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="Plot correlation results from oneTwoDecompose")
 parser.add_argument('corrData', help="correlation data file <oneTwoDecompose.corr.h5>")
-parser.add_argument('-o', '--out', default='corr', help="output figure base filename")
+parser.add_argument('-o', '--out', default='corr', help="output figure base filename, default = 'corr'")
 args = parser.parse_args()
 
 with h5py.File(args.corrData, 'r') as f:
