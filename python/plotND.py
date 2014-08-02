@@ -48,3 +48,14 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
   const = Const(volume)
 
+for k in sorted(ND.keys(), key=lambda x:x.split(sep='-')[0]):
+  print(k + ':')
+  print(ND[k] * const.ND2ecSI)
+  print()
+
+print("Total")
+for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
+  print(k + ':')
+  print(NDTotal[k] * const.ND2ecSI)
+  print()
+
