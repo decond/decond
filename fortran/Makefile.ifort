@@ -14,7 +14,7 @@ OUTDIR = ./out/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 #FFTWDIR = /usr/
-FFTWDIR = $(HOME)/local
+FFTWDIR = $(HOME)/local/fftw-3.3.4
 FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
