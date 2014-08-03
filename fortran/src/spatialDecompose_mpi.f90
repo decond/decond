@@ -460,8 +460,6 @@ program spatialDecompose_mpi
     end do
   end do
   deallocate(rBinIndex)
-  deallocate(pos)
-  deallocate(vel)
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished spatial decomposition. It took ", endtime - starttime, " seconds"
 
