@@ -31,7 +31,7 @@ program spatialDecompose_mpi
   integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime
+  real(8) :: starttime, endtime, starttime2
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c, num_r, num_c
   real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :), vel_r(:, :, :), vel_c(:, :, :)
@@ -436,9 +436,13 @@ program spatialDecompose_mpi
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
+  if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
   do j = c_start, c_end
     do i = r_start, r_end
       if (i /= j) then
+        if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
+                                          ", c =", j-c_start+1, " of ", num_c
+        starttime2 = MPI_Wtime()
         call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
         do k = 1, maxLag+1      
@@ -456,6 +460,8 @@ program spatialDecompose_mpi
             rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
           end if
         end do
+        if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
+        if (myrank == root) write(*,*) 
       end if
     end do
   end do
