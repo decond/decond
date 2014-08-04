@@ -2,6 +2,7 @@
 import argparse
 import h5py
 import numpy as np
+from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitNDCesaro.py")
 parser.add_argument('NDCesaroFit', help="fitted ND results data file <NDCesaro.fit.h5>")
@@ -48,14 +49,29 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
   const = Const(volume)
 
+def zipIndexPair2(idx_r, idx_c, size):
+  """
+  Returns the single index of a upper-half matrix based the row index and column index
+
+  accepts only the "upper-half" index pair, because cross-correlation should
+  be the same for (i,j) and (j,i)
+  """
+  assert(idx_r <= idx_c)
+  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
+
 for k in sorted(ND.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(ND[k] * const.ND2ecSI)
-  print()
+  print("Total:", const.ND2ecSI * (sum((ND[k]*zz)[:numMol.size]) +
+                  sum((ND[k]*zz)[numMol.size:][d] for d in
+                    [zipIndexPair2(i,j,numMol.size) for i in range(numMol.size)
+                                                    for j in range(numMol.size) if i == j]) + 
+                  sum((ND[k]*zz)[numMol.size:][d] for d in
+                    [zipIndexPair2(i,j,numMol.size) for i in range(numMol.size)
+                                                    for j in range(numMol.size) if i < j])*2), '\n')
 
 print("Total")
 for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
-  print(NDTotal[k] * const.ND2ecSI)
-  print()
+  print(NDTotal[k] * const.ND2ecSI, '\n')
 
