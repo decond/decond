@@ -31,7 +31,7 @@ program spatialDecompose_mpi
   integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime, starttime2
+  real(8) :: starttime, endtime, starttime2, prog_starttime
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c, num_r, num_c
   real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :), vel_r(:, :, :), vel_c(:, :, :)
@@ -45,6 +45,7 @@ program spatialDecompose_mpi
 
   num_dataArg = command_argument_count() - num_parArg
 
+  prog_starttime = MPI_Wtime()
   !root checks the input arguments
   if (myrank == root) then
     is_periodic = .true.
@@ -522,6 +523,8 @@ program spatialDecompose_mpi
     write(*,*) "finished writing outputs. It took ", endtime - starttime, " seconds"
   end if
 
+  if (myrank == root) write(*,*)
+  if (myrank == root) write(*,*) "time for the whole program (sec):", MPI_Wtime() - prog_starttime
   call mpi_finalize(ierr)
   stop
 
