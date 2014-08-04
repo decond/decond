@@ -3,6 +3,7 @@ import argparse
 import h5py
 import numpy as np
 from scipy import integrate
+from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Fit the no-average Cesaro of sdcorr calculated by calSdDCesaro.py")
 parser.add_argument('sdDCesaroData', nargs='+', help="no-average Cesaro data to be averaged and fit. <data.sdDCesaro.h5>")
@@ -21,7 +22,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * (size - 1) + idx_c
+  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 numMD = len(args.sdDCesaroData)
 

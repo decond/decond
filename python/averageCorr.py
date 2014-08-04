@@ -2,6 +2,7 @@
 import argparse
 import h5py
 import numpy as np
+from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Average oneTwoDecompose correlation")
 parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <oneTwoDecompose.corr.h5>")
@@ -24,7 +25,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * (size - 1) + idx_c
+  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 numMD = len(args.corrData)
 

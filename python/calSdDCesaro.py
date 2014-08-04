@@ -3,6 +3,7 @@ import argparse
 import h5py
 import numpy as np
 from scipy import integrate
+from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Calcuate no-average Cesaro sdD from sdcorr file")
 parser.add_argument('sdcorrData', help="sd correlation data file. <data.sdcorr.h5>")
@@ -26,7 +27,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * (size - 1) + idx_c
+  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 with h5py.File(args.sdcorrData, 'r') as f:
   timestep = f.attrs['timestep'][0]
