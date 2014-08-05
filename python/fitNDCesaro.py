@@ -36,10 +36,16 @@ for n, data in enumerate(args.NDCesaroData):
       numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
       charge = f.attrs['charge']
       zz = np.ones([numIonTypes + numIonTypePairs])
+      ww = np.ones([numIonTypes + numIonTypePairs])
+      # ww: weight of each component. ex. for NaCl, ww = [1, 1, 1, 2, 1]
       for i in range(numIonTypes):
         zz[i] = charge[i] ** 2
         for j in range(i,numIonTypes):
           zz[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = charge[i] * charge[j]
+          if (i == j):
+            ww[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = 1
+          else:
+            ww[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = 2
       timeLags = f['timeLags'][:]
       NDCesaroRaw = np.empty([numMD, numIonTypes + numIonTypePairs, timeLags.size])
       volumeRaw = np.empty([numMD])
@@ -49,7 +55,7 @@ for n, data in enumerate(args.NDCesaroData):
     volumeRaw[n] = f.attrs['cell'].prod()
 
 
-NDCesaroTotalRaw = np.sum(NDCesaroRaw * np.sign(zz[:, np.newaxis]), axis=1)
+NDCesaroTotalRaw = np.sum(NDCesaroRaw * (zz * ww)[:, np.newaxis], axis=1)
 NDCesaroTotal = np.mean(NDCesaroTotalRaw, axis=0)
 NDCesaroTotal_std = np.std(NDCesaroTotalRaw, axis=0)
 NDCesaroTotal_err = NDCesaroTotal_std / np.sqrt(numMD)
@@ -121,6 +127,7 @@ with h5py.File(args.NDCesaroData[0], 'r') as f, h5py.File(args.out, 'w') as outF
 
   outFile['timeLags'] = timeLags
   outFile['zz'] = zz
+  outFile['ww'] = ww
   outFile['volume'] = volume
   outFile['volume_err'] = volume_err
   outFile['NDCesaro'] = NDCesaro
