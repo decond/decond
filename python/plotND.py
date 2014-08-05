@@ -53,7 +53,7 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
 for k in sorted(ND.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(ND[k] * const.ND2ecSI)
-  print("Total:", const.ND2ecSI * sum(ND[k]*zz*ww))
+  print("Total:", const.ND2ecSI * sum(ND[k]*zz*ww), '\n')
 
 print("Total")
 for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
