@@ -50,19 +50,36 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
   const = Const(volume)
 
-for k in sorted(ND.keys(), key=lambda x:x.split(sep='-')[0]):
+ec = {}
+ecTotal = {}
+sortedKeys = sorted(ND.keys(), key=lambda x:x.split(sep='-')[0])
+for k in sortedKeys:
   print(k + ':')
-  print(ND[k] * const.ND2ecSI)
-  print("Total:", const.ND2ecSI * sum(ND[k]*zz*ww), '\n')
+  ec[k] = ND[k] * const.ND2ecSI
+  print(ec[k])
+  ecTotal[k] = const.ND2ecSI * sum(ND[k]*zz*ww)
+  print("Total:", ecTotal[k], '\n')
+
+plt.figure(1)
+for i in range(zz.size):
+  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], label='{}'.format(i))
+plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], label='total')
+plt.xticks(range(len(ecTotal)), sortedKeys)
+plt.legend()
+plt.xlabel("fit range")
+plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
 
 print("Total")
 for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(NDTotal[k] * const.ND2ecSI, '\n')
 
+plt.figure(2)
 for i, (NDC, NDC_err)  in enumerate(zip(NDCesaro, NDCesaro_err)):
   plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=10000, label='{}'.format(i))
 plt.legend()
+plt.xlabel("time lag  (ps)")
+plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
 
 plt.ion()
 plt.show()
