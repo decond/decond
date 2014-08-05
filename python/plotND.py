@@ -2,6 +2,7 @@
 import argparse
 import h5py
 import numpy as np
+import matplotlib.pyplot as plt
 
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitNDCesaro.py")
 parser.add_argument('NDCesaroFit', help="fitted ND results data file <NDCesaro.fit.h5>")
@@ -59,3 +60,9 @@ for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(NDTotal[k] * const.ND2ecSI, '\n')
 
+for i, (NDC, NDC_err)  in enumerate(zip(NDCesaro, NDCesaro_err)):
+  plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=10000, label='{}'.format(i))
+plt.legend()
+
+plt.ion()
+plt.show()
