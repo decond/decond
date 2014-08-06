@@ -54,7 +54,6 @@ with h5py.File(args.sdDCesaroFit, 'r') as fSdD:
   rho2_err = fSdD['rho2_err'][...]
   sdD = loadDictFromH5(fSdD['sdD'])
   sdD_err = loadDictFromH5(fSdD['sdD_err'])
-  Const.sdD2ecSI = Const.beta * Const.basicCharge**2 / (volumeSdD*(Const.nm**3)) * Const.nm**2 / Const.ps
 
 if (args.NDCesaroFit != None):
   with h5py.File(args.NDCesaroFit, 'r') as fND:
@@ -86,17 +85,18 @@ rBins *= Const.nm2AA
 figs = []
 numPlots = 3 if (args.NDCesaroFit != None) else 2
 
-sigIL = {}
-sigI = {}
-for fit in sdD:
-  sigIL[fit] = rho_dv / Const.nm2AA**3 * sdD[fit] * zzCross[:, np.newaxis] * \
-             Const.beta * Const.basicCharge**2 
-  sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
-  for r in range(numMol.size):
-    for c in range(r, numMol.size):
-      sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
-      if (r != c):
-        sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
+if (args.NDCesaroFit != None):
+  sigIL = {}
+  sigI = {}
+  for fit in sdD:
+    sigIL[fit] = rho_dv / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
+                 zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
+    sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
+    for r in range(numMol.size):
+      for c in range(r, numMol.size):
+        sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
+        if (r != c):
+          sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
 
 threshold = 0.1
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
@@ -129,6 +129,7 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
       axs[2].plot(rBins, sig, label='{}'.format(i))
       axs[2].legend()
     axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
+    axs[2].set_xlabel(r"$r$  ($\AA$)")
 
   plt.xlim(xmax=rBins[rBins.size / 2])
 
