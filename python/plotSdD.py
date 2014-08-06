@@ -82,10 +82,6 @@ g = rho / np.array([d1 * d2 for (e1, d1) in enumerate(density)
                   )[:, np.newaxis]
 
 
-rBins *= Const.nm2AA
-figs = []
-numPlots = 3 if (args.NDCesaroFit != None) else 2
-
 if (args.NDCesaroFit != None):
   sigIL = {}
   sigI = {}
@@ -93,13 +89,17 @@ if (args.NDCesaroFit != None):
     sigIL[fit] = rho_dv / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
                  zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
     sigIL[fit][np.isnan(sigIL[fit])] = 0
-    sigIL[fit] = integrate.cumtrapz(sigIL[fit], rBins, initial=0)
+    sigIL[fit] = integrate.cumtrapz(sigIL[fit], initial=0)
     sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
     for r in range(numMol.size):
       for c in range(r, numMol.size):
         sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
         if (r != c):
           sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
+
+rBins *= Const.nm2AA
+figs = []
+numPlots = 3 if (args.NDCesaroFit != None) else 2
 
 threshold = 0.1
 smallRegion = [list(range(35)), list(range(25)), list(range(39))]
