@@ -66,7 +66,7 @@ for i in range(zz.size):
 plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
-plt.xlabel("fit range")
+plt.xlabel("fit range  (ps)")
 plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
 
 print("Total")
