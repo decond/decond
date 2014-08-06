@@ -3,6 +3,7 @@ import argparse
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy import integrate
 from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitSdDCesaro.py and fitNDCesaro.py")
@@ -88,9 +89,11 @@ numPlots = 3 if (args.NDCesaroFit != None) else 2
 if (args.NDCesaroFit != None):
   sigIL = {}
   sigI = {}
-  for fit in sdD:
+  for i, fit in enumerate(sdD):
     sigIL[fit] = rho_dv / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
                  zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
+    sigIL[fit][np.isnan(sigIL[fit])] = 0
+    sigIL[fit] = integrate.cumtrapz(sigIL[fit], rBins, initial=0)
     sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
     for r in range(numMol.size):
       for c in range(r, numMol.size):
@@ -99,6 +102,7 @@ if (args.NDCesaroFit != None):
           sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
 
 threshold = 0.1
+smallRegion = [list(range(35)), list(range(25)), list(range(39))]
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)
   figs.append(fig)
@@ -120,7 +124,8 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   else:
     axs[1].set_ylabel(r"$D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
   for j, D in enumerate(sdD[fitKey]):
-    axs[1].plot(rBins, np.ma.masked_where(g[j] < threshold, D), label='{}'.format(i+j+1))
+    D[g[j][smallRegion[j]] < threshold] = np.nan
+    axs[1].plot(rBins, D, label='{}'.format(i+j+1))
     axs[1].legend()
     axs[1].set_title("threshold {}".format(threshold))
 
