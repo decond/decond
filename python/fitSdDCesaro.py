@@ -47,6 +47,8 @@ for n, data in enumerate(args.sdDCesaroData):
 
     if (f['rBins'].size < rBins.size):
       rBins = f['rBins'][...]
+      sdDCesaroRaw = sdDCesaroRaw[:, :, :rBins.size, :]
+      rho2Raw = rho2Raw[:, :, :rBins.size]
 
     sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :]
     rho2Raw[n] = f['rho2'][:, :rBins.size]
