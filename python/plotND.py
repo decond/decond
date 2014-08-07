@@ -51,14 +51,19 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   const = Const(volume)
 
 ec = {}
+ec_err = {}
 ecTotal = {}
+ecTotal_err = {}
 sortedKeys = sorted(ND.keys(), key=lambda x:x.split(sep='-')[0])
 for k in sortedKeys:
   print(k + ':')
   ec[k] = ND[k] * const.ND2ecSI
+  ec_err[k] = ND_err[k] * const.ND2ecSI
   print(ec[k])
+  print("+/-\n", ec_err[k], sep="")
   ecTotal[k] = const.ND2ecSI * sum(ND[k]*zz*ww)
-  print("Total:", ecTotal[k], '\n')
+  ecTotal_err[k] = const.ND2ecSI * sum(abs(ND_err[k]))
+  print("Total: ", ecTotal[k], " +/- ", ecTotal_err[k], '\n', sep="")
 
 plt.figure(1)
 for i in range(zz.size):
@@ -72,13 +77,18 @@ plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
 print("Total")
 for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
-  print(NDTotal[k] * const.ND2ecSI, '\n')
+  print(NDTotal[k] * const.ND2ecSI, " +/- ", NDTotal_err[k] * const.ND2ecSI, '\n', sep="")
 
 plt.figure(2)
 numErrBars = 5
 for i, (NDC, NDC_err)  in enumerate(zip(NDCesaro, NDCesaro_err)):
-  plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, label='{}'.format(i))
-plt.legend()
+  if (i < numIonTypes):
+    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, linestyle='--', label='auto-{}'.format(i))
+    if (i == numIonTypes - 1):
+      plt.gca().set_color_cycle(None)
+  else:
+    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, label='cross-{}'.format(i-numIonTypes))
+plt.legend(loc='upper left')
 plt.xlabel("time lag  (ps)")
 plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
 
