@@ -11,7 +11,10 @@ parser.add_argument('-ND', '--NDCesaroFit', help="fitted ND results data file <N
 parser.add_argument('sdDCesaroFit', help="fitted sdD results data file <sdDCesaro.fit.h5>")
 parser.add_argument('-o', '--out', default='sdDCesaro.fit', help="output figure base filename, default = 'sdDCesaro.fit'")
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
+parser.add_argument('--threshold', type=float, default=0, help="RDF threshold for D/sdD figure, default = 0")
 args = parser.parse_args()
+
+threshold = args.threshold
 
 class Const:
   """
@@ -101,8 +104,11 @@ rBins *= Const.nm2AA
 figs = []
 numPlots = 3 if (args.NDCesaroFit != None) else 2
 
-threshold = 0.1
-smallRegion = [list(range(35)), list(range(25)), list(range(39))]
+smallRegion = []
+for rdf in g:
+  smallRegion.append(list(range(next(i for i, v in enumerate(rdf) if v >= 1))))
+print("smallRegion =", [i[-1] for i in smallRegion])
+
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)
   figs.append(fig)
