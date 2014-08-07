@@ -26,6 +26,7 @@ def zipIndexPair2(idx_r, idx_c, size):
 
 numMD = len(args.sdDCesaroData)
 
+isTimeLagsChanged = False
 # sum the sdDCesaroData
 for n, data in enumerate(args.sdDCesaroData):
   print("reading file {}".format(n))
@@ -45,14 +46,24 @@ for n, data in enumerate(args.sdDCesaroData):
       rho2Raw = np.empty([numMD, numIonTypePairs, rBins.size])
       volumeRaw = np.empty([numMD])
 
+    if (f['timeLags'].size != timeLags.size):
+      isTimeLagsChanged = True
+    if (f['timeLags'].size < timeLags.size):
+      timeLags = f[timeLags][...]
+      sdDCesaroRaw = sdDCesaroRaw[:, :, :, :timeLags.size]
+
     if (f['rBins'].size < rBins.size):
       rBins = f['rBins'][...]
       sdDCesaroRaw = sdDCesaroRaw[:, :, :rBins.size, :]
       rho2Raw = rho2Raw[:, :, :rBins.size]
 
-    sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :]
+    sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :timeLags.size]
     rho2Raw[n] = f['rho2'][:, :rBins.size]
     volumeRaw[n] = f.attrs['cell'].prod()
+
+if (isTimeLagsChanged):
+  print("Note: the maximum timeLags are different among the sdcorr files\n"
+        "      it is now set to {} ps".format(timeLags[-1]))
 
 sdDCesaro = np.mean(sdDCesaroRaw, axis=0)
 sdDCesaro_std = np.std(sdDCesaroRaw, axis=0)
