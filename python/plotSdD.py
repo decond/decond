@@ -117,14 +117,13 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
 
   for i, rdf in enumerate(g):
     axs[0].plot(rBins, rdf, label='{}'.format(i))
-  axs[0].legend()
+  axs[0].legend(loc='upper left')
   axs[0].set_title("Fit {} ps".format(fitKey))
   axs[0].set_ylabel(r"$g_{IL}(r)$")
 
   if (args.NDCesaroFit != None):
     for i, D in enumerate(DI[fitKey]):
       axs[1].plot(rBins, np.ones_like(rBins)*D, label='auto-{}'.format(i), linestyle='--')
-      axs[1].legend()
     axs[1].set_color_cycle(None)
     axs[1].set_ylabel(r"$D_I, D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
   else:
@@ -132,13 +131,13 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   for i, D in enumerate(sdD[fitKey]):
     D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False for j, c in enumerate(g[i] < threshold)], D)
     axs[1].plot(rBins, D_masked, label='cross-{}'.format(i+1))
-    axs[1].legend()
+    axs[1].legend(loc='upper left')
     axs[1].set_title("threshold {}".format(threshold))
 
   if (args.NDCesaroFit != None):
     for i, sig in enumerate(sigI[fitKey]):
       axs[2].plot(rBins, sig, label='{}'.format(i))
-      axs[2].legend()
+      axs[2].legend(loc='upper left')
     axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
     axs[2].set_xlabel(r"$r$  ($\AA$)")
 
