@@ -48,9 +48,9 @@ for n, data in enumerate(args.sdDCesaroData):
 
     if (f['timeLags'].size != timeLags.size):
       isTimeLagsChanged = True
-    if (f['timeLags'].size < timeLags.size):
-      timeLags = f[timeLags][...]
-      sdDCesaroRaw = sdDCesaroRaw[:, :, :, :timeLags.size]
+      if (f['timeLags'].size < timeLags.size):
+        timeLags = f[timeLags][...]
+        sdDCesaroRaw = sdDCesaroRaw[:, :, :, :timeLags.size]
 
     if (f['rBins'].size < rBins.size):
       rBins = f['rBins'][...]
