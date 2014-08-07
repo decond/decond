@@ -29,9 +29,11 @@ def zipIndexPair2(idx_r, idx_c, size):
 
 numMD = len(args.corrData)
 
+isTimeLagsChanged = False
 # sum the NDCesaroData
 for n, data in enumerate(args.corrData):
   with h5py.File(data, 'r') as f:
+    print("reading " + data)
     if (n == 0):
       numMol = f.attrs['numMol']
       numIonTypes = numMol.size
@@ -42,17 +44,28 @@ for n, data in enumerate(args.corrData):
       crossCorrN = np.zeros([numMD, numIonTypePairs, timeLags.size])
       volumeN = np.zeros([numMD])
 
+    if (f['timeLags'].size != timeLags.size):
+      isTimeLagsChanged = True
+      if (f['timeLags'].size < timeLags.size):
+        timeLags = f[timeLags][...]
+        autoCorrN = autoCorrN[..., :timeLags.size]
+        crossCorrN = crossCorrN[..., :timeLags.size]
+
     volumeN[n] = f.attrs['cell'].prod()
-    autoCorrN[n, :, :] += f['autoCorr']
+    autoCorrN[n, :, :] += f['autoCorr'][:, :timeLags.size]
     for i in range(numIonTypes):
       for j in range(i, numIonTypes):
         if (i == j):
           crossCorrN[n, zipIndexPair2(i, j, numIonTypes), :] += \
-              f['crossCorr'][zipIndexPair(i, j, numIonTypes), :]
+              f['crossCorr'][zipIndexPair(i, j, numIonTypes), :timeLags.size]
         else:
           crossCorrN[n, zipIndexPair2(i, j, numIonTypes), :] += \
-              (f['crossCorr'][zipIndexPair(i, j, numIonTypes), :] +
-              f['crossCorr'][zipIndexPair(j, i, numIonTypes), :]) / 2
+              (f['crossCorr'][zipIndexPair(i, j, numIonTypes), :timeLags.size] +
+              f['crossCorr'][zipIndexPair(j, i, numIonTypes), :timeLags.size]) / 2
+
+if (isTimeLagsChanged):
+  print("Note: the maximum timeLags are different among the corr files\n"
+        "      it is now set to {} ps".format(timeLags[-1]))
 
 autoCorr = np.mean(autoCorrN, axis=0)
 crossCorr = np.mean(crossCorrN, axis=0)
