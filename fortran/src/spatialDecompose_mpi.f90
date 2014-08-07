@@ -602,10 +602,14 @@ contains
         idx_begin = start_index(i) + (j-1) * num_atom
         idx_end = idx_begin + num_atom - 1
         idx_com = idx_com + 1
-        call gatherMolPos(pos_gathered, pos(:, idx_begin:idx_end), cell)
-        do d = 1, 3
-          com_p(d, idx_com) = sum(pos_gathered(d, :) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
-        end do
+        if (num_atom > 1) then
+          call gatherMolPos(pos_gathered, pos(:, idx_begin:idx_end), cell)
+          do d = 1, 3
+            com_p(d, idx_com) = sum(pos_gathered(d, :) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+          end do
+        else
+          com_p(:, idx_com) = pos(:, idx_begin)
+        end if
       end do
       deallocate(pos_gathered)
     end do
