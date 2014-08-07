@@ -14,18 +14,15 @@ with h5py.File(args.corrData, 'r') as f:
   autoCorr = f['autoCorr'][...]
   crossCorr = f['crossCorr'][...]
 
-  p = []
-
   for i, corr in enumerate(autoCorr[:]):
-    p.append(plt.plot(timeLags, corr*100, label='auto{}'.format(i)))
+    plt.plot(timeLags, corr*100, label='auto-{}'.format(i), linestyle='--')
 
+  plt.gca().set_color_cycle(None)
   for i, corr in enumerate(crossCorr[:]):
-    p.append(plt.plot(timeLags, corr*100, label='cross{}'.format(i)))
-
-  p = [i for j in p for i in j]
+    plt.plot(timeLags, corr*100, label='cross-{}'.format(i))
 
   leg = plt.legend()
-  plt.xlabel(r'$\mathrm{time\ (ps)}$')
-  plt.ylabel(r'$C(t)\ (\AA^2 \mathrm{ps}^{-2}$)')
+  plt.xlabel(r'time  (ps)')
+  plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$  ($\AA^2$ ps$^{-2}$)')
   plt.ion()
   plt.show()
