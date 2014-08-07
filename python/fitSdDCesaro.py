@@ -29,7 +29,7 @@ numMD = len(args.sdDCesaroData)
 isTimeLagsChanged = False
 # sum the sdDCesaroData
 for n, data in enumerate(args.sdDCesaroData):
-  print("reading file {}".format(n))
+  print("reading " + data)
   with h5py.File(data, 'r') as f:
     if (n == 0):
       numMol = f.attrs['numMol']

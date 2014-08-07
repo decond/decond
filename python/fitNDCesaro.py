@@ -30,6 +30,7 @@ numMD = len(args.NDCesaroData)
 # sum the NDCesaroData
 for n, data in enumerate(args.NDCesaroData):
   with h5py.File(data, 'r') as f:
+    print("reading " + data)
     if (n == 0):
       numMol = f.attrs['numMol']
       numIonTypes = numMol.size
