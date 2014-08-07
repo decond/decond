@@ -106,8 +106,8 @@ numPlots = 3 if (args.NDCesaroFit != None) else 2
 
 smallRegion = []
 for rdf in g:
-  smallRegion.append(list(range(next(i for i, v in enumerate(rdf) if v >= 1))))
-print("smallRegion =", [i[-1] for i in smallRegion])
+  smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
+print("smallRegion =", smallRegion)
 
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)
@@ -121,17 +121,17 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   axs[0].set_title("Fit {} ps".format(fitKey))
   axs[0].set_ylabel(r"$g_{IL}(r)$")
 
-  i = -1
   if (args.NDCesaroFit != None):
     for i, D in enumerate(DI[fitKey]):
-      axs[1].plot(rBins, np.ones_like(rBins)*D, label='{}'.format(i), linestyle='--')
+      axs[1].plot(rBins, np.ones_like(rBins)*D, label='auto-{}'.format(i), linestyle='--')
       axs[1].legend()
+    axs[1].set_color_cycle(None)
     axs[1].set_ylabel(r"$D_I, D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
   else:
     axs[1].set_ylabel(r"$D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
-  for j, D in enumerate(sdD[fitKey]):
-    D[g[j][smallRegion[j]] < threshold] = np.nan
-    axs[1].plot(rBins, D, label='{}'.format(i+j+1))
+  for i, D in enumerate(sdD[fitKey]):
+    D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False for j, c in enumerate(g[i] < threshold)], D)
+    axs[1].plot(rBins, D_masked, label='cross-{}'.format(i+1))
     axs[1].legend()
     axs[1].set_title("threshold {}".format(threshold))
 
