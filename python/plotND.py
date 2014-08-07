@@ -75,8 +75,9 @@ for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(NDTotal[k] * const.ND2ecSI, '\n')
 
 plt.figure(2)
+numErrBars = 5
 for i, (NDC, NDC_err)  in enumerate(zip(NDCesaro, NDCesaro_err)):
-  plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=10000, label='{}'.format(i))
+  plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, label='{}'.format(i))
 plt.legend()
 plt.xlabel("time lag  (ps)")
 plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
