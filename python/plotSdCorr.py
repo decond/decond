@@ -56,7 +56,7 @@ for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2)):
     ax.set_title('{}'.format(i))
     if (i == 0):
       ax.set_ylabel(r'$r$  ($\AA$)')
-cb = fig.colorbar(c, ax=list(axs))
+cb = fig.colorbar(c, ax=axs.ravel().tolist())
 cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
 
 plt.ion()
