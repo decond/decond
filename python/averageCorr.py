@@ -6,10 +6,8 @@ from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Average oneTwoDecompose correlation")
 parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <oneTwoDecompose.corr.h5>")
-parser.add_argument('-o', '--out', default='corr.ave.h5', help="output file, default = 'corr.ave.h5'")
+parser.add_argument('-o', '--out', help="output file, default = 'corr.ave<num>.h5'")
 args = parser.parse_args()
-
-outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 def zipIndexPair(idx_r, idx_c, size):
   """
@@ -28,6 +26,10 @@ def zipIndexPair2(idx_r, idx_c, size):
   return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 numMD = len(args.corrData)
+if (args.out == None):
+  outFilename = 'corr.ave' + str(numMD) + '.h5'
+else:
+  outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 isTimeLagsChanged = False
 # sum the NDCesaroData
@@ -77,7 +79,7 @@ autoCorr_err = autoCorr_std / np.sqrt(numMD)
 crossCorr_err = crossCorr_std / np.sqrt(numMD)
 volume_err = volume_std / np.sqrt(numMD)
 
-with h5py.File(args.corrData[0], 'r') as f, h5py.File(args.out, 'w') as outFile:
+with h5py.File(args.corrData[0], 'r') as f, h5py.File(outFilename, 'w') as outFile:
   for (name, value) in f.attrs.items():
     if (name != 'cell'):
       outFile.attrs[name] = value
