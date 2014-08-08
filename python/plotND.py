@@ -19,6 +19,8 @@ class Const:
   basicCharge = 1.60217646E-19 #(Coulomb)
   ps = 1.0E-12 #(s)
   nm = 1.0E-9 #(m)
+  nm2cm = 1.0E-7
+  ps2s = 1.0E-12
 
   def __init__(self, volume):
     self.ND2ecSI = self.beta * self.basicCharge**2 / (volume*(self.nm**3)) * self.nm**2 / self.ps
@@ -40,6 +42,7 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   zz = f['zz'][...]
   ww = f['ww'][...]
   volume = f['volume'][...]
+  volume_err = f['volume_err'][...]
   NDCesaro = f['NDCesaro'][...]
   NDCesaro_err = f['NDCesaro_err'][...]
   NDCesaroTotal = f['NDCesaroTotal'][...]
@@ -50,6 +53,11 @@ with h5py.File(args.NDCesaroFit, 'r') as f:
   NDTotal_err = loadDictFromH5(f['NDTotal_err'])
   const = Const(volume)
 
+DI = {}
+DI_err = {}
+for fit in ND:
+  DI[fit] = ND[fit][:numIonTypes] / numMol * 1E5 * Const.nm2cm**2 / Const.ps2s # 10^-5 cm^2 / s
+  DI_err[fit] = ND_err[fit][:numIonTypes] / numMol * 1E5 * Const.nm2cm**2 / Const.ps2s # 10^-5 cm^2 / s
 ec = {}
 ec_err = {}
 ecTotal = {}
@@ -57,6 +65,8 @@ ecTotal_err = {}
 sortedKeys = sorted(ND.keys(), key=lambda x:x.split(sep='-')[0])
 for k in sortedKeys:
   print(k + ':')
+  print("========================")
+  print("Electrical conductivity in S / m:")
   ec[k] = ND[k] * const.ND2ecSI
   ec_err[k] = ND_err[k] * const.ND2ecSI
   print(ec[k])
@@ -64,6 +74,9 @@ for k in sortedKeys:
   ecTotal[k] = const.ND2ecSI * sum(ND[k]*zz*ww)
   ecTotal_err[k] = const.ND2ecSI * sum(abs(ND_err[k]))
   print("Total: ", ecTotal[k], " +/- ", ecTotal_err[k], '\n', sep="")
+  print("Diffusion constant in 10^-5 cm^2 / s:")
+  print(DI[k])
+  print("+/-\n", DI_err[k], '\n', sep="")
 
 plt.figure(1)
 for i in range(zz.size):
