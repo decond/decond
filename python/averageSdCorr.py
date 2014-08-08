@@ -59,7 +59,7 @@ for n, data in enumerate(args.sdcorrData):
       rhoN = rhoN[..., :rBins.size]
 
     sdCorrN[n] = f['sdCorr'][:, :rBins.size, :timeLags.size]
-    rhoN[n] += f['rho'][:, :rBins.size]
+    rhoN[n] = f['rho'][:, :rBins.size]
     volumeN[n] = f.attrs['cell'].prod()
 
 if (isTimeLagsChanged):
