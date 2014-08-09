@@ -110,6 +110,7 @@ if (numMD > 1):
 else:
   for fitBoundary in args.fitRange:
     sdD_err[getKeyFromFitBoundary(fitBoundary)] = np.zeros_like([sdD[getKeyFromFitBoundary(fitBoundary)]])
+    sdD_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)

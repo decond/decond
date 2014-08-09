@@ -113,8 +113,10 @@ if (numMD > 1):
     NDTotal_err[getKeyFromFitBoundary(fitBoundary)] = np.sqrt(S / delta)
 else:
   for fitBoundary in args.fitRange:
-    ND_err[getKeyFromFitBoundary(fitBoundary)] = 0.
-    NDTotal_err[getKeyFromFitBoundary(fitBoundary)] = 0.
+    ND_err[getKeyFromFitBoundary(fitBoundary)] = np.empty_like(ND[getKeyFromFitBoundary(fitBoundary)])
+    ND_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
+    NDTotal_err[getKeyFromFitBoundary(fitBoundary)] = np.empty_like(NDTotal[getKeyFromFitBoundary(fitBoundary)])
+    NDTotal_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)
