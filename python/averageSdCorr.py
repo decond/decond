@@ -7,6 +7,9 @@ from itertools import accumulate
 parser = argparse.ArgumentParser(description="Average SD correlation")
 parser.add_argument('sdcorrData', nargs='+', help="SD correlation data files to be averaged <sdcorr.h5>")
 parser.add_argument('-o', '--out', help="output file, default = 'sdcorr.ave<num>.h5'")
+parser.add_argument('-m', '--memoryFriendly', action='store_true',
+                    help="turn on memory-friendly mode. Files are loaded and processed one by one,"
+                         "thus slower but more memory friendly")
 args = parser.parse_args()
 
 def zipIndexPair(idx_r, idx_c, size):
@@ -32,49 +35,106 @@ else:
   outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 isTimeLagsChanged = False
-# sum the NDCesaroData
-for n, data in enumerate(args.sdcorrData):
-  with h5py.File(data, 'r') as f:
+
+if (args.memoryFriendly):
+  print("proceed with memory-friendly mode")
+  print("determine the averages... ")
+  for n, data in enumerate(args.sdcorrData):
     print("reading " + data)
-    if (n == 0):
-      numMol = f.attrs['numMol']
-      numIonTypes = numMol.size
-      numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
-      charge = f.attrs['charge']
-      rBins = f['rBins'][...]
-      timeLags = f['timeLags'][:]
-      sdCorrN = np.zeros([numMD, numIonTypes**2, rBins.size, timeLags.size])
-      rhoN = np.empty([numMD, numIonTypes**2, rBins.size])
-      volumeN = np.zeros([numMD])
+    with h5py.File(data, 'r') as f:
+      if (n == 0):
+        numMol = f.attrs['numMol']
+        numIonTypes = numMol.size
+        numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+        charge = f.attrs['charge']
+        rBins = f['rBins'][...]
+        timeLags = f['timeLags'][:]
+        sdCorr = np.zeros([numIonTypes**2, rBins.size, timeLags.size])
+        rho = np.empty([numIonTypes**2, rBins.size])
+        volume = 0
 
-    if (f['timeLags'].size != timeLags.size):
-      isTimeLagsChanged = True
-      if (f['timeLags'].size < timeLags.size):
-        timeLags = f[timeLags][...]
-        sdCorrN = sdCorrN[..., :timeLags.size]
+      if (f['timeLags'].size != timeLags.size):
+        isTimeLagsChanged = True
+        if (f['timeLags'].size < timeLags.size):
+          timeLags = f[timeLags][...]
+          sdCorr = sdCorr[..., :timeLags.size]
 
-    if (f['rBins'].size < rBins.size):
-      rBins = f['rBins'][...]
-      sdCorrN = sdCorrN[..., :rBins.size, :]
-      rhoN = rhoN[..., :rBins.size]
+      if (f['rBins'].size < rBins.size):
+        rBins = f['rBins'][...]
+        sdCorr = sdCorr[..., :rBins.size, :]
+        rho = rho[..., :rBins.size]
 
-    sdCorrN[n] = f['sdCorr'][:, :rBins.size, :timeLags.size]
-    rhoN[n] = f['rho'][:, :rBins.size]
-    volumeN[n] = f.attrs['cell'].prod()
+      sdCorr += f['sdCorr'][:, :rBins.size, :timeLags.size]
+      rho += f['rho'][:, :rBins.size]
+      volume += f.attrs['cell'].prod()
+
+  sdCorr /= numMD
+  rho /= numMD
+  volume /= numMD
+
+  print("determine the errors... ")
+  sdCorr_std = np.zeros_like(sdCorr)
+  rho_std = np.zeros_like(rho)
+  volume_std = 0.
+
+  for n, data in enumerate(args.sdcorrData):
+    print("reading " + data)
+    with h5py.File(data, 'r') as f:
+      sdCorr_std += (f['sdCorr'][:, :rBins.size, :timeLags.size] - sdCorr)**2
+      rho_std += (f['rho'][:, :rBins.size] - rho)**2
+      volume_std += (f.attrs['cell'].prod() - volume)**2
+
+  sdCorr_std = np.sqrt(sdCorr_std / (numMD - 1)) 
+  rho_std = np.sqrt(rho_std / (numMD - 1))
+  volume_std = np.sqrt(volume_std / (numMD - 1))
+
+  sdCorr_err = sdCorr_std / np.sqrt(numMD)
+  rho_err = rho_std / np.sqrt(numMD)
+  volume_err = volume_std / np.sqrt(numMD)
+
+else:
+  for n, data in enumerate(args.sdcorrData):
+    with h5py.File(data, 'r') as f:
+      print("reading " + data)
+      if (n == 0):
+        numMol = f.attrs['numMol']
+        numIonTypes = numMol.size
+        numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+        charge = f.attrs['charge']
+        rBins = f['rBins'][...]
+        timeLags = f['timeLags'][:]
+        sdCorrN = np.zeros([numMD, numIonTypes**2, rBins.size, timeLags.size])
+        rhoN = np.empty([numMD, numIonTypes**2, rBins.size])
+        volumeN = np.zeros([numMD])
+
+      if (f['timeLags'].size != timeLags.size):
+        isTimeLagsChanged = True
+        if (f['timeLags'].size < timeLags.size):
+          timeLags = f[timeLags][...]
+          sdCorrN = sdCorrN[..., :timeLags.size]
+
+      if (f['rBins'].size < rBins.size):
+        rBins = f['rBins'][...]
+        sdCorrN = sdCorrN[..., :rBins.size, :]
+        rhoN = rhoN[..., :rBins.size]
+
+      sdCorrN[n] = f['sdCorr'][:, :rBins.size, :timeLags.size]
+      rhoN[n] = f['rho'][:, :rBins.size]
+      volumeN[n] = f.attrs['cell'].prod()
+
+  sdCorr = np.mean(sdCorrN, axis=0)
+  sdCorr_std = np.std(sdCorrN, axis=0)
+  sdCorr_err = sdCorr_std / np.sqrt(numMD)
+  volume = np.mean(volumeN, axis=0)
+  volume_std = np.std(volumeN, axis=0)
+  volume_err = volume_std / np.sqrt(numMD)
+  rho = np.mean(rhoN, axis=0)
+  rho_std = np.std(rhoN, axis=0)
+  rho_err = rho_std / np.sqrt(numMD)
 
 if (isTimeLagsChanged):
   print("Note: the maximum timeLags are different among the corr files\n"
         "      it is now set to {} ps".format(timeLags[-1]))
-
-sdCorr = np.mean(sdCorrN, axis=0)
-sdCorr_std = np.std(sdCorrN, axis=0)
-sdCorr_err = sdCorr_std / np.sqrt(numMD)
-volume = np.mean(volumeN, axis=0)
-volume_std = np.std(volumeN, axis=0)
-volume_err = volume_std / np.sqrt(numMD)
-rho = np.mean(rhoN, axis=0)
-rho_std = np.std(rhoN, axis=0)
-rho_err = rho_std / np.sqrt(numMD)
 
 with h5py.File(args.sdcorrData[0], 'r') as f, h5py.File(outFilename, 'w') as outFile:
   for (name, value) in f.attrs.items():
