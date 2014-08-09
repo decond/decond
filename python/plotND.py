@@ -67,7 +67,7 @@ for k in sortedKeys:
   print(k + ':')
   print("========================")
   print("Electrical conductivity in S / m:")
-  ec[k] = ND[k] * const.ND2ecSI
+  ec[k] = ND[k] * const.ND2ecSI * zz
   ec_err[k] = ND_err[k] * const.ND2ecSI
   print(ec[k])
   print("+/-\n", ec_err[k], sep="")
