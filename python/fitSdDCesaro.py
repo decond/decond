@@ -127,10 +127,6 @@ else:
       rho2Raw[n] = f['rho2'][:, :rBins.size]
       volumeRaw[n] = f.attrs['cell'].prod()
 
-  if (isTimeLagsChanged):
-    print("Note: the maximum timeLags are different among the sdcorr files\n"
-          "      it is now set to {} ps".format(timeLags[-1]))
-
   sdDCesaro = np.mean(sdDCesaroRaw, axis=0)
   sdDCesaro_std = np.std(sdDCesaroRaw, axis=0)
   sdDCesaro_err = sdDCesaro_std / np.sqrt(numMD)
@@ -142,6 +138,10 @@ else:
   volume = np.mean(volumeRaw)
   volume_std = np.std(volumeRaw)
   volume_err = volume_std / np.sqrt(numMD)
+
+if (isTimeLagsChanged):
+  print("Note: the maximum timeLags are different among the sdcorr files\n"
+        "      it is now set to {} ps".format(timeLags[-1]))
 
 dt = timeLags[1] - timeLags[0]
 fitRangeBoundary = (np.array(args.fitRange) / dt).astype(int)
