@@ -119,7 +119,7 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
     axs[0].plot(rBins, rdf, label='{}'.format(i))
   axs[0].legend(loc='upper left')
   axs[0].set_title("Fit {} ps".format(fitKey))
-  axs[0].set_ylabel(r"$g_{IL}(r)$")
+  axs[0].set_ylabel(r"$\mathsf{g}_{IL}(r)$")
 
   if (args.NDCesaroFit != None):
     for i, D in enumerate(DI[fitKey]):
