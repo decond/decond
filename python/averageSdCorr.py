@@ -8,8 +8,11 @@ parser = argparse.ArgumentParser(description="Average SD correlation")
 parser.add_argument('sdcorrData', nargs='+', help="SD correlation data files to be averaged <sdcorr.h5>")
 parser.add_argument('-o', '--out', help="output file, default = 'sdcorr.ave<num>.h5'")
 parser.add_argument('-m', '--memoryFriendly', action='store_true',
-                    help="turn on memory-friendly mode. Files are loaded and processed one by one,"
-                         "thus slower but more memory friendly")
+                    help="turn on memory-friendly mode. Files are loaded and processed one by one."
+                         "When combined with -e, files are loaded twice thus much slower.")
+parser.add_argument('-e', '--error', action='store_true',
+                    help="calculate and output the errors."
+                         "Files are loaded twice if memory-friendly mode is on.")
 args = parser.parse_args()
 
 def zipIndexPair(idx_r, idx_c, size):
@@ -72,25 +75,26 @@ if (args.memoryFriendly):
   rho /= numMD
   volume /= numMD
 
-  print("determine the errors... ")
-  sdCorr_std = np.zeros_like(sdCorr)
-  rho_std = np.zeros_like(rho)
-  volume_std = 0.
+  if (args.error):
+    print("determine the errors... ")
+    sdCorr_std = np.zeros_like(sdCorr)
+    rho_std = np.zeros_like(rho)
+    volume_std = 0.
 
-  for n, data in enumerate(args.sdcorrData):
-    print("reading " + data)
-    with h5py.File(data, 'r') as f:
-      sdCorr_std += (f['sdCorr'][:, :rBins.size, :timeLags.size] - sdCorr)**2
-      rho_std += (f['rho'][:, :rBins.size] - rho)**2
-      volume_std += (f.attrs['cell'].prod() - volume)**2
+    for n, data in enumerate(args.sdcorrData):
+      print("reading " + data)
+      with h5py.File(data, 'r') as f:
+        sdCorr_std += (f['sdCorr'][:, :rBins.size, :timeLags.size] - sdCorr)**2
+        rho_std += (f['rho'][:, :rBins.size] - rho)**2
+        volume_std += (f.attrs['cell'].prod() - volume)**2
 
-  sdCorr_std = np.sqrt(sdCorr_std / (numMD - 1)) 
-  rho_std = np.sqrt(rho_std / (numMD - 1))
-  volume_std = np.sqrt(volume_std / (numMD - 1))
+    sdCorr_std = np.sqrt(sdCorr_std / (numMD - 1)) 
+    rho_std = np.sqrt(rho_std / (numMD - 1))
+    volume_std = np.sqrt(volume_std / (numMD - 1))
 
-  sdCorr_err = sdCorr_std / np.sqrt(numMD)
-  rho_err = rho_std / np.sqrt(numMD)
-  volume_err = volume_std / np.sqrt(numMD)
+    sdCorr_err = sdCorr_std / np.sqrt(numMD)
+    rho_err = rho_std / np.sqrt(numMD)
+    volume_err = volume_std / np.sqrt(numMD)
 
 else:
   for n, data in enumerate(args.sdcorrData):
@@ -123,14 +127,16 @@ else:
       volumeN[n] = f.attrs['cell'].prod()
 
   sdCorr = np.mean(sdCorrN, axis=0)
-  sdCorr_std = np.std(sdCorrN, axis=0)
-  sdCorr_err = sdCorr_std / np.sqrt(numMD)
   volume = np.mean(volumeN, axis=0)
-  volume_std = np.std(volumeN, axis=0)
-  volume_err = volume_std / np.sqrt(numMD)
   rho = np.mean(rhoN, axis=0)
-  rho_std = np.std(rhoN, axis=0)
-  rho_err = rho_std / np.sqrt(numMD)
+
+  if (args.error):
+    sdCorr_std = np.std(sdCorrN, axis=0)
+    sdCorr_err = sdCorr_std / np.sqrt(numMD)
+    volume_std = np.std(volumeN, axis=0)
+    volume_err = volume_std / np.sqrt(numMD)
+    rho_std = np.std(rhoN, axis=0)
+    rho_err = rho_std / np.sqrt(numMD)
 
 if (isTimeLagsChanged):
   print("Note: the maximum timeLags are different among the corr files\n"
@@ -144,19 +150,21 @@ with h5py.File(args.sdcorrData[0], 'r') as f, h5py.File(outFilename, 'w') as out
   outFile['timeLags'] = timeLags
   outFile['rBins'] = rBins
   outFile['volume'] = volume
-  outFile['volume_err'] = volume_err
   outFile['sdCorr'] = sdCorr
-  outFile['sdCorr_err'] = sdCorr_err
   outFile['rho'] = rho
-  outFile['rho_err'] = rho_err
+  if (args.error):
+    outFile['volume_err'] = volume_err
+    outFile['sdCorr_err'] = sdCorr_err
+    outFile['rho_err'] = rho_err
 
   outFile['timeLags'].dims.create_scale(outFile['timeLags'], 't')
   outFile['rBins'].dims.create_scale(outFile['rBins'], 'r')
   outFile['sdCorr'].dims[1].attach_scale(outFile['rBins'])
   outFile['sdCorr'].dims[2].attach_scale(outFile['timeLags'])
-  outFile['sdCorr_err'].dims[1].attach_scale(outFile['rBins'])
-  outFile['sdCorr_err'].dims[2].attach_scale(outFile['timeLags'])
   outFile['rho'].dims[1].attach_scale(outFile['rBins'])
-  outFile['rho_err'].dims[1].attach_scale(outFile['rBins'])
+  if (args.error):
+    outFile['sdCorr_err'].dims[1].attach_scale(outFile['rBins'])
+    outFile['sdCorr_err'].dims[2].attach_scale(outFile['timeLags'])
+    outFile['rho_err'].dims[1].attach_scale(outFile['rBins'])
 
 print("File is output as: " + outFilename)
