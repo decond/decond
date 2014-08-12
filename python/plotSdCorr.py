@@ -77,13 +77,22 @@ class MidpointNormalize(Normalize):
         x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.42, 1]
         return np.ma.masked_array(np.interp(value, x, y))
 
+smallRegion = []
+for rdf in g:
+  smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
+print("smallRegion =", smallRegion)
+
+sdCorr2_masked = np.ma.masked_where(np.ones_like(sdCorr2) *
+                    np.array([c if j <= smallRegion[i] else False
+                               for j, c in enumerate(g[i] < threshold)])[np.newaxis, :, np.newaxis], sdCorr2)
+
 nm2AA = 10
 
 fig, axs = plt.subplots(1, numIonTypePairs, sharex=True, sharey=True, figsize=(18, 5))
 tmin, tmax = 0, 70
 rmin, rmax = 25, 120
-vmin, vmax = (np.nanmin(sdCorr2[:, rmin:rmax, tmin:tmax]) * nm2AA**2,
-              np.nanmax(sdCorr2[:, rmin:rmax, tmin:tmax]) * nm2AA**2)
+vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2,
+              np.nanmax(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2)
 T, R = np.meshgrid(timeLags[tmin:tmax], rBins[rmin:rmax] * nm2AA)
 #bounds = np.linspace(vmin, vmax, endpoint=True)
 bounds = np.arange(-0.05, 0.301, 0.025)
@@ -91,20 +100,13 @@ bounds = np.arange(-0.05, 0.301, 0.025)
 cmap = cm.get_cmap('RdYlBu_r', 28)
 norm = MidpointNormalize(midpoint=0, vmin=-0.3, vmax=0.3)
 
-smallRegion = []
-for rdf in g:
-  smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
-print("smallRegion =", smallRegion)
-
-for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2)):
-  if (i < numIonTypePairs):
-    sd_masked = np.ma.masked_where(np.array([[c if j <= smallRegion[i] else False
-                                     for j, c in enumerate(g[i] < threshold)]] * timeLags.size).T, sd)
-    c = ax.contourf(T, R, sd_masked[rmin:rmax, tmin:tmax] * nm2AA**2, bounds, norm=norm, cmap=cmap)
-    ax.set_xlabel(r'$t$  (ps)')
-    ax.set_title('{}'.format(i))
-    if (i == 0):
-      ax.set_ylabel(r'$r$  ($\AA$)')
+for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2_masked)):
+  c = ax.contourf(T, R, sd[rmin:rmax, tmin:tmax] * nm2AA**2,
+                  bounds, norm=norm, cmap=cmap)
+  ax.set_xlabel(r'$t$  (ps)')
+  ax.set_title('{}'.format(i))
+  if (i == 0):
+    ax.set_ylabel(r'$r$  ($\AA$)')
 
 plt.tight_layout()
 cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(-0.05, 0.301, 0.05))
