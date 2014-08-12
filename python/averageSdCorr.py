@@ -53,7 +53,7 @@ if (args.memoryFriendly):
         rBins = f['rBins'][...]
         timeLags = f['timeLags'][:]
         sdCorr = np.zeros([numIonTypes**2, rBins.size, timeLags.size])
-        rho = np.empty([numIonTypes**2, rBins.size])
+        rho = np.zeros([numIonTypes**2, rBins.size])
         volume = 0
 
       if (f['timeLags'].size != timeLags.size):
