@@ -10,6 +10,11 @@ parser.add_argument('-o', '--out', default='NDCesaro.fit', help="output figure b
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
 args = parser.parse_args()
 
+colorCode = ['blue', 'green', 'blue', 'red', 'green']
+labelMol = [r'[C$_4$mim]', r'[NTf$_2$]']
+labels = labelMol + [m1 + '-' + m2 for i1, m1 in enumerate(labelMol)
+                                   for i2, m2 in enumerate(labelMol)
+                                   if i1 <= i2 ]
 class Const:
   """
   Defines some constants
@@ -24,6 +29,7 @@ class Const:
 
   def __init__(self, volume):
     self.ND2ecSI = self.beta * self.basicCharge**2 / (volume*(self.nm**3)) * self.nm**2 / self.ps
+
 
 def loadDictFromH5(h5g):
   dict = {}
@@ -79,9 +85,12 @@ for k in sortedKeys:
   print("+/-\n", DI_err[k], '\n', sep="")
 
 plt.figure(1)
-for i in range(zz.size):
-  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], label='{}'.format(i))
-plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], label='total')
+for i, (color, label) in enumerate(zip(colorCode, labels)):
+  if (i < numIonTypes):
+    plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], linestyle='--', color=color, label=label)
+  else:
+    plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], color=color, label=label)
+plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], color='black', label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
 plt.xlabel("fit range  (ps)")
@@ -92,15 +101,17 @@ for k in sorted(NDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(NDTotal[k] * const.ND2ecSI, " +/- ", NDTotal_err[k] * const.ND2ecSI, '\n', sep="")
 
-plt.figure(2)
 numErrBars = 5
-for i, (NDC, NDC_err)  in enumerate(zip(NDCesaro, NDCesaro_err)):
+
+plt.figure(2)
+for i, (NDC, NDC_err, color, label)  in enumerate(zip(NDCesaro, NDCesaro_err, colorCode, labels)):
   if (i < numIonTypes):
-    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, linestyle='--', label='auto-{}'.format(i))
-    if (i == numIonTypes - 1):
-      plt.gca().set_color_cycle(None)
+    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars,
+                 linestyle='--', label=label, color=color)
   else:
-    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars, label='cross-{}'.format(i-numIonTypes))
+    plt.errorbar(timeLags, NDC, yerr=NDC_err, errorevery=timeLags.size//numErrBars,
+                 label=label, color=color)
+
 plt.legend(loc='upper left')
 plt.xlabel("time lag  (ps)")
 plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
