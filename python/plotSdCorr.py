@@ -66,15 +66,16 @@ g = rho / np.array([d1 * d2 for (e1, d1) in enumerate(density)
                             for (e2, d2) in enumerate(density) if e2 >= e1]
                   )[:, np.newaxis]
 
-class MidpointNormalize(Normalize):
-    def __init__(self, vmin=None, vmax=None, midpoint=None, clip=False):
-        self.midpoint = midpoint
+class CustomNormalize(Normalize):
+    def __init__(self, vmin=None, vmax=None, vanchor=None, clip=False, canchor=0.5):
+        self.vanchor = vanchor
+        self.canchor = canchor
         Normalize.__init__(self, vmin, vmax, clip)
 
     def __call__(self, value, clip=None):
         # I'm ignoring masked values and all kinds of edge cases to make a
         # simple example...
-        x, y = [self.vmin, self.midpoint, self.vmax], [0, 0.42, 1]
+        x, y = [self.vmin, self.vanchor, self.vmax], [0, self.canchor, 1]
         return np.ma.masked_array(np.interp(value, x, y))
 
 smallRegion = []
@@ -94,11 +95,10 @@ rmin, rmax = 25, 120
 vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2,
               np.nanmax(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2)
 T, R = np.meshgrid(timeLags[tmin:tmax], rBins[rmin:rmax] * nm2AA)
-#bounds = np.linspace(vmin, vmax, endpoint=True)
+
 bounds = np.arange(-0.05, 0.301, 0.025)
-#cmap = cm.get_cmap('RdBu_r')
 cmap = cm.get_cmap('RdYlBu_r', 28)
-norm = MidpointNormalize(midpoint=0, vmin=-0.3, vmax=0.3)
+norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-0.3, vmax=0.3)
 
 for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2_masked)):
   c = ax.contourf(T, R, sd[rmin:rmax, tmin:tmax] * nm2AA**2,
