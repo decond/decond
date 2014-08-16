@@ -89,20 +89,34 @@ sdCorr2_masked = np.ma.masked_where(np.ones_like(sdCorr2) *
 
 nm2AA = 10
 
+tmin, tmax, tstep = 0, 501, 1
+rmin, rmax, rstep = 25, 100, 1
+T, R = np.meshgrid(timeLags[tmin:tmax:tstep], rBins[rmin:rmax:rstep] * nm2AA)
+cmap = cm.get_cmap('RdYlBu_r')
+
+for i, sd in enumerate(sdCorr2_masked):
+  vmin, vmax = (np.nanmin(sdCorr2_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2,
+                np.nanmax(sdCorr2_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2)
+  norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=vmin, vmax=vmax)
+  plt.figure()
+  c = plt.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
+                   32, norm=norm, cmap=cmap)
+#  plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
+  ax = plt.gca()
+  ax.set_xlabel(r'$t$  (ps)')
+  ax.set_title('{}'.format(i))
+  cb = plt.colorbar(c)
+  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
+
+vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2,
+              np.nanmax(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2)
+norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-0.1, vmax=0.3)
+bounds = np.arange(-0.05, 0.301, 0.0125)
 fig, axs = plt.subplots(1, numIonTypePairs, sharex=True, sharey=True, figsize=(18, 5))
-tmin, tmax = 0, 70
-rmin, rmax = 25, 120
-vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2,
-              np.nanmax(sdCorr2_masked[:, rmin:rmax, tmin:tmax]) * nm2AA**2)
-T, R = np.meshgrid(timeLags[tmin:tmax], rBins[rmin:rmax] * nm2AA)
-
-bounds = np.arange(-0.05, 0.301, 0.025)
-cmap = cm.get_cmap('RdYlBu_r', 28)
-norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-0.3, vmax=0.3)
-
 for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2_masked)):
-  c = ax.contourf(T, R, sd[rmin:rmax, tmin:tmax] * nm2AA**2,
+  c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
                   bounds, norm=norm, cmap=cmap)
+#  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
   ax.set_xlabel(r'$t$  (ps)')
   ax.set_title('{}'.format(i))
   if (i == 0):
