@@ -73,36 +73,43 @@ if (args.NDCesaroFit != None):
     sigAutoI[fit] = ND[fit][:numMol.size] * zz[:numMol.size] * Const.ND2ecSI
 
 density = numMol / volumeSdD
+cellLengthHalf = volumeSdD**(1/3) / 2
 dr = rBins[1] - rBins[0]
-dv = 4 * np.pi * rBins**2 * dr
+dv = 4 * np.pi * dr * rBins**2
+filter = (rBins > cellLengthHalf) & (rBins < np.sqrt(2) * cellLengthHalf)
+dvsim = dv.copy()
+dvsim[filter] = 4 * np.pi * dr * rBins[filter] * (3 * cellLengthHalf - 2 * rBins[filter])
 vol = volumeSdD
-rho_Vdv = rho2
-rho_V = rho_Vdv / dv
-rho_dv = rho_Vdv / vol
+rho_Vdvsim = rho2
+rho_V = rho_Vdvsim / dvsim
+rho_dvsim = rho_Vdvsim / vol
 rho = rho_V / vol
-g = rho / np.array([d1 * d2 for (e1, d1) in enumerate(density)
-                            for (e2, d2) in enumerate(density) if e2 >= e1]
-                  )[:, np.newaxis]
 
+density2 = np.array([d1 * d2 for (e1, d1) in enumerate(density)
+                             for (e2, d2) in enumerate(density) if e2 >= e1]
+                    )[:, np.newaxis]
+g = rho / density2
+
+sigIL = {}
+for i, fit in enumerate(sdD):
+  sigIL[fit] = rho_dvsim / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
+               zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
+  sigIL[fit][np.isnan(sigIL[fit])] = 0
+  sigIL[fit] = integrate.cumtrapz(sigIL[fit], initial=0)
 
 if (args.NDCesaroFit != None):
-  sigIL = {}
   sigI = {}
   for i, fit in enumerate(sdD):
-    sigIL[fit] = rho_dv / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
-                 zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
-    sigIL[fit][np.isnan(sigIL[fit])] = 0
-    sigIL[fit] = integrate.cumtrapz(sigIL[fit], initial=0)
     sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
-    for r in range(numMol.size):
-      for c in range(r, numMol.size):
-        sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
+    for r in range(numIonTypes):
+      for c in range(r, numIonTypes):
+        sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)]
         if (r != c):
-          sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numMol.size)]
+          sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)]
 
 rBins *= Const.nm2AA
 figs = []
-numPlots = 3 if (args.NDCesaroFit != None) else 2
+numPlots = 3
 
 smallRegion = []
 for rdf in g:
@@ -139,6 +146,12 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
       axs[2].plot(rBins, sig, label='{}'.format(i))
       axs[2].legend(loc='upper left')
     axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
+    axs[2].set_xlabel(r"$r$  ($\AA$)")
+  else:
+    for i, sig in enumerate(sigIL[fitKey]):
+      axs[2].plot(rBins, sig, label='{}'.format(i))
+      axs[2].legend(loc='upper left')
+    axs[2].set_ylabel(r"$\sigma_{IL}(\lambda)$  (S m$^{-1}$)")
     axs[2].set_xlabel(r"$r$  ($\AA$)")
 
   plt.xlim(xmax=rBins[rBins.size / 2])
