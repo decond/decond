@@ -122,6 +122,7 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
 
   sdD[fitKey] *= Const.nm2AA**2
 
+  axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
   for i, rdf in enumerate(g):
     axs[0].plot(rBins, rdf, label='{}'.format(i))
   axs[0].legend(loc='upper left')
