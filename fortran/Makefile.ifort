@@ -13,7 +13,7 @@ MODDIR = ./mod/
 OUTDIR = ./out/
 
 #FCFLAGS = -g -traceback -gen-interfaces -warn interfaces -check all -debug all -fp-stack-check -heap-arrays 327680 $(MODFLAG) $(MODDIR)
-FCFLAGS = $(MODFLAG) $(MODDIR) -O2
+FCFLAGS = $(MODFLAG) $(MODDIR) -O3
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/kmtu/local/fftw-3.3.4
 FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
