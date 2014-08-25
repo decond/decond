@@ -6,7 +6,7 @@ program spatialDecompose_mpi
   implicit none
   integer, parameter :: num_parArg = 9
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
+  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom, nf
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   character(len=128) :: topFilename
@@ -16,7 +16,7 @@ program spatialDecompose_mpi
   integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
+  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:), vv3_tmp(:,:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
@@ -31,10 +31,12 @@ program spatialDecompose_mpi
   integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime, starttime2, prog_starttime
+  real(8) :: starttime, endtime, starttime2, prog_starttime, starttime3
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c, num_r, num_c
-  real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :), vel_r(:, :, :), vel_c(:, :, :)
+  real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :)
+  real(8), allocatable, target :: vel_r(:, :, :), vel_c(:, :, :)
+  real(8), pointer :: tmp_vel_r(:, :) => NULL(), tmp_vel_c(:, :) => NULL()
   integer :: row_comm, col_comm, r_group_idx, c_group_idx, offset
   integer, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
 
@@ -365,6 +367,21 @@ program spatialDecompose_mpi
     write(*,*) "cell = ", cell
   end if
 
+  if (myrank /= root) then
+    allocate(pos(1, 1, 1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: dummy pos on rank", myrank
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    allocate(vel(1, 1, 1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: dummy vel on rank", myrank
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+  end if
+
   !distribute trajectory data collectively
   if (myrank == root) write(*,*) "start broadcasting trajectory"
   starttime = MPI_Wtime()
@@ -396,10 +413,8 @@ program spatialDecompose_mpi
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
-  if (myrank == root) then
-    deallocate(pos)
-    deallocate(vel)
-  end if
+  deallocate(pos)
+  deallocate(vel)
 
   ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
   num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
@@ -437,6 +452,15 @@ program spatialDecompose_mpi
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
+  vv = 0d0
+  allocate(vv3_tmp(3, numFrame))
+  if (stat /=0) then
+    write(*,*) "Allocation failed: vv3_tmp"
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
+  end if
+  vv3_tmp = 0d0
+
   if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
   do j = c_start, c_end
     do i = r_start, r_end
@@ -445,28 +469,57 @@ program spatialDecompose_mpi
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
+if (myrank == root) write(*,*) "time for getBinIndex (sec):", MPI_Wtime() - starttime2
+if (myrank == root) write(*,*)
+starttime3 = MPI_Wtime()
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
+if (myrank == root) write(*,*) "time for getMolTypePairIndex (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
         do k = 1, maxLag+1      
-          vv = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame-k+1, j-c_start+1), 1)
-          do n = 1, numFrame-k+1
+          nf = numFrame-k+1
+starttime3 = MPI_Wtime()
+          tmp_vel_r => vel_r(:, k:numFrame, i-r_start+1)
+          tmp_vel_c => vel_c(:, 1:nf, j-c_start+1)
+if (myrank == root) write(*,*) "time for tmp_v => vel_rc (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
+starttime3 = MPI_Wtime()
+          vv3_tmp = tmp_vel_r * tmp_vel_c
+if (myrank == root) write(*,*) "time for tmp_v*tmp_v (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
+starttime3 = MPI_Wtime()
+          vv(:nf) = sum(vv3_tmp(:,:nf), 1)
+if (myrank == root) write(*,*) "time for sum(vv3_tmp) (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
+starttime3 = MPI_Wtime()
+          do n = 1, nf
             tmp_i = rBinIndex(n)
             if (tmp_i <= num_rBin) then
               sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
             end if
           end do
+if (myrank == root) write(*,*) "time for sdCorr + vv (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
         end do
+starttime3 = MPI_Wtime()
         do t = 1, numFrame
           tmp_i = rBinIndex(t)
           if (tmp_i <= num_rBin) then
             rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
           end if
         end do
+if (myrank == root) write(*,*) "time for rho=rho+1 (sec):", MPI_Wtime() - starttime3
+if (myrank == root) write(*,*)
         if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
         if (myrank == root) write(*,*) 
       end if
     end do
   end do
   deallocate(rBinIndex)
+  deallocate(pos_r)
+  deallocate(pos_c)
+  deallocate(vel_r)
+  deallocate(vel_c)
+  deallocate(vv3_tmp)
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished spatial decomposition. It took ", endtime - starttime, " seconds"
 

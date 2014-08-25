@@ -96,11 +96,12 @@ contains
 
     integer(C_INT) :: ret, step
     real(C_DOUBLE) :: lambda, box(3, 3)
-    real(C_DOUBLE), allocatable :: f(:, :)
+!    real(C_DOUBLE), allocatable :: f(:, :)
+    real(C_DOUBLE) :: dum_f(1, 1)
 
     integer :: i
 
-    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
+    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, dum_f)
 
     do i = 1, 3
       cell(i) = box(i, i)
