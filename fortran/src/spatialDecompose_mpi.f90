@@ -31,7 +31,7 @@ program spatialDecompose_mpi
   integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
   integer, parameter :: root = 0
   integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime, starttime2, prog_starttime, starttime3
+  real(8) :: starttime, endtime, starttime2, prog_starttime
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c, num_r, num_c
   real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :)
@@ -469,48 +469,28 @@ program spatialDecompose_mpi
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
-if (myrank == root) write(*,*) "time for getBinIndex (sec):", MPI_Wtime() - starttime2
-if (myrank == root) write(*,*)
-starttime3 = MPI_Wtime()
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
-if (myrank == root) write(*,*) "time for getMolTypePairIndex (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
-        do k = 1, maxLag+1      
+        do k = 1, maxLag+1
           nf = numFrame-k+1
-starttime3 = MPI_Wtime()
           tmp_vel_r => vel_r(:, k:numFrame, i-r_start+1)
           tmp_vel_c => vel_c(:, 1:nf, j-c_start+1)
-if (myrank == root) write(*,*) "time for tmp_v => vel_rc (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
-starttime3 = MPI_Wtime()
           vv3_tmp = tmp_vel_r * tmp_vel_c
-if (myrank == root) write(*,*) "time for tmp_v*tmp_v (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
-starttime3 = MPI_Wtime()
           vv(:nf) = sum(vv3_tmp(:,:nf), 1)
-if (myrank == root) write(*,*) "time for sum(vv3_tmp) (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
-starttime3 = MPI_Wtime()
           do n = 1, nf
             tmp_i = rBinIndex(n)
             if (tmp_i <= num_rBin) then
               sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
             end if
           end do
-if (myrank == root) write(*,*) "time for sdCorr + vv (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
         end do
-starttime3 = MPI_Wtime()
         do t = 1, numFrame
           tmp_i = rBinIndex(t)
           if (tmp_i <= num_rBin) then
             rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
           end if
         end do
-if (myrank == root) write(*,*) "time for rho=rho+1 (sec):", MPI_Wtime() - starttime3
-if (myrank == root) write(*,*)
         if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
-        if (myrank == root) write(*,*) 
+        if (myrank == root) write(*,*)
       end if
     end do
   end do
