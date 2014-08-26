@@ -1,0 +1,107 @@
+# Defining variables ===============================
+FC = pgf95
+H5FC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13/bin/h5fc
+H5PFC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13_mpi-pgi/bin/h5pfc
+FCMPI = mpif90
+OMPFLAGS = -openmp
+MODFLAG = -module
+
+SRCDIR = ./src/
+#OBJDIR = ./obj/
+MODDIR = ./mod/
+#LIBDIR = $(SRCDIR)lib/
+OUTDIR = ./out/
+
+#FCFLAGS = -g -traceback -gen-interfaces -warn interfaces -check all -debug all -fp-stack-check -heap-arrays 327680 $(MODFLAG) $(MODDIR)
+FCFLAGS = $(MODFLAG) $(MODDIR) -fastsse -Minfo=all
+#FFTWDIR = /usr/
+FFTWDIR = $(HOME)/kmtu/local/fftw-3.3.4
+FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+
+XDRFILEDIR = $(HOME)/kmtu/local/xdrfile-1.1.1-d-pgi
+XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
+
+PROGRAM = spatialDecompose spatialDecompose_mpi spatialDecompose_openmp bridge \
+          com corr_test oneTwoDecompose
+
+vpath %.f90 $(SRCDIR)
+#vpath %.o $(SRCDIR)
+#vpath % $(OUTDIR)
+
+# Program ==================================
+.PHONY : all
+all : $(PROGRAM)
+
+# ---------------------------
+oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
+	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
+
+oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
+	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
+spatialDecompose_openmp : spatialDecompose_openmp.o utility.o g96.o octave_save.o
+	$(FC) $(OMPFLAGS) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+spatialDecompose_openmp.o : spatialDecompose_openmp.f90 utility.o g96.o octave_save.o
+	$(FC) $(OMPFLAGS) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+spatialDecompose_mpi : spatialDecompose_mpi.o utility.o xdr.o top.o
+	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
+
+spatialDecompose_mpi.o : spatialDecompose_mpi.f90 utility.o xdr.o top.o
+	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
+spatialDecompose : spatialDecompose.o utility.o g96.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+spatialDecompose.o : spatialDecompose.f90 utility.o g96.o octave_save.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+bridge: bridge.o utility.o g96.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+bridge.o : bridge.f90 utility.o g96.o octave_save.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+com : com.o utility.o g96.o octave_save.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
+
+com.o : com.f90 utility.o g96.o octave_save.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+corr_test : corr_test.o correlation.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK)
+
+corr_test.o : corr_test.f90 correlation.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+# Library ===================================
+octave_save.o : octave_save.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+top.o : top.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+xdr.o : xdr.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+g96.o : g96.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+trr.o : trr.f90 utility.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+utility.o : utility.f90
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+correlation.o : correlation.f90 fftw.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+fftw.o : fftw.f90
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
+#==================================================
+.PHONY: clean
+clean :
+	rm -f $(SRCDIR)*.o $(MODDIR)*.mod
+	rm -f $(addprefix $(OUTDIR), $(PROGRAM) )
+	rm -f *~ $(SRCDIR)*~
