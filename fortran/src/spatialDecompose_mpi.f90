@@ -522,20 +522,16 @@ program spatialDecompose_mpi
     rho = rho / numFrame
 
     norm = [ (numFrame - (i-1), i = 1, maxLag+1) ] * 3d0
-    do n = 1, numMolType*numMolType
+    do n = 1, numMolType*(numMolType+1)
       nCorr(:,n) = nCorr(:,n) / norm
+    end do
+    do n = 1, numMolType*numMolType
       do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / norm
+        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
       end do
     end do
 
     deallocate(norm)
-
-    do n = 1, numMolType*numMolType
-      do j = 1, num_rBin
-        sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
-      end do
-    end do
 
     !output results
     write(*,*) "start writing outputs"
