@@ -1,4 +1,4 @@
 econd
-=====
+==============
 
-Calculate the electrical conductivity from MD trajectories
+Calculates the electrical conductivity from MD trajectories, and performs various decomposition methods.
