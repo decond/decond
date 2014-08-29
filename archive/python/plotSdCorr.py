@@ -89,7 +89,7 @@ sdCorr2_masked = np.ma.masked_where(np.ones_like(sdCorr2) *
 
 nm2AA = 10
 
-tmin, tmax, tstep = 0, 501, 1
+tmin, tmax, tstep = 0, 126, 1
 rmin, rmax, rstep = 25, 100, 1
 T, R = np.meshgrid(timeLags[tmin:tmax:tstep], rBins[rmin:rmax:rstep] * nm2AA)
 cmap = cm.get_cmap('RdYlBu_r')

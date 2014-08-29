@@ -4,9 +4,15 @@ import h5py
 import numpy as np
 from itertools import accumulate
 
-parser = argparse.ArgumentParser(description="Average oneTwoDecompose correlation")
-parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <oneTwoDecompose.corr.h5>")
+parser = argparse.ArgumentParser(description="Average correlation")
+parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <corr.h5>")
 parser.add_argument('-o', '--out', help="output file, default = 'corr.ave<num>.h5'")
+parser.add_argument('-m', '--memoryFriendly', action='store_true',
+                    help="turn on memory-friendly mode. Files are loaded and processed one by one."
+                         "When combined with -e, files are loaded twice thus much slower.")
+parser.add_argument('-e', '--error', action='store_true',
+                    help="calculate and output the errors."
+                         "Files are loaded twice if memory-friendly mode is on.")
 args = parser.parse_args()
 
 def zipIndexPair(idx_r, idx_c, size):
@@ -32,52 +38,145 @@ else:
   outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 isTimeLagsChanged = False
-# sum the NDCesaroData
-for n, data in enumerate(args.corrData):
-  with h5py.File(data, 'r') as f:
+
+if (args.memoryFriendly):
+  print("proceed with memory-friendly mode")
+  print("determine the averages... ")
+  for n, data in enumerate(args.corrData):
     print("reading " + data)
-    if (n == 0):
-      numMol = f.attrs['numMol']
-      numIonTypes = numMol.size
-      numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
-      charge = f.attrs['charge']
-      timeLags = f['timeLags'][:]
-      autoCorrN = np.zeros([numMD, numIonTypes, timeLags.size])
-      crossCorrN = np.zeros([numMD, numIonTypePairs, timeLags.size])
-      volumeN = np.zeros([numMD])
+    with h5py.File(data, 'r') as f:
+      if (n == 0):
+        numMol = f.attrs['numMol']
+        numIonTypes = numMol.size
+        numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+        charge = f.attrs['charge']
+        rBins = f['rBins'][...]
+        timeLags = f['timeLags'][:]
+        nCorr = np.zeros([numIonTypes*(numIonTypes+1), timeLags.size])
+        sdCorr = np.zeros([numIonTypes**2, rBins.size, timeLags.size])
+        rho = np.zeros([numIonTypes**2, rBins.size])
+        volume = 0
 
-    if (f['timeLags'].size != timeLags.size):
-      isTimeLagsChanged = True
-      if (f['timeLags'].size < timeLags.size):
-        timeLags = f[timeLags][...]
-        autoCorrN = autoCorrN[..., :timeLags.size]
-        crossCorrN = crossCorrN[..., :timeLags.size]
+      if (f['timeLags'].size != timeLags.size):
+        isTimeLagsChanged = True
+        if (f['timeLags'].size < timeLags.size):
+          timeLags = f[timeLags][...]
+          nCorr = nCorr[..., :timeLags.size]
+          sdCorr = sdCorr[..., :timeLags.size]
 
-    volumeN[n] = f.attrs['cell'].prod()
-    autoCorrN[n, :, :] += f['autoCorr'][:, :timeLags.size]
-    for i in range(numIonTypes):
-      for j in range(i, numIonTypes):
-        if (i == j):
-          crossCorrN[n, zipIndexPair2(i, j, numIonTypes), :] += \
-              f['crossCorr'][zipIndexPair(i, j, numIonTypes), :timeLags.size]
-        else:
-          crossCorrN[n, zipIndexPair2(i, j, numIonTypes), :] += \
-              (f['crossCorr'][zipIndexPair(i, j, numIonTypes), :timeLags.size] +
-              f['crossCorr'][zipIndexPair(j, i, numIonTypes), :timeLags.size]) / 2
+      if (f['rBins'].size < rBins.size):
+        rBins = f['rBins'][...]
+        sdCorr = sdCorr[..., :rBins.size, :]
+        rho = rho[..., :rBins.size]
+
+      nCorr += f['nCorr'][:, :timeLags.size]
+      sdCorr += f['sdCorr'][:, :rBins.size, :timeLags.size]
+      rho += f['rho'][:, :rBins.size]
+      volume += f.attrs['cell'].prod()
+
+  nCorr /= numMD
+  sdCorr /= numMD
+  rho /= numMD
+  volume /= numMD
+
+  if (args.error):
+    print("determine the errors... ")
+    if (numMD > 1):
+      nCorr_std = np.zeros_like(nCorr)
+      sdCorr_std = np.zeros_like(sdCorr)
+      rho_std = np.zeros_like(rho)
+      volume_std = 0.
+
+      for n, data in enumerate(args.corrData):
+        print("reading " + data)
+        with h5py.File(data, 'r') as f:
+          nCorr_std += (f['nCorr'][:, :timeLags.size] - nCorr)**2
+          sdCorr_std += (f['sdCorr'][:, :rBins.size, :timeLags.size] - sdCorr)**2
+          rho_std += (f['rho'][:, :rBins.size] - rho)**2
+          volume_std += (f.attrs['cell'].prod() - volume)**2
+
+      nCorr_std = np.sqrt(nCorr_std / (numMD - 1)) 
+      sdCorr_std = np.sqrt(sdCorr_std / (numMD - 1)) 
+      rho_std = np.sqrt(rho_std / (numMD - 1))
+      volume_std = np.sqrt(volume_std / (numMD - 1))
+
+      nCorr_err = nCorr_std / np.sqrt(numMD)
+      sdCorr_err = sdCorr_std / np.sqrt(numMD)
+      rho_err = rho_std / np.sqrt(numMD)
+      volume_err = volume_std / np.sqrt(numMD)
+    else:
+      # numMD = 1
+      nCorr_err = np.empty_like(nCorr)
+      nCorr_err.fill(np.nan)
+      sdCorr_err = np.empty_like(sdCorr)
+      sdCorr_err.fill(np.nan)
+      rho_err = np.empty_like(rho)
+      rho_err.fill(np.nan)
+      volume_err = np.empty_like(volume)
+      volume_err.fill(np.nan)
+
+else:
+  for n, data in enumerate(args.corrData):
+    with h5py.File(data, 'r') as f:
+      print("reading " + data)
+      if (n == 0):
+        numMol = f.attrs['numMol']
+        numIonTypes = numMol.size
+        numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+        charge = f.attrs['charge']
+        rBins = f['rBins'][...]
+        timeLags = f['timeLags'][:]
+        nCorrN = np.zeros([numMD, numIonTypes*(numIonTypes+1), timeLags.size])
+        sdCorrN = np.zeros([numMD, numIonTypes**2, rBins.size, timeLags.size])
+        rhoN = np.empty([numMD, numIonTypes**2, rBins.size])
+        volumeN = np.zeros([numMD])
+
+      if (f['timeLags'].size != timeLags.size):
+        isTimeLagsChanged = True
+        if (f['timeLags'].size < timeLags.size):
+          timeLags = f[timeLags][...]
+          nCorrN = nCorrN[..., :timeLags.size]
+          sdCorrN = sdCorrN[..., :timeLags.size]
+
+      if (f['rBins'].size < rBins.size):
+        rBins = f['rBins'][...]
+        sdCorrN = sdCorrN[..., :rBins.size, :]
+        rhoN = rhoN[..., :rBins.size]
+
+      nCorrN[n] = f['nCorr'][:, :timeLags.size]
+      sdCorrN[n] = f['sdCorr'][:, :rBins.size, :timeLags.size]
+      rhoN[n] = f['rho'][:, :rBins.size]
+      volumeN[n] = f.attrs['cell'].prod()
+
+  nCorr = np.mean(nCorrN, axis=0)
+  sdCorr = np.mean(sdCorrN, axis=0)
+  volume = np.mean(volumeN, axis=0)
+  rho = np.mean(rhoN, axis=0)
+
+  if (args.error):
+    if (numMD > 1):
+      nCorr_std = np.std(nCorrN, axis=0)
+      nCorr_err = nCorr_std / np.sqrt(numMD)
+      sdCorr_std = np.std(sdCorrN, axis=0)
+      sdCorr_err = sdCorr_std / np.sqrt(numMD)
+      volume_std = np.std(volumeN, axis=0)
+      volume_err = volume_std / np.sqrt(numMD)
+      rho_std = np.std(rhoN, axis=0)
+      rho_err = rho_std / np.sqrt(numMD)
+    else:
+      # numMD = 1
+      nCorr_err = np.empty_like(nCorr)
+      nCorr_err.fill(np.nan)
+      sdCorr_err = np.empty_like(sdCorr)
+      sdCorr_err.fill(np.nan)
+      rho_err = np.empty_like(rho)
+      rho_err.fill(np.nan)
+      volume_err = np.empty_like(volume)
+      volume_err.fill(np.nan)
 
 if (isTimeLagsChanged):
   print("Note: the maximum timeLags are different among the corr files\n"
         "      it is now set to {} ps".format(timeLags[-1]))
-
-autoCorr = np.mean(autoCorrN, axis=0)
-crossCorr = np.mean(crossCorrN, axis=0)
-volume = np.mean(volumeN, axis=0)
-autoCorr_std = np.std(autoCorrN, axis=0)
-crossCorr_std = np.std(crossCorrN, axis=0)
-volume_std = np.std(volumeN, axis=0)
-autoCorr_err = autoCorr_std / np.sqrt(numMD)
-crossCorr_err = crossCorr_std / np.sqrt(numMD)
-volume_err = volume_std / np.sqrt(numMD)
 
 with h5py.File(args.corrData[0], 'r') as f, h5py.File(outFilename, 'w') as outFile:
   for (name, value) in f.attrs.items():
@@ -85,17 +184,27 @@ with h5py.File(args.corrData[0], 'r') as f, h5py.File(outFilename, 'w') as outFi
       outFile.attrs[name] = value
 
   outFile['timeLags'] = timeLags
+  outFile['rBins'] = rBins
   outFile['volume'] = volume
-  outFile['volume_err'] = volume_err
-  outFile['autoCorr'] = autoCorr
-  outFile['crossCorr'] = crossCorr
-  outFile['autoCorr_err'] = autoCorr_err
-  outFile['crossCorr_err'] = crossCorr_err
+  outFile['nCorr'] = nCorr
+  outFile['sdCorr'] = sdCorr
+  outFile['rho'] = rho
+  if (args.error):
+    outFile['volume_err'] = volume_err
+    outFile['nCorr_err'] = nCorr_err
+    outFile['sdCorr_err'] = sdCorr_err
+    outFile['rho_err'] = rho_err
 
   outFile['timeLags'].dims.create_scale(outFile['timeLags'], 't')
-  outFile['autoCorr'].dims[1].attach_scale(outFile['timeLags'])
-  outFile['autoCorr_err'].dims[1].attach_scale(outFile['timeLags'])
-  outFile['crossCorr'].dims[1].attach_scale(outFile['timeLags'])
-  outFile['crossCorr_err'].dims[1].attach_scale(outFile['timeLags'])
+  outFile['rBins'].dims.create_scale(outFile['rBins'], 'r')
+  outFile['nCorr'].dims[1].attach_scale(outFile['timeLags'])
+  outFile['sdCorr'].dims[1].attach_scale(outFile['rBins'])
+  outFile['sdCorr'].dims[2].attach_scale(outFile['timeLags'])
+  outFile['rho'].dims[1].attach_scale(outFile['rBins'])
+  if (args.error):
+    outFile['nCorr_err'].dims[1].attach_scale(outFile['timeLags'])
+    outFile['sdCorr_err'].dims[1].attach_scale(outFile['rBins'])
+    outFile['sdCorr_err'].dims[2].attach_scale(outFile['timeLags'])
+    outFile['rho_err'].dims[1].attach_scale(outFile['rBins'])
 
 print("File is output as: " + outFilename)

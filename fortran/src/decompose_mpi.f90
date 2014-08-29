@@ -1,4 +1,4 @@
-program spatialDecompose_mpi
+program decompose_mpi
   use mpi
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
@@ -11,8 +11,8 @@ program spatialDecompose_mpi
   character(len=128) :: dataFilename
   character(len=128) :: topFilename
   type(handle) :: dataFileHandle, topFileHandle
-  integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead
-  integer :: molTypePairIndex, tmp_i, skip
+  integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead, numFrame_k
+  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
   integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
   character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r
@@ -20,7 +20,7 @@ program spatialDecompose_mpi
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), dummy_null
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :), dummy_null
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic
@@ -416,6 +416,14 @@ program spatialDecompose_mpi
   end if 
   sdCorr = 0d0
 
+  allocate(nCorr(maxLag+1, numMolType*(numMolType+1)), stat=stat)
+  if (stat /=0) then
+    write(*,*) "Allocation failed: nCorr"
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
+  end if 
+  nCorr = 0d0
+
   allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: rho"
@@ -440,19 +448,36 @@ program spatialDecompose_mpi
   if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
   do j = c_start, c_end
     do i = r_start, r_end
-      if (i /= j) then
+      if (i == j) then
+        !TODO: this autocorrelation part should utilize FFT
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
-        call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
+        molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num)
+        do k = 1, maxLag+1
+          numFrame_k = numFrame - k + 1
+          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
+        end do
+      else
+        if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
+                                          ", c =", j-c_start+1, " of ", num_c
+        starttime2 = MPI_Wtime()
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
-        do k = 1, maxLag+1      
-          vv = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame-k+1, j-c_start+1), 1)
-          do n = 1, numFrame-k+1
+        molTypePairAllIndex = molTypePairIndex + numMolType
+        call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
+        do k = 1, maxLag+1
+          numFrame_k = numFrame - k + 1
+          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+          !TODO: test if this sum should be put here or inside the following loop for better performance
+          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
+          do n = 1, numFrame_k
             tmp_i = rBinIndex(n)
             if (tmp_i <= num_rBin) then
               sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
             end if
+            !TODO: need test
+            !nCorr(k, molTypePairIndex) = corr(k, molTypePairIndex) + vv(n)
           end do
         end do
         do t = 1, numFrame
@@ -461,9 +486,9 @@ program spatialDecompose_mpi
             rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
           end if
         end do
-        if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
-        if (myrank == root) write(*,*) 
       end if
+      if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
+      if (myrank == root) write(*,*) 
     end do
   end do
   deallocate(rBinIndex)
@@ -474,9 +499,11 @@ program spatialDecompose_mpi
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
+    call mpi_reduce(MPI_IN_PLACE, nCorr, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   else
+    call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
@@ -493,27 +520,18 @@ program spatialDecompose_mpi
     end if 
 
     rho = rho / numFrame
-    sdCorr = sdCorr / 3d0
 
-    norm = [ (numFrame - (i-1), i = 1, maxLag+1) ]
-    forall (i = 1:num_rBin, n = 1:numMolType*numMolType )
-      sdCorr(:,i,n) = sdCorr(:,i,n) / norm
-    end forall
-
-    deallocate(norm)
-
-!    forall (i = 1:maxLag+1, n = 1:numMolType*numMolType )
-!      sdCorr(i,:,n) = sdCorr(i,:,n) / rho(:, n)
-!    end forall
-!    where (isnan(sdCorr))
-!      sdCorr = 0
-!    end where
-
+    norm = [ (numFrame - (i-1), i = 1, maxLag+1) ] * 3d0
+    do n = 1, numMolType*(numMolType+1)
+      nCorr(:,n) = nCorr(:,n) / norm
+    end do
     do n = 1, numMolType*numMolType
-      do j = 1, num_rBin
-        sdCorr(:,j,n) = sdCorr(:,j,n) / rho(j, n)
+      do i = 1, num_rBin
+        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
       end do
     end do
+
+    deallocate(norm)
 
     !output results
     write(*,*) "start writing outputs"
@@ -657,7 +675,7 @@ contains
     implicit none
     real(8), allocatable :: timeLags(:), rBins(:)
     integer :: ierr
-    integer(hid_t) :: fid, did1, did2, sid1, sid2
+    integer(hid_t) :: fid, did1, did2, did3, sid1, sid2
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -686,13 +704,17 @@ contains
     call H5LTset_attribute_int_f(fid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
     call H5LTset_attribute_double_f(fid, "/", "cell", cell, size(cell, kind=size_t), ierr)
 
+    call H5LTmake_dataset_double_f(fid, "nCorr", 2, &
+        [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
+    call H5Dopen_f(fid, "sdCorr", did1, ierr)
+
     call H5LTmake_dataset_double_f(fid, "sdCorr", 3, &
         [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
-    call H5Dopen_f(fid, "sdCorr", did1, ierr)
+    call H5Dopen_f(fid, "sdCorr", did2, ierr)
 
     call H5LTmake_dataset_double_f(fid, "rho", 2, &
         [size(rho, 1, kind=hsize_t), size(rho, 2, kind=hsize_t)], rho, ierr)
-    call H5Dopen_f(fid, "rho", did2, ierr)
+    call H5Dopen_f(fid, "rho", did3, ierr)
 
     call H5LTmake_dataset_double_f(fid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
     call H5Dopen_f(fid, "timeLags", sid1, ierr)
@@ -702,15 +724,17 @@ contains
 
     ! attach scale dimension
     call H5DSattach_scale_f(did1, sid1, 1, ierr)
-    call H5DSattach_scale_f(did1, sid2, 2, ierr)
-    call H5DSattach_scale_f(did2, sid2, 1, ierr)
+    call H5DSattach_scale_f(did2, sid1, 1, ierr)
+    call H5DSattach_scale_f(did2, sid2, 2, ierr)
+    call H5DSattach_scale_f(did3, sid2, 1, ierr)
 
     call H5Dclose_f(sid1, ierr)
     call H5Dclose_f(sid2, ierr)
     call H5Dclose_f(did1, ierr)
     call H5Dclose_f(did2, ierr)
+    call H5Dclose_f(did3, ierr)
     call H5Fclose_f(fid, ierr)
     call H5close_f(ierr)
   end subroutine output
 
-end program spatialDecompose_mpi
+end program decompose_mpi
