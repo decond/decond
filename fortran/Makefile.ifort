@@ -20,7 +20,7 @@ FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = spatialDecompose_mpi oneTwoDecompose
+PROGRAM = decompose_mpi oneTwoDecompose
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -37,10 +37,10 @@ oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
 oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
 	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-spatialDecompose_mpi : spatialDecompose_mpi.o utility.o xdr.o top.o
+decompose_mpi : decompose_mpi.o utility.o xdr.o top.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
-spatialDecompose_mpi.o : spatialDecompose_mpi.f90 utility.o xdr.o top.o
+decompose_mpi.o : decompose_mpi.f90 utility.o xdr.o top.o
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 bridge: bridge.o utility.o g96.o octave_save.o

@@ -1,4 +1,4 @@
-program spatialDecompose_mpi
+program decompose_mpi
   use mpi
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
@@ -737,4 +737,4 @@ contains
     call H5close_f(ierr)
   end subroutine output
 
-end program spatialDecompose_mpi
+end program decompose_mpi
