@@ -46,8 +46,7 @@ with h5py.File(args.corrData, 'r') as f:
 
   nDCesaro = np.empty([numIonTypes * (numIonTypes + 3) // 2, timeLags.size])
   # autocorrelation
-  nDCesaro[:numIonTypes, :] = integrate.cumtrapz(nCorr[:numIonTypes, :], timeLags, initial=0) # nm**2 / ps
-  nDCesaro[:numIonTypes, :] = integrate.cumtrapz(nDCesaro[:numIonTypes, :], timeLags, initial=0) # nm**2
+  nDCesaro[:numIonTypes] = nCorr[:numIonTypes]
   # cross correlation
   for i in range(numIonTypes):
     for j in range(i, numIonTypes):
@@ -58,6 +57,7 @@ with h5py.File(args.corrData, 'r') as f:
       else:
         idx1_ji = numIonTypes + zipIndexPair(j, i, numIonTypes)
         nDCesaro[idx2, :] = (nCorr[idx1_ij, :] + nCorr[idx1_ji, :]) / 2
+  # double integration
   nDCesaro = integrate.cumtrapz(nDCesaro, timeLags, initial = 0)
   nDCesaro = integrate.cumtrapz(nDCesaro, timeLags, initial = 0)
 
