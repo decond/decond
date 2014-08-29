@@ -1,1 +1,0 @@
-../octave/fitAveNoAverageCesaro-sdD.m
