@@ -43,18 +43,6 @@ decompose_mpi : decompose_mpi.o utility.o xdr.o top.o
 decompose_mpi.o : decompose_mpi.f90 utility.o xdr.o top.o
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-bridge: bridge.o utility.o g96.o octave_save.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
-
-bridge.o : bridge.f90 utility.o g96.o octave_save.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
-
-com : com.o utility.o g96.o octave_save.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F))
-
-com.o : com.f90 utility.o g96.o octave_save.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
-
 # Library ===================================
 top.o : top.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
