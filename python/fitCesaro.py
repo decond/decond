@@ -224,6 +224,7 @@ fitRange = [list(range(i, j)) for [i, j] in fitRangeBoundary]
 def getKeyFromFitBoundary(fitBoundary):
   return '{}-{}'.format(*fitBoundary)
 
+print("fitting data")
 nD = {}
 nDTotal = {}
 for fit, fitBoundary in zip(fitRange, args.fitRange):
@@ -239,13 +240,13 @@ for fit, fitBoundary in zip(fitRange, args.fitRange):
     sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit], 1)[0, :]
 
 def fitErr(timeLags, cesaro, cesaro_std, fit):
-  rec_sig2 = 1 / cesaro_std[..., fit] ** 2  # [type, rBins, timeLags]
-  S = np.sum(rec_sig2, 2) # [type, rBins]
-  Sx = np.sum(timeLags[fit] * rec_sig2, 2) # [type, rBins]
-  Sxx = np.sum(timeLags[fit]**2 * rec_sig2, 2) # [type, rBins]
-  Sy = np.sum(cesaro[..., fit] * rec_sig2, 2) # [type, rBins]
-  Syy = np.sum(cesaro[..., fit]**2 * rec_sig2, 2) # [type, rBins]
-  Sxy = np.sum(timeLags[fit] * cesaro[..., fit] * rec_sig2, 2) # [type, rBins]
+  rec_sig2 = 1 / cesaro_std[..., fit] ** 2  # [type, rBins, timeLags] or [type, timeLags]
+  S = np.sum(rec_sig2, -1) # [type, rBins] or [type]
+  Sx = np.sum(timeLags[fit] * rec_sig2, -1) # [type, rBins] or [type]
+  Sxx = np.sum(timeLags[fit]**2 * rec_sig2, -1) # [type, rBins] or [type]
+  Sy = np.sum(cesaro[..., fit] * rec_sig2, -1) # [type, rBins] or [type]
+  Syy = np.sum(cesaro[..., fit]**2 * rec_sig2, -1) # [type, rBins] or [type]
+  Sxy = np.sum(timeLags[fit] * cesaro[..., fit] * rec_sig2, -1) # [type, rBins] or [type]
 
   delta = S * Sxx - Sx * Sx
   #slope_b = (S * Sxy - Sx * Sy) / delta  # can be used for double check
