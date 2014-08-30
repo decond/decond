@@ -7,6 +7,8 @@ from itertools import accumulate
 parser = argparse.ArgumentParser(description="Average correlation")
 parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <corr.h5>")
 parser.add_argument('-o', '--out', help="output file, default = 'corr.ave<num>.h5'")
+parser.add_argument('-w', '--window', type=int, default=1,
+                    help="combine every <window> rBins into one bin, default = 1")
 parser.add_argument('-m', '--memoryFriendly', action='store_true',
                     help="turn on memory-friendly mode. Files are loaded and processed one by one."
                          "When combined with -e, files are loaded twice thus much slower.")
@@ -33,7 +35,10 @@ def zipIndexPair2(idx_r, idx_c, size):
 
 numMD = len(args.corrData)
 if (args.out == None):
-  outFilename = 'corr.ave' + str(numMD) + '.h5'
+  if (args.window == 1):
+    outFilename = 'corr.ave' + str(numMD) + '.h5'
+  else:
+    outFilename = 'corr.ave' + str(numMD) + '.bin' + str(args.window) + '.h5'
 else:
   outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
@@ -50,7 +55,10 @@ if (args.memoryFriendly):
         numIonTypes = numMol.size
         numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
         charge = f.attrs['charge']
-        rBins = f['rBins'][...]
+        rBinsTmp = f['rBins'][:]
+        rBinsTmp = rBinsTmp[:rBinsTmp.size // args.window * args.window]
+        rBins = np.concatenate(np.mean(np.split(rBinsTmp, rBinsTmp.size // args.window, axis=0),
+                                                axis=1, keepdims=True), axis=0)
         timeLags = f['timeLags'][:]
         nCorr = np.zeros([numIonTypes*(numIonTypes+1), timeLags.size])
         sdCorr = np.zeros([numIonTypes**2, rBins.size, timeLags.size])
@@ -64,14 +72,19 @@ if (args.memoryFriendly):
           nCorr = nCorr[..., :timeLags.size]
           sdCorr = sdCorr[..., :timeLags.size]
 
-      if (f['rBins'].size < rBins.size):
-        rBins = f['rBins'][...]
+      if (f['rBins'].size < rBins.size*args.window):
+        rBinsTmp = f['rBins'][:]
+        rBinsTmp = rBinsTmp[:rBinsTmp.size // args.window * args.window]
+        rBins = np.concatenate(np.mean(np.split(rBinsTmp, rBinsTmp.size // args.window, axis=0),
+                                                axis=1, keepdims=True), axis=0)
         sdCorr = sdCorr[..., :rBins.size, :]
         rho = rho[..., :rBins.size]
 
       nCorr += f['nCorr'][:, :timeLags.size]
-      sdCorr += f['sdCorr'][:, :rBins.size, :timeLags.size]
-      rho += f['rho'][:, :rBins.size]
+      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size]
+      sdCorr += np.concatenate(np.mean(np.split(sdCorrTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
+      rhoTmp = f['rho'][:, :rBins.size*args.window]
+      rho += np.concatenate(np.mean(np.split(rhoTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
       volume += f.attrs['cell'].prod()
 
   nCorr /= numMD
@@ -124,7 +137,10 @@ else:
         numIonTypes = numMol.size
         numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
         charge = f.attrs['charge']
-        rBins = f['rBins'][...]
+        rBinsTmp = f['rBins'][:]
+        rBinsTmp = rBinsTmp[:rBinsTmp.size // args.window * args.window]
+        rBins = np.concatenate(np.mean(np.split(rBinsTmp, rBinsTmp.size // args.window, axis=0),
+                                                axis=1, keepdims=True), axis=0)
         timeLags = f['timeLags'][:]
         nCorrN = np.zeros([numMD, numIonTypes*(numIonTypes+1), timeLags.size])
         sdCorrN = np.zeros([numMD, numIonTypes**2, rBins.size, timeLags.size])
@@ -138,15 +154,21 @@ else:
           nCorrN = nCorrN[..., :timeLags.size]
           sdCorrN = sdCorrN[..., :timeLags.size]
 
-      if (f['rBins'].size < rBins.size):
-        rBins = f['rBins'][...]
+      if (f['rBins'].size < rBins.size*args.window):
+        rBinsTmp = f['rBins'][:]
+        rBinsTmp = rBinsTmp[:rBinsTmp.size // args.window * args.window]
+        rBins = np.concatenate(np.mean(np.split(rBinsTmp, rBinsTmp.size // args.window, axis=0),
+                                                axis=1, keepdims=True), axis=0)
         sdCorrN = sdCorrN[..., :rBins.size, :]
         rhoN = rhoN[..., :rBins.size]
 
       nCorrN[n] = f['nCorr'][:, :timeLags.size]
-      sdCorrN[n] = f['sdCorr'][:, :rBins.size, :timeLags.size]
-      rhoN[n] = f['rho'][:, :rBins.size]
+      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size]
+      sdCorrN[n] = np.concatenate(np.mean(np.split(sdCorrTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
+      rhoTmp = f['rho'][:, :rBins.size*args.window]
+      rhoN[n] = np.concatenate(np.mean(np.split(rhoTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
       volumeN[n] = f.attrs['cell'].prod()
+
 
   nCorr = np.mean(nCorrN, axis=0)
   sdCorr = np.mean(sdCorrN, axis=0)
@@ -180,7 +202,7 @@ if (isTimeLagsChanged):
 
 with h5py.File(args.corrData[0], 'r') as f, h5py.File(outFilename, 'w') as outFile:
   for (name, value) in f.attrs.items():
-    if (name != 'cell'):
+    if (numMD == 1 or (numMD > 1 and name != 'cell')):
       outFile.attrs[name] = value
 
   outFile['timeLags'] = timeLags
