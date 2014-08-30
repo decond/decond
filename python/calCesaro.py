@@ -30,8 +30,8 @@ def zipIndexPair2(idx_r, idx_c, size):
   return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 with h5py.File(args.corrData, 'r') as f:
-  timestep = f.attrs['timestep'][0]
-  numMol = f.attrs['numMol']
+  timestep = f.attrs['timestep'][...]
+  numMol = f.attrs['numMol'][...]
 
   timeLags = f['timeLags'][0::args.intDelta]
   rBins = f['rBins'][...]
