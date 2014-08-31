@@ -40,6 +40,18 @@ with h5py.File(args.corrData[0], 'r') as fcorr,\
   outFile['timeLags'] = fcorr['timeLags'][...]
   outFile['rBins'] = fsd['rBins'][...]
   outFile['nCorr'] = np.concatenate([fcorr['autoCorr'][...], fcorr['crossCorr'][...]])
+
+  if ('autoCorr_err' in fcorr):
+    outFile['nCorr_err'] = np.concatenate([fcorr['autoCorr_err'][...], fcorr['crossCorr_err'][...]])
+
+  if ('volume' in fcorr):
+    outFile['volume'] = fcorr['volume'][...]
+    if ('volume_err' in fcorr):
+      outFile['volume_err'] = fcorr['volume_err'][...]
+
+  if ('sdCorr_err' in fsd):
+    outFile['sdCorr_err'] = fsd['sdCorr_err'][...]
+
   outFile['sdCorr'] = fsd['sdCorr'][...]
   outFile['rho'] = fsd['rho'][...]
 
