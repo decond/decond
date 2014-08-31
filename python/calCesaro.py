@@ -80,6 +80,8 @@ with h5py.File(args.corrData, 'r') as f:
     for (name, value) in f.attrs.items():
       outFile.attrs[name] = value
 
+    if ('cell' not in f.attrs):
+      outFile['volume'] = f['volume'][...]
     outFile['rBins'] = rBins
     outFile['rho2'] = rho2
     outFile['timeLags'] = timeLags

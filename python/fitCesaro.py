@@ -83,7 +83,10 @@ if (args.memoryFriendly):
       nDCesaro += f['nDCesaro'][:, :timeLags.size]
       sdDCesaro += f['sdDCesaro'][:, :rBins.size, :timeLags.size]
       rho2 += f['rho2'][:, :rBins.size]
-      volume += f.attrs['cell'].prod()
+      if ('cell' in f.attrs.keys()):
+        volume += f.attrs['cell'].prod()
+      else:
+        volume += f['volume'][...]
 
   nDCesaro /= numMD
   nDCesaroTotal = np.sum(nDCesaro * (zz * ww)[:, np.newaxis], axis=0)
@@ -107,7 +110,10 @@ if (args.memoryFriendly):
         nDCesaroTotal_std += (np.sum(tmp_nDCesaro * (zz * ww)[:, np.newaxis], axis=0) - nDCesaroTotal)**2
         sdDCesaro_std += (f['sdDCesaro'][:, :rBins.size, :timeLags.size] - sdDCesaro)**2
         rho2_std += (f['rho2'][:, :rBins.size] - rho2)**2
-        volume_std += (f.attrs['cell'].prod() - volume)**2
+        if ('cell' in f.attrs.keys()):
+          volume_std += (f.attrs['cell'].prod() - volume)**2
+        else:
+          volume_std += (f['volume'] - volume)**2
 
     nDCesaro_std = np.sqrt(nDCesaro_std / (numMD - 1)) 
     nDCesaroTotal_std = np.sqrt(nDCesaroTotal_std / (numMD - 1)) 
@@ -180,7 +186,10 @@ else:
       nDCesaroRaw[n] = f['nDCesaro'][:, :timeLags.size]
       sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :timeLags.size]
       rho2Raw[n] = f['rho2'][:, :rBins.size]
-      volumeRaw[n] = f.attrs['cell'].prod()
+      if ('cell' in f.attrs.keys()):
+        volumeRaw[n] = f.attrs['cell'].prod()
+      else:
+        volumeRaw[n] = f['volume'][...]
 
   nDCesaroTotalRaw = np.sum(nDCesaroRaw * (zz * ww)[:, np.newaxis], axis=1)
 
