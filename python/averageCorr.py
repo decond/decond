@@ -81,11 +81,22 @@ if (args.memoryFriendly):
         rho = rho[..., :rBins.size]
 
       nCorr += f['nCorr'][:, :timeLags.size]
-      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size]
-      sdCorr += np.concatenate(np.mean(np.split(sdCorrTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
-      rhoTmp = f['rho'][:, :rBins.size*args.window]
-      rho += np.concatenate(np.mean(np.split(rhoTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
-      volume += f.attrs['cell'].prod()
+
+      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size] # [type, rBin*window, time]
+      rhoTmp = f['rho'][:, :rBins.size*args.window] # [type, rBin*window]
+      sdCorrTmp = sdCorrTmp * rhoTmp[:, :, np.newaxis] # [type, rBin*window, time]
+      sdCorrTmp = np.array(np.split(sdCorrTmp, rBins.size, axis=1)) # [rBin, type, window, time]
+      sdCorrTmp = np.swapaxes(np.sum(sdCorrTmp, axis=2), 0, 1) # [type, rBin, time]
+      rhoTmp = np.array(np.split(rhoTmp, rBins.size, axis=1)) # [rBin, type, window]
+      rhoTmp = np.sum(rhoTmp, axis=2).T # [type, rBin]
+
+      sdCorr += sdCorrTmp / rhoTmp[:, :, np.newaxis]
+      rho += rhoTmp
+
+      if ('cell' in f.attrs.keys()):
+        volume += f.attrs['cell'].prod()
+      else:
+        volume += f['volume'][...]
 
   nCorr /= numMD
   sdCorr /= numMD
@@ -106,7 +117,10 @@ if (args.memoryFriendly):
           nCorr_std += (f['nCorr'][:, :timeLags.size] - nCorr)**2
           sdCorr_std += (f['sdCorr'][:, :rBins.size, :timeLags.size] - sdCorr)**2
           rho_std += (f['rho'][:, :rBins.size] - rho)**2
-          volume_std += (f.attrs['cell'].prod() - volume)**2
+          if ('cell' in f.attrs.keys()):
+            volume_std += (f.attrs['cell'].prod() - volume)**2
+          else:
+            volume_std += (f['volume'] - volume)**2
 
       nCorr_std = np.sqrt(nCorr_std / (numMD - 1)) 
       sdCorr_std = np.sqrt(sdCorr_std / (numMD - 1)) 
@@ -163,11 +177,22 @@ else:
         rhoN = rhoN[..., :rBins.size]
 
       nCorrN[n] = f['nCorr'][:, :timeLags.size]
-      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size]
-      sdCorrN[n] = np.concatenate(np.mean(np.split(sdCorrTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
-      rhoTmp = f['rho'][:, :rBins.size*args.window]
-      rhoN[n] = np.concatenate(np.mean(np.split(rhoTmp, rBins.size, axis=1), axis=2, keepdims=True), axis=1)
-      volumeN[n] = f.attrs['cell'].prod()
+
+      sdCorrTmp = f['sdCorr'][:, :rBins.size*args.window, :timeLags.size] # [type, rBin*window, time]
+      rhoTmp = f['rho'][:, :rBins.size*args.window] # [type, rBin*window]
+      sdCorrTmp = sdCorrTmp * rhoTmp[:, :, np.newaxis] # [type, rBin*window, time]
+      sdCorrTmp = np.array(np.split(sdCorrTmp, rBins.size, axis=1)) # [rBin, type, window, time]
+      sdCorrTmp = np.swapaxes(np.sum(sdCorrTmp, axis=2), 0, 1) # [type, rBin, time]
+      rhoTmp = np.array(np.split(rhoTmp, rBins.size, axis=1)) # [rBin, type, window]
+      rhoTmp = np.sum(rhoTmp, axis=2).T # [type, rBin]
+
+      sdCorrN[n] = sdCorrTmp / rhoTmp[:, :, np.newaxis]
+      rhoN[n] = rhoTmp
+
+      if ('cell' in f.attrs.keys()):
+        volumeN[n] = f.attrs['cell'].prod()
+      else:
+        volumeN[n] = f['volume'][...]
 
 
   nCorr = np.mean(nCorrN, axis=0)
