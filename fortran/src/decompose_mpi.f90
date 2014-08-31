@@ -706,7 +706,7 @@ contains
 
     call H5LTmake_dataset_double_f(fid, "nCorr", 2, &
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
-    call H5Dopen_f(fid, "sdCorr", did1, ierr)
+    call H5Dopen_f(fid, "nCorr", did1, ierr)
 
     call H5LTmake_dataset_double_f(fid, "sdCorr", 3, &
         [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
