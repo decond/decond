@@ -26,9 +26,13 @@ vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
 #vpath % $(OUTDIR)
 
+DIR = $(MODDIR) $(OUTDIR)
+
 # Program ==================================
-.PHONY : all 
-all : $(PROGRAM)
+.PHONY : all dir
+all : dir $(PROGRAM)
+dir :
+	mkdir -p $(DIR)
 
 # ---------------------------
 oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
