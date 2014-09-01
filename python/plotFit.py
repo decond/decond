@@ -172,7 +172,7 @@ numPlots = 3
 smallRegion = []
 for rdf in g:
   smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
-print("smallRegion =", smallRegion)
+print("small rdf region =", smallRegion)
 
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)

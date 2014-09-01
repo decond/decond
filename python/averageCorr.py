@@ -6,7 +6,9 @@ from itertools import accumulate
 
 parser = argparse.ArgumentParser(description="Average correlation")
 parser.add_argument('corrData', nargs='+', help="correlation data files to be averaged <corr.h5>")
-parser.add_argument('-o', '--out', help="output file, default = 'corr.ave<num>.h5'")
+parser.add_argument('-o', '--out',
+                    help="output file, default = 'corr.ave<num>.h5' or 'corr.ave<num>.w<window>.h5' "
+                         "if <window> > 1")
 parser.add_argument('-w', '--window', type=int, default=1,
                     help="combine every <window> rBins into one bin, default = 1")
 parser.add_argument('-m', '--memoryFriendly', action='store_true',
@@ -38,7 +40,7 @@ if (args.out == None):
   if (args.window == 1):
     outFilename = 'corr.ave' + str(numMD) + '.h5'
   else:
-    outFilename = 'corr.ave' + str(numMD) + '.bin' + str(args.window) + '.h5'
+    outFilename = 'corr.ave' + str(numMD) + '.w' + str(args.window) + '.h5'
 else:
   outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
