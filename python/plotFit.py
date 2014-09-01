@@ -137,9 +137,11 @@ density = numMol / volume
 cellLengthHalf = volume**(1/3) / 2
 dr = rBins[1] - rBins[0]
 dv = 4 * np.pi * dr * rBins**2
-filter = (rBins > cellLengthHalf) & (rBins < np.sqrt(2) * cellLengthHalf)
 dvsim = dv.copy()
+filter = (rBins > cellLengthHalf) & (rBins < np.sqrt(2) * cellLengthHalf)
 dvsim[filter] = 4 * np.pi * dr * rBins[filter] * (3 * cellLengthHalf - 2 * rBins[filter])
+filter = (rBins >= np.sqrt(2) * cellLengthHalf)
+dvsim[filter] = np.nan
 rho_Vdvsim = rho2
 rho_V = rho_Vdvsim / dvsim
 rho_dvsim = rho_Vdvsim / volume
@@ -172,7 +174,7 @@ numPlots = 3
 smallRegion = []
 for rdf in g:
   smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
-print("small rdf region =", smallRegion)
+print("small-rdf region =", smallRegion)
 
 for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)
@@ -194,8 +196,10 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
 
   sdD[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(sdD[fitKey]):
-    D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False for j, c in enumerate(g[i] < threshold)], D)
-    axs[1].plot(rBins, D_masked, label='cross-{}'.format(i+1))
+    g_masked = np.where(np.isnan(g[i]), -1, g[i])
+    D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
+                                   for j, c in enumerate(g_masked < threshold)], D)
+    axs[1].plot(rBins, D_masked, label='cross-{}'.format(i))
     axs[1].legend(loc='upper right')
     axs[1].set_title("threshold {}".format(threshold))
 
