@@ -233,7 +233,7 @@ fitRange = [list(range(i, j)) for [i, j] in fitRangeBoundary]
 def getKeyFromFitBoundary(fitBoundary):
   return '{}-{}'.format(*fitBoundary)
 
-print("fitting data")
+print("fitting data...")
 nD = {}
 nDTotal = {}
 for fit, fitBoundary in zip(fitRange, args.fitRange):
