@@ -3,14 +3,16 @@ import argparse
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from scipy import integrate
-from itertools import accumulate
+import itertools as it
 
 parser = argparse.ArgumentParser(description="Plot and examine the results from fitCesaro.py")
 parser.add_argument('cesaroFit', help="fitted data file <cesaro.fit.h5>")
 parser.add_argument('-o', '--out', default='cesaro.fit', help="output figure base filename, default = 'cesaro.fit'")
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
 parser.add_argument('--threshold', type=float, default=0, help="RDF threshold for D_IL(r) figure, default = 0")
+parser.add_argument('--label', nargs='*', help="manually assign label for each component. <mol1>...<molN>")
 args = parser.parse_args()
 
 threshold = args.threshold
@@ -36,7 +38,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
+  return idx_r * size - ([0]+list(it.accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 def loadDictFromH5(h5g):
   dict = {}
@@ -48,7 +50,7 @@ def loadDictFromH5(h5g):
 with h5py.File(args.cesaroFit, 'r') as f:
   numMol = f.attrs['numMol'][...]
   numIonTypes = numMol.size
-  numIonTypePairs = (numIonTypes*(numIonTypes+1)) / 2;
+  numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2;
   charge = f.attrs['charge'][...]
   timeLags = f['timeLags'][...]
   rBins = f['rBins'][...]
@@ -74,6 +76,17 @@ with h5py.File(args.cesaroFit, 'r') as f:
   Const.nD2ecSI = Const.beta * Const.basicCharge**2 / (volume*(Const.nm**3)) * Const.nm**2 / Const.ps
   Const.D2AA2_ps = Const.nm2AA**2
   Const.D2cm2_s = Const.nm2cm**2 / Const.ps2s
+
+# validate arguments
+def connectLabel(label):
+  return label[0] + '-' + label[1]
+
+if (args.label is not None):
+  assert(len(args.label) == numIonTypes)
+  label = args.label
+else:
+  label = ['{}'.format(i+1) for i in range(numIonTypes)]
+label += [connectLabel(l) for l in it.combinations_with_replacement(label, 2)]
 
 DI = {}
 DI_err = {}
@@ -108,10 +121,13 @@ for k in sorted(nDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
   print(k + ':')
   print(nDTotal[k] * Const.nD2ecSI, " +/- ", nDTotal_err[k] * Const.nD2ecSI, '\n', sep="")
 
+lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 # plot fitting results of nCorr
 plt.figure()
-for i in range(zz.size):
-  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], label='{}'.format(i))
+for i in range(numIonTypes + numIonTypePairs):
+  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], linestyle=lineStyle[i], label=label[i])
+  if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
+
 plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
@@ -121,12 +137,8 @@ plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
 plt.figure()
 numErrBars = 5
 for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
-  if (i < numIonTypes):
-    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, linestyle='--', label='auto-{}'.format(i))
-    if (i == numIonTypes - 1):
-      plt.gca().set_color_cycle(None)
-  else:
-    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, label='cross-{}'.format(i-numIonTypes))
+    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, linestyle=lineStyle[i], label=label[i])
+    if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 plt.legend(loc='upper left')
 plt.xlabel("time lag  (ps)")
 plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
@@ -182,7 +194,7 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   # plot rdf
   axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
   for i, rdf in enumerate(g):
-    axs[0].plot(rBins, rdf, label='{}'.format(i))
+    axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
   axs[0].legend(loc='upper right')
   axs[0].set_title("Fit {} ps".format(fitKey))
   axs[0].set_ylabel(r"$\mathsf{g}_{IL}(r)$")
@@ -190,7 +202,7 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   # plot D
   DI[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(DI[fitKey]):
-    axs[1].plot(rBins, np.ones_like(rBins)*D, label='auto-{}'.format(i), linestyle='--')
+    axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle='--')
   axs[1].set_color_cycle(None)
   axs[1].set_ylabel(r"$D_I, D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
 
@@ -199,13 +211,13 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
     g_masked = np.where(np.isnan(g[i]), -1, g[i])
     D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
                                    for j, c in enumerate(g_masked < threshold)], D)
-    axs[1].plot(rBins, D_masked, label='cross-{}'.format(i))
+    axs[1].plot(rBins, D_masked, label=label[numIonTypes + i])
     axs[1].legend(loc='upper right')
     axs[1].set_title("threshold {}".format(threshold))
 
   # plot sig
   for i, sig in enumerate(sigI[fitKey]):
-    axs[2].plot(rBins, sig, label='{}'.format(i))
+    axs[2].plot(rBins, sig, label=label[i])
     axs[2].legend(loc='upper right')
   axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
   axs[2].set_xlabel(r"$r$  ($\AA$)")
