@@ -12,6 +12,8 @@ parser.add_argument('cesaroFit', help="fitted data file <cesaro.fit.h5>")
 parser.add_argument('-o', '--out', default='cesaro.fit', help="output figure base filename, default = 'cesaro.fit'")
 parser.add_argument('-T', '--temp', type=float, required=True, help="temperature in K")
 parser.add_argument('--threshold', type=float, default=0, help="RDF threshold for D_IL(r) figure, default = 0")
+parser.add_argument('--color', nargs='*', help="manually assign line color for each auto and cross terms. "
+                                    "<auto1>...<autoN> <cross11>...<cross1N> <cross22>...<cross2N> .. <crossNN>")
 parser.add_argument('--label', nargs='*', help="manually assign label for each component. <mol1>...<molN>")
 args = parser.parse_args()
 
@@ -78,6 +80,10 @@ with h5py.File(args.cesaroFit, 'r') as f:
   Const.D2cm2_s = Const.nm2cm**2 / Const.ps2s
 
 # validate arguments
+if (args.color is not None):
+  assert(len(args.color) == numIonTypes + numIonTypePairs )
+  mpl.rcParams['axes.color_cycle'] = args.color
+
 def connectLabel(label):
   return label[0] + '-' + label[1]
 
@@ -128,7 +134,7 @@ for i in range(numIonTypes + numIonTypePairs):
   plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], linestyle=lineStyle[i], label=label[i])
   if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 
-plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], label='total')
+plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], linestyle=':', label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
 plt.xlabel("fit range  (ps)")
@@ -140,8 +146,8 @@ for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
     plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, linestyle=lineStyle[i], label=label[i])
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 plt.legend(loc='upper left')
-plt.xlabel("time lag  (ps)")
-plt.ylabel(r"$\tilde D_I$ $\tilde D_{IL}$  ($\AA^2$)")
+plt.xlabel("$\Lambda$  (ps)")
+plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)")
 
 
 # plot g-D-sig
@@ -192,6 +198,8 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   fig, axs = plt.subplots(numPlots, 1, sharex=True)
 
   # plot rdf
+  if (args.color is not None):
+    axs[0].set_color_cycle(args.color[numIonTypes:])
   axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
   for i, rdf in enumerate(g):
     axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
@@ -202,16 +210,15 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   # plot D
   DI[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(DI[fitKey]):
-    axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle='--')
-  axs[1].set_color_cycle(None)
-  axs[1].set_ylabel(r"$D_I, D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
+    axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i])
+  axs[1].set_ylabel(r"$D_I$, $D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
 
   sdD[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(sdD[fitKey]):
     g_masked = np.where(np.isnan(g[i]), -1, g[i])
     D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
                                    for j, c in enumerate(g_masked < threshold)], D)
-    axs[1].plot(rBins, D_masked, label=label[numIonTypes + i])
+    axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
     axs[1].legend(loc='upper right')
     axs[1].set_title("threshold {}".format(threshold))
 
