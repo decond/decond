@@ -3,14 +3,18 @@ import argparse
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 from matplotlib.colors import Normalize
 from matplotlib import cm
-from itertools import accumulate
+import itertools as it
 
 parser = argparse.ArgumentParser(description="Plot decomposed correlation")
 parser.add_argument('corrData', help="correlation data file <corr.h5>")
 parser.add_argument('-o', '--out', default='corr', help="output figure base filename, default = 'sdcorr'")
 parser.add_argument('--threshold', type=float, default=0, help="RDF threshold for plotting sdCorr, default = 0")
+parser.add_argument('--color', nargs='*', help="manually assign line color for each auto and cross terms. "
+                                    "<auto1>...<autoN> <cross11>...<cross1N> <cross22>...<cross2N> .. <crossNN>")
+parser.add_argument('--label', nargs='*', help="manually assign label for each component. <mol1>...<molN>")
 args = parser.parse_args()
 
 threshold = args.threshold
@@ -35,7 +39,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
+  return idx_r * size - ([0]+list(it.accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 with h5py.File(args.corrData, 'r') as f:
   timeLags = f['timeLags'][...]
@@ -47,6 +51,21 @@ with h5py.File(args.corrData, 'r') as f:
   numMol = f.attrs['numMol'][...]
   numIonTypes = numMol.size
   numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2;
+
+# validate arguments
+if (args.color is not None):
+  assert(len(args.color) == numIonTypes + numIonTypePairs )
+  mpl.rcParams['axes.color_cycle'] = args.color
+
+def connectLabel(label):
+  return label[0] + '-' + label[1]
+
+if (args.label is not None):
+  assert(len(args.label) == numIonTypes)
+  label = args.label
+else:
+  label = ['{}'.format(i+1) for i in range(numIonTypes)]
+label += [connectLabel(l) for l in it.combinations_with_replacement(label, 2)]
 
 # plot nCorr
 nCorr2 = np.empty([numIonTypes + numIonTypePairs, timeLags.size])
@@ -61,13 +80,10 @@ for i in range(numIonTypes):
       idx1_ji = numIonTypes + zipIndexPair(j, i, numIonTypes)
       nCorr2[idx2] = (nCorr[idx1_ij] + nCorr[idx1_ji]) / 2
 
+lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure()
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
-  if (i < numIonTypes):
-    plt.plot(timeLags, corr, label='auto-{}'.format(i), linestyle='--')
-  else:
-    if (i == numIonTypes): plt.gca().set_color_cycle(None)
-    plt.plot(timeLags, corr, label='cross-{}'.format(i))
+  plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
 leg = plt.legend()
 plt.xlabel(r'time  (ps)')
@@ -137,7 +153,7 @@ for i, sd in enumerate(sdCorr2_masked):
 #  plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
   ax = plt.gca()
   ax.set_xlabel(r'$t$  (ps)')
-  ax.set_title('{}'.format(i))
+  ax.set_title(label[numIonTypes + i])
   cb = plt.colorbar(c)
   cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
 
@@ -151,7 +167,7 @@ for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2_masked)):
                   bounds, norm=norm, cmap=cmap)
 #  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
   ax.set_xlabel(r'$t$  (ps)')
-  ax.set_title('{}'.format(i))
+  ax.set_title(label[numIonTypes + i])
   if (i == 0):
     ax.set_ylabel(r'$r$  ($\AA$)')
 
