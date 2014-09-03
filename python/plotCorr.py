@@ -86,7 +86,7 @@ for i, corr in enumerate(nCorr2*Const.nm2AA**2):
   plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
 leg = plt.legend()
-plt.xlabel(r'time  (ps)')
+plt.xlabel(r't  (ps)')
 plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$  ($\AA^2$ ps$^{-2}$)')
 
 # plot sdCorr
