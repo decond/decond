@@ -108,7 +108,7 @@ ecTotal = {}
 ecTotal_err = {}
 sortedKeys = sorted(nD.keys(), key=lambda x:x.split(sep='-')[0])
 for k in sortedKeys:
-  print(k + ':')
+  print("Fit", k + ' ps:')
   print("========================")
   print("Electrical conductivity in S / m:")
   ec[k] = nD[k] * Const.nD2ecSI * zz
@@ -117,15 +117,11 @@ for k in sortedKeys:
   print("+/-\n", ec_err[k], sep="")
   ecTotal[k] = Const.nD2ecSI * sum(nD[k]*zz*ww)
   ecTotal_err[k] = Const.nD2ecSI * sum(abs(nD_err[k]))
-  print("Total: ", ecTotal[k], " +/- ", ecTotal_err[k], '\n', sep="")
+  print("Fit then sum: ", ecTotal[k], " +/- ", ecTotal_err[k], sep="")
+  print("Sum then fit: ", nDTotal[k] * Const.nD2ecSI, " +/- ", nDTotal_err[k] * Const.nD2ecSI, '\n', sep="")
   print("Diffusion constant in 10^-5 cm^2 / s:")
   print(DI[k] * Const.D2cm2_s * 1E5)
   print("+/-\n", DI_err[k] * Const.D2cm2_s * 1E5, '\n', sep="")
-
-print("Total")
-for k in sorted(nDTotal.keys(), key=lambda x:x.split(sep='-')[0]):
-  print(k + ':')
-  print(nDTotal[k] * Const.nD2ecSI, " +/- ", nDTotal_err[k] * Const.nD2ecSI, '\n', sep="")
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 # plot fitting results of nCorr
