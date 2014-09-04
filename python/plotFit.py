@@ -211,16 +211,18 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
   DI[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(DI[fitKey]):
     axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i])
-  axs[1].set_ylabel(r"$D_I$, $D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
 
+  if (args.color is None): axs[1].set_color_cycle(None)
   sdD[fitKey] *= Const.D2AA2_ps
   for i, D in enumerate(sdD[fitKey]):
     g_masked = np.where(np.isnan(g[i]), -1, g[i])
     D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
                                    for j, c in enumerate(g_masked < threshold)], D)
     axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
-    axs[1].legend(loc='upper right')
-    axs[1].set_title("threshold {}".format(threshold))
+
+  axs[1].set_ylabel(r"$D_I$, $D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
+  axs[1].legend(loc='upper right')
+  axs[1].set_title("threshold {}".format(threshold))
 
   # plot sig
   for i, sig in enumerate(sigI[fitKey]):
