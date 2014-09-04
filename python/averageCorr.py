@@ -60,7 +60,7 @@ if (args.memoryFriendly):
         rBinsTmp = f['rBins'][:]
         rBinsTmp = rBinsTmp[:rBinsTmp.size // args.window * args.window]
         rBins = np.concatenate(np.mean(np.split(rBinsTmp, rBinsTmp.size // args.window, axis=0),
-                                                axis=1, keepdims=True), axis=0)
+                                       axis=1, keepdims=True), axis=0)
         timeLags = f['timeLags'][:]
         nCorr = np.zeros([numIonTypes*(numIonTypes+1), timeLags.size])
         sdCorr = np.zeros([numIonTypes**2, rBins.size, timeLags.size])
