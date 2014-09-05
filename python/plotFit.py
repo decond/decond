@@ -15,6 +15,7 @@ parser.add_argument('--threshold', type=float, default=0, help="RDF threshold fo
 parser.add_argument('--color', nargs='*', help="manually assign line color for each auto and cross terms. "
                                     "<auto1>...<autoN> <cross11>...<cross1N> <cross22>...<cross2N> .. <crossNN>")
 parser.add_argument('--label', nargs='*', help="manually assign label for each component. <mol1>...<molN>")
+parser.add_argument('-p', '--plugin', nargs='*', help="plugin files which will be executed at the end")
 args = parser.parse_args()
 
 threshold = args.threshold
@@ -231,3 +232,9 @@ for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
 
 plt.ion()
 plt.show()
+
+if (args.plugin is not None):
+  for plug in args.plugin:
+    with open(plug) as f:
+      code = compile(f.read(), plug, 'exec')
+      exec(code)
