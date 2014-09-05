@@ -23,7 +23,8 @@ module xdr
       integer(C_INT), value :: natoms
       integer(C_INT) :: step
       real(C_DOUBLE) :: t, lambda
-      real(C_DOUBLE) :: box(*), x(*), v(*), f(*)
+      real(C_DOUBLE) :: box(*), x(*), v(*)
+      type(C_PTR), value :: f
     end function
 
     type(C_PTR) function xdrfile_open(path, mode) bind(C)
@@ -96,7 +97,7 @@ contains
 
     integer(C_INT) :: ret, step
     real(C_DOUBLE) :: lambda, box(3, 3)
-    real(C_DOUBLE), allocatable :: f(:, :)
+    type(C_PTR), parameter :: f = C_NULL_PTR
 
     integer :: i
 
