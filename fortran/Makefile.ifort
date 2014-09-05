@@ -13,6 +13,7 @@ MODDIR = ./mod/
 OUTDIR = ./out/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
+#FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
 #FFTWDIR = /usr/
 FFTWDIR = $(HOME)/local/fftw-3.3.4
 FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
@@ -20,7 +21,7 @@ FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = decompose_mpi oneTwoDecompose
+PROGRAM = decompose_mpi oneTwoDecompose trjconv2com
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -35,6 +36,12 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
+trjconv2com : trjconv2com.o utility.o xdr.o top.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
+
+trjconv2com.o : trjconv2com.f90
+	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
 oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
 	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
