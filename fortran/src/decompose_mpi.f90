@@ -5,7 +5,7 @@ program decompose_mpi
   use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
   integer, parameter :: num_parArg = 9
-  integer, parameter :: num_argPerData = 2
+  integer :: num_argPerData
   integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
@@ -15,15 +15,15 @@ program decompose_mpi
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
   integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
   character(len=10) :: tmp_str
-  real(8) :: cell(3), timestep, rBinWidth, tmp_r
+  real(8) :: cell(3), timestep, rBinWidth, tmp_r, dummy_null
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :), dummy_null
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
-  logical :: is_periodic
+  logical :: is_periodic, com_mode
   type(system) :: sys
 
   !MPI variables
@@ -49,10 +49,16 @@ program decompose_mpi
   !root checks the input arguments
   if (myrank == root) then
     is_periodic = .true.
+    com_mode = .false.
+    num_argPerData = 2
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage: $spatialdecompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
+      write(*,*) "usage1: $decompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
                   <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
                   <molecule1> <start_index1> [<molecule2> <start_index2>...]"
+      write(*,*) "usage2: $decompose <outfile> <com.trr> com <numFrameToRead> &
+                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
+                  <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2...]"
+      write(*,*) "Note: for usage2, no topfile is needed, simply input the string 'com'"
       write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
       write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
       write(*,*) "Note: numDomain_r and numDomain_c can be 0 and let the program decide (may not be the best)."
@@ -67,6 +73,10 @@ program decompose_mpi
   call get_command_argument(2, dataFilename)
 
   call get_command_argument(3, topFilename)
+  if (topFilename == "com" .or. topFilename == "COM") then
+    com_mode = .true.
+    num_argPerData = 3
+  end if
 
   call get_command_argument(4, tmp_str) ! in the unit of frame number
   read(tmp_str, *) numFrame 
@@ -92,7 +102,7 @@ program decompose_mpi
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
     write(*,*) "inFile.trr = ", dataFilename
-    write(*,*) "topFile.trr = ", topFilename
+    write(*,*) "topFile.top = ", topFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
@@ -115,32 +125,48 @@ program decompose_mpi
     call exit(1)
   end if 
 
-  allocate(start_index(numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: start_index"
-    call exit(1)
-  end if 
+  if (com_mode) then
+    do n = 1, numMolType
+      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
+      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
+      read(tmp_str, *) charge(n)
+      call get_command_argument(num_parArg + num_argPerData*(n-1) + 3, tmp_str) 
+      read(tmp_str, *) sys%mol(n)%num
+    end do
+    totNumMol = sum(sys%mol(:)%num)
+    if (myrank == root) then
+      write(*,*) "sys%mol%type = ", sys%mol%type
+      write(*,*) "charge = ", charge
+      write(*,*) "sys%mol%num = ", sys%mol%num
+    end if
+  else
+    allocate(start_index(numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: start_index"
+      call exit(1)
+    end if 
 
-  do n = 1, numMolType
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-    call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-    read(tmp_str, *) start_index(n)
-  end do
-  if (myrank == root) then
-    write(*,*) "sys%mol%type = ", sys%mol%type
-    write(*,*) "start_index = ", start_index
+    do n = 1, numMolType
+      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
+      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
+      read(tmp_str, *) start_index(n)
+    end do
+    if (myrank == root) then
+      write(*,*) "sys%mol%type = ", sys%mol%type
+      write(*,*) "start_index = ", start_index
+    end if
+
+    !read topFile
+    topFileHandle = open_top(topFilename)
+    call read_top(topFileHandle, sys)
+    call close_top(topFileHandle)
+    if (myrank == root) call print_sys(sys)
+
+    do n = 1, numMolType
+      charge(n) = sum(sys%mol(n)%atom(:)%charge)
+    end do
+    totNumMol = sum(sys%mol(:)%num)
   end if
-
-  !read topFile
-  topFileHandle = open_top(topFilename)
-  call read_top(topFileHandle, sys)
-  call close_top(topFileHandle)
-  if (myrank == root) call print_sys(sys)
-
-  do n = 1, numMolType
-    charge(n) = sum(sys%mol(n)%atom(:)%charge)
-  end do
-  totNumMol = sum(sys%mol(:)%num)
 
   !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
   !numMolPerDomain_r * numDomain_r ~= totNumMol
@@ -290,6 +316,12 @@ program decompose_mpi
     write(*,*) "start reading trajectory..."
     starttime = MPI_Wtime()
     sysNumAtom = get_natom(dataFilename)
+    if (com_mode .and. sysNumAtom /= totNumMol) then
+      write(*,*) "sysNumAtom = ", sysNumAtom, ", totNumMol = ", totNumMol
+      write(*,*) "In COM mode, sysNumAtom should equal to totNumMol!"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
     write(*,*) "sysNumAtom=", sysNumAtom
 
     allocate(pos(3, numFrame, totNumMol), stat=stat)
@@ -333,8 +365,13 @@ program decompose_mpi
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
-      call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
+      if (com_mode) then
+        pos(:, i, :) = pos_tmp
+        vel(:, i, :) = vel_tmp
+      else
+        call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
+        call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
+      end if
       do j = 1, skip-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
         if (stat > 0) then
@@ -363,6 +400,20 @@ program decompose_mpi
     write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
     write(*,*) "timestep = ", timestep
     write(*,*) "cell = ", cell
+  else
+    !not root, allocate dummy pos to inhibit error messages
+    allocate(pos(1, 1, 1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: dummy pos on rank", myrank
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    allocate(vel(1, 1, 1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: dummy vel on rank", myrank
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
   end if
 
   !distribute trajectory data collectively
@@ -396,10 +447,8 @@ program decompose_mpi
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
-  if (myrank == root) then
-    deallocate(pos)
-    deallocate(vel)
-  end if
+  deallocate(pos)
+  deallocate(vel)
 
   ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
   num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
