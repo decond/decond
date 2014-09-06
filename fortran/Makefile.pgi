@@ -3,7 +3,7 @@ FC = pgf95
 H5FC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13/bin/h5fc
 H5PFC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13_mpi-pgi/bin/h5pfc
 FCMPI = mpif90
-OMPFLAGS = -openmp
+#OMPFLAGS = -openmp
 MODFLAG = -module
 
 SRCDIR = ./src/
@@ -21,17 +21,27 @@ FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 XDRFILEDIR = $(HOME)/kmtu/local/xdrfile-1.1.1-d-pgi
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = decompose_mpi oneTwoDecompose
+PROGRAM = decompose_mpi oneTwoDecompose trjconv2com
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
 #vpath % $(OUTDIR)
 
+DIR = $(MODDIR) $(OUTDIR)
+
 # Program ==================================
-.PHONY : all 
-all : $(PROGRAM)
+.PHONY : all dir
+all : dir $(PROGRAM)
+dir :
+	mkdir -p $(DIR)
 
 # ---------------------------
+trjconv2com : trjconv2com.o utility.o xdr.o top.o
+	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
+
+trjconv2com.o : trjconv2com.f90
+	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
 oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
 	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
@@ -49,9 +59,6 @@ top.o : top.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 xdr.o : xdr.f90 utility.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
-
-trr.o : trr.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 utility.o : utility.f90

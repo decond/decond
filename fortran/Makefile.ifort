@@ -61,9 +61,6 @@ top.o : top.f90 utility.o
 xdr.o : xdr.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
-trr.o : trr.f90 utility.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
-
 utility.o : utility.f90
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
