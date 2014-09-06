@@ -136,7 +136,7 @@ program trjconv2com
     numFrameRead = numFrameRead + 1
     call com_pos(pos_com, pos_tmp, start_index, sys, cell)
     call com_vel(vel_com, vel_tmp, start_index, sys)
-    call write_trajectory(outFileHandle, totNumMol, is_periodic, pos_tmp, vel_tmp, cell, i-1, time(i), stat)
+    call write_trajectory(outFileHandle, totNumMol, is_periodic, pos_com, vel_com, cell, i-1, time(i), stat)
     do j = 1, skip-1
       call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
