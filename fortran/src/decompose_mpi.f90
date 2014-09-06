@@ -46,11 +46,11 @@ program decompose_mpi
   num_dataArg = command_argument_count() - num_parArg
 
   prog_starttime = MPI_Wtime()
+  com_mode = .false.
+  num_argPerData = 2
   !root checks the input arguments
   if (myrank == root) then
     is_periodic = .true.
-    com_mode = .false.
-    num_argPerData = 2
     if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
       write(*,*) "usage1: $decompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
                   <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
