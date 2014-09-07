@@ -4,17 +4,14 @@ program decompose_mpi
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
-  integer, parameter :: num_parArg = 9
-  integer :: num_argPerData
-  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
-  character(len=128) :: outFilename 
-  character(len=128) :: dataFilename
-  character(len=128) :: topFilename
+  integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
+  integer :: num_arg, num_subArg, num_argPerMolType
+  integer :: i, j, k, n, totNumMol, t, sysNumAtom
+  character(len=128) :: outFilename, dataFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead, numFrame_k
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
   integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
-  character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r, dummy_null
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
@@ -23,7 +20,7 @@ program decompose_mpi
   real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
-  logical :: is_periodic, com_mode
+  logical :: is_periodic, is_pa_mode, is_pm_mode, is_oneTwo_only
   type(system) :: sys
 
   !MPI variables
@@ -43,129 +40,232 @@ program decompose_mpi
   call mpi_comm_size(MPI_COMM_WORLD, nprocs, ierr)
   call mpi_comm_rank(MPI_COMM_WORLD, myrank, ierr)
 
-  num_dataArg = command_argument_count() - num_parArg
-
   prog_starttime = MPI_Wtime()
-  com_mode = .false.
-  num_argPerData = 2
-  !root checks the input arguments
-  if (myrank == root) then
-    is_periodic = .true.
-    if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage1: $decompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
-                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
-                  <molecule1> <start_index1> [<molecule2> <start_index2>...]"
-      write(*,*) "usage2: $decompose <outfile> <com.trr> com <numFrameToRead> &
-                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
-                  <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2...]"
-      write(*,*) "Note: for usage2, no topfile is needed, simply input the string 'com'"
-      write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
-      write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
-      write(*,*) "Note: numDomain_r and numDomain_c can be 0 and let the program decide (may not be the best)."
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
+
+  num_arg = command_argument_count()
+  is_pa_mode = .false.
+  is_pm_mode = .false.
+
+  !default values
+  outFilename = 'corr.h5'
+  skip = 1
+  maxLag = -1
+  is_oneTwo_only = .false.
+  rBinWidth = 0.01
+  numDomain_r = 0
+  numDomain_c = 0
+
+  !root checks the number of the input arguments
+  is_periodic = .true.
+  if (num_arg < LEAST_REQUIRED_NUM_ARG) then
+    if (myrank == root) call print_usage()
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
   end if
 
   !read parameters for all ranks
-  call get_command_argument(1, outFilename)
+  i = 1
+  do while (i <= num_arg)
+    call get_command_argument(number=i, value=arg, status=stat)
+    if (i <= NUM_POSITIONAL_ARG) then
+      select case (i)
+      case (1)
+        dataFilename = arg
+        i = i + 1
+      case (2)
+        read(arg, *) numFrame ! in the unit of frame number
+        i = i + 1
+      case default
+        if (myrank == root) then
+          write(*,*) "Something is wrong in the codes; maybe NUM_POSITIONAL_ARG is not set correctly."
+        end if
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end select
+    else
+      i = i + 1
+      select case (arg)
+      case ('-pa')
+        if (is_pm_mode) then
+          if (myrank == root) then
+            write(*,*) "-pa and -pm cannot be given at the same time!"
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+        is_pa_mode = .true.
+        call get_command_argument(i, topFilename)
+        i = i + 1
+        num_subArg = count_arg(i, num_arg)
+        num_argPerMolType = 2
+        if (mod(num_subArg, num_argPerMolType) > 0 .or. num_subArg < num_argPerMolType) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -pm: ", num_subArg + 1
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
 
-  call get_command_argument(2, dataFilename)
+        numMolType = num_subArg / num_argPerMolType
 
-  call get_command_argument(3, topFilename)
-  if (topFilename == "com" .or. topFilename == "COM") then
-    com_mode = .true.
-    num_argPerData = 3
+        allocate(sys%mol(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(charge(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(start_index(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: start_index"
+          call exit(1)
+        end if 
+
+        do n = 1, numMolType
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          read(arg, *) start_index(n)
+          i = i + 1
+        end do
+
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "start_index = ", start_index
+        end if
+
+        !read topFile
+        topFileHandle = open_top(topFilename)
+        call read_top(topFileHandle, sys)
+        call close_top(topFileHandle)
+        if (myrank == root) call print_sys(sys)
+
+        do n = 1, numMolType
+          charge(n) = sum(sys%mol(n)%atom(:)%charge)
+        end do
+        totNumMol = sum(sys%mol(:)%num)
+
+      case ('-pm')
+        if (is_pa_mode) then
+          if (myrank == root) then
+            write(*,*) "-pa and -pm cannot be given at the same time!"
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+        is_pm_mode = .true.
+        num_subArg = count_arg(i, num_arg)
+        num_argPerMolType = 3
+        if (mod(num_subArg, num_argPerMolType) > 0 .or. num_subArg < num_argPerMolType) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -pm: ", num_subArg
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+
+        numMolType = num_subArg / num_argPerMolType
+
+        allocate(sys%mol(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(charge(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        do n = 1, numMolType
+          call get_command_argument(i, sys%mol(n)%type) 
+          i = i + 1
+          call get_command_argument(i, arg) 
+          i = i + 1
+          read(arg, *) charge(n)
+          call get_command_argument(i, arg) 
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totNumMol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "charge = ", charge
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+      case ('-o')
+        call get_command_argument(i, outFilename)
+        i = i + 1
+
+      case ('-s')
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) skip
+
+      case ('-l')
+        call get_command_argument(i, arg) ! in the unit of frame number
+        i = i + 1
+        read(arg, *) maxLag
+
+      case ('-a')
+        is_oneTwo_only = .true.
+
+      case ('-r')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) rBinWidth
+
+      case ('-d')
+        num_subArg = 2
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) numDomain_r
+
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) numDomain_c
+
+      case default
+        if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+        call exit(1)
+      end select
+    end if
+  end do
+
+  if (maxLag == -1) then
+    maxLag = numFrame - 1
   end if
-
-  call get_command_argument(4, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) numFrame 
-
-  call get_command_argument(5, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) skip
-
-  call get_command_argument(6, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) maxLag
-
-  call get_command_argument(7, tmp_str)
-  read(tmp_str, *) rBinWidth
-
-  call get_command_argument(8, tmp_str) 
-  read(tmp_str, *) numDomain_r
-
-  call get_command_argument(9, tmp_str) 
-  read(tmp_str, *) numDomain_c
-
-  numMolType = num_dataArg / num_argPerData
 
   !rank root output parameters read
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
     write(*,*) "inFile.trr = ", dataFilename
-    write(*,*) "topFile.top = ", topFilename
+    if (is_pa_mode) write(*,*) "topFile.top = ", topFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     write(*,*) "rBinWidth = ", rBinWidth
     write(*,*) "numMolType = ", numMolType
-    write(*,*) "numDomain_r = ", numDomain_r
-    write(*,*) "numDomain_c = ", numDomain_c
-  end if
-
-  allocate(sys%mol(numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: sys%mol"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-
-  allocate(charge(numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: charge"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-
-  if (com_mode) then
-    do n = 1, numMolType
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-      read(tmp_str, *) charge(n)
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 3, tmp_str) 
-      read(tmp_str, *) sys%mol(n)%num
-    end do
-    totNumMol = sum(sys%mol(:)%num)
-    if (myrank == root) then
-      write(*,*) "sys%mol%type = ", sys%mol%type
-      write(*,*) "charge = ", charge
-      write(*,*) "sys%mol%num = ", sys%mol%num
+    if (.not. is_oneTwo_only) then
+      write(*,*) "numDomain_r = ", numDomain_r
+      write(*,*) "numDomain_c = ", numDomain_c
     end if
-  else
-    allocate(start_index(numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: start_index"
-      call exit(1)
-    end if 
-
-    do n = 1, numMolType
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-      read(tmp_str, *) start_index(n)
-    end do
-    if (myrank == root) then
-      write(*,*) "sys%mol%type = ", sys%mol%type
-      write(*,*) "start_index = ", start_index
-    end if
-
-    !read topFile
-    topFileHandle = open_top(topFilename)
-    call read_top(topFileHandle, sys)
-    call close_top(topFileHandle)
-    if (myrank == root) call print_sys(sys)
-
-    do n = 1, numMolType
-      charge(n) = sum(sys%mol(n)%atom(:)%charge)
-    end do
-    totNumMol = sum(sys%mol(:)%num)
   end if
 
   !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
@@ -316,7 +416,7 @@ program decompose_mpi
     write(*,*) "start reading trajectory..."
     starttime = MPI_Wtime()
     sysNumAtom = get_natom(dataFilename)
-    if (com_mode .and. sysNumAtom /= totNumMol) then
+    if (is_pm_mode .and. sysNumAtom /= totNumMol) then
       write(*,*) "sysNumAtom = ", sysNumAtom, ", totNumMol = ", totNumMol
       write(*,*) "In COM mode, sysNumAtom should equal to totNumMol!"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -365,7 +465,7 @@ program decompose_mpi
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      if (com_mode) then
+      if (is_pm_mode) then
         pos(:, i, :) = pos_tmp
         vel(:, i, :) = vel_tmp
       else
@@ -785,5 +885,63 @@ contains
     call H5Fclose_f(fid, ierr)
     call H5close_f(ierr)
   end subroutine output
+
+  integer function count_arg(i, num_arg)
+    implicit none
+    integer, intent(in) :: i, num_arg
+    character(len=128) :: arg
+    integer :: j, stat
+    logical :: is_numeric
+    !count number of arguments for the (i-1)-th option
+    count_arg = 0
+    j = i
+    do while (.true.)
+      if (j > num_arg) then
+        return
+      end if
+      call get_command_argument(number=j, value=arg, status=stat)
+      if (stat /= 0) then
+        if (myrank == root) then
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          write(*,*) "Error: unable to count the number of arguments for the ", i-1, "-th option"
+          call print_usage()
+          call exit(1)
+        end if
+      else if (arg(1:1) == '-' ) then
+        is_numeric = verify(arg(2:2), '0123456789') .eq. 0 
+        if (.not. is_numeric) return !end of data file arguments
+      end if
+      j = j + 1
+      count_arg = count_arg + 1
+    end do
+  end function count_arg
+
+  subroutine print_usage()
+    implicit none
+    write(*, *) "usage: $ decompose_mpi <infile.trr> <numFrameToRead> <-pa | -pm ...> [options]"
+    write(*, *) "options: "
+    write(*, *) "  -pa <topfile.top> <molecule1> <start_index1> [<molecule2> <start_index2>...]:"
+    write(*, *) "   read parameters from topology file. ignored when -pm is given"
+    write(*, *) 
+    write(*, *) "  -pm <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2>...]:"
+    write(*, *) "   manually assign parameters for single-atom-molecule system"
+    write(*, *) 
+    write(*, *) "  -o <outfile>: output filename. default = corr.h5"
+    write(*, *) 
+    write(*, *) "  -s <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "             skip=2 means reading every 2nd frame."
+    write(*, *) 
+    write(*, *) "  -l <maxlag>: maximum time lag. default = <numFrameToRead - 1>"
+    write(*, *) 
+    write(*, *) "  -a: calculate only the autocorrelation term"
+    write(*, *) "      that is, do one-two decomposition only"
+    write(*, *) 
+    write(*, *) "  -r <rbinwidth(nm)>:"
+    write(*, *) "   spatial decomposition r-bin width. default = 0.01, ignored when -a is given"
+    write(*, *) 
+    write(*, *) "  -d <numDomain_r> <numDomain_c>:" 
+    write(*, *) "   manually assign MPI decomposition pattern,ignored when -a is given"
+  end subroutine print_usage
+
 
 end program decompose_mpi
