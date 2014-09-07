@@ -3,6 +3,7 @@ program decompose_mpi
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only : open_top, close_top, read_top, system, print_sys
+  use correlation
   implicit none
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
   integer :: num_arg, num_subArg, num_argPerMolType
@@ -17,7 +18,7 @@ program decompose_mpi
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :), corr_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd
@@ -225,6 +226,7 @@ program decompose_mpi
 
       case ('-nosd')
         is_sd = .false.
+        if (outFilename == 'corr.h5') outFilename = 'corr-nosd.h5'
 
       case ('-r')
         call get_command_argument(i, arg)
@@ -598,22 +600,35 @@ program decompose_mpi
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
+  else
+    allocate(corr_tmp(2*maxLag+1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: corr_tmp"
+      call exit(1)
+    end if 
+    corr_tmp = 0d0
   end if
 
   if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
   do j = c_start, c_end
     do i = r_start, r_end
       if (i == j) then
-        !TODO: this autocorrelation part should utilize FFT
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num)
-        do k = 1, maxLag+1
-          numFrame_k = numFrame - k + 1
-          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
-          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
-        end do
+        if (is_sd) then
+          do k = 1, maxLag+1
+            numFrame_k = numFrame - k + 1
+            vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+            nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
+          end do
+        else
+          do k = 1, 3
+            corr_tmp = corr(vel_r(k, :, i-r_start+1), maxLag)
+            nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) + corr_tmp(maxLag+1:)
+          end do
+        end if
       else
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
@@ -622,13 +637,11 @@ program decompose_mpi
         molTypePairAllIndex = molTypePairIndex + numMolType
         if (is_sd) then
           call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
-        end if
-        do k = 1, maxLag+1
-          numFrame_k = numFrame - k + 1
-          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
-          !TODO: test if this sum should be put here or inside the following loop for better performance
-          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
-          if (is_sd) then
+          do k = 1, maxLag+1
+            numFrame_k = numFrame - k + 1
+            vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+            !TODO: test if this sum should be put here or inside the following loop for better performance
+            nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
             do n = 1, numFrame_k
               tmp_i = rBinIndex(n)
               if (tmp_i <= num_rBin) then
@@ -637,14 +650,19 @@ program decompose_mpi
               !TODO: need test
               !nCorr(k, molTypePairIndex) = corr(k, molTypePairIndex) + vv(n)
             end do
-          end if
-        end do
-        if (is_sd) then
+          end do
+
           do t = 1, numFrame
             tmp_i = rBinIndex(t)
             if (tmp_i <= num_rBin) then
               rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
             end if
+          end do
+
+        else ! one-two only
+          do k = 1, 3
+            corr_tmp = corr(vel_r(k, :, i-r_start+1), vel_c(k, :, j-c_start+1), maxLag)
+            nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) + corr_tmp(maxLag+1:)
           end do
         end if
       end if
