@@ -3,27 +3,25 @@ program decompose_mpi
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only : open_top, close_top, read_top, system, print_sys
+  use correlation
   implicit none
-  integer, parameter :: num_parArg = 9
-  integer :: num_argPerData
-  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
-  character(len=128) :: outFilename 
-  character(len=128) :: dataFilename
-  character(len=128) :: topFilename
+  integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
+  integer :: num_arg, num_subArg, num_argPerMolType
+  integer :: i, j, k, n, totNumMol, t, sysNumAtom
+  character(len=128) :: outFilename, dataFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead, numFrame_k
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
   integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
-  character(len=10) :: tmp_str
   real(8) :: cell(3), timestep, rBinWidth, tmp_r, dummy_null
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: pos(:, :, :), vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :)
+  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :), corr_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
-  logical :: is_periodic, com_mode
+  logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd
   type(system) :: sys
 
   !MPI variables
@@ -43,129 +41,231 @@ program decompose_mpi
   call mpi_comm_size(MPI_COMM_WORLD, nprocs, ierr)
   call mpi_comm_rank(MPI_COMM_WORLD, myrank, ierr)
 
-  num_dataArg = command_argument_count() - num_parArg
-
   prog_starttime = MPI_Wtime()
-  com_mode = .false.
-  num_argPerData = 2
-  !root checks the input arguments
-  if (myrank == root) then
-    is_periodic = .true.
-    if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
-      write(*,*) "usage1: $decompose <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
-                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
-                  <molecule1> <start_index1> [<molecule2> <start_index2>...]"
-      write(*,*) "usage2: $decompose <outfile> <com.trr> com <numFrameToRead> &
-                  <skip> <maxlag> <rbinwidth(nm)> <numDomain_r> <numDomain_c> &
-                  <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2...]"
-      write(*,*) "Note: for usage2, no topfile is needed, simply input the string 'com'"
-      write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
-      write(*,*) "Note: maxlag is counted in terms of the numFrameToRead."
-      write(*,*) "Note: numDomain_r and numDomain_c can be 0 and let the program decide (may not be the best)."
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
+
+  num_arg = command_argument_count()
+  is_pa_mode = .false.
+  is_pm_mode = .false.
+
+  !default values
+  outFilename = 'corr.h5'
+  skip = 1
+  maxLag = -1
+  is_sd = .true.
+  rBinWidth = 0.01
+  numDomain_r = 0
+  numDomain_c = 0
+
+  !root checks the number of the input arguments
+  is_periodic = .true.
+  if (num_arg < LEAST_REQUIRED_NUM_ARG) then
+    if (myrank == root) call print_usage()
+    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call exit(1)
   end if
 
   !read parameters for all ranks
-  call get_command_argument(1, outFilename)
+  i = 1
+  do while (i <= num_arg)
+    call get_command_argument(number=i, value=arg, status=stat)
+    if (i <= NUM_POSITIONAL_ARG) then
+      select case (i)
+      case (1)
+        dataFilename = arg
+        i = i + 1
+      case (2)
+        read(arg, *) numFrame ! in the unit of frame number
+        i = i + 1
+      case default
+        if (myrank == root) then
+          write(*,*) "Something is wrong in the codes; maybe NUM_POSITIONAL_ARG is not set correctly."
+        end if
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end select
+    else
+      i = i + 1
+      select case (arg)
+      case ('-pa')
+        if (is_pm_mode) then
+          if (myrank == root) then
+            write(*,*) "-pa and -pm cannot be given at the same time!"
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+        is_pa_mode = .true.
+        call get_command_argument(i, topFilename)
+        i = i + 1
+        num_subArg = count_arg(i, num_arg)
+        num_argPerMolType = 2
+        if (mod(num_subArg, num_argPerMolType) > 0 .or. num_subArg < num_argPerMolType) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -pm: ", num_subArg + 1
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
 
-  call get_command_argument(2, dataFilename)
+        numMolType = num_subArg / num_argPerMolType
 
-  call get_command_argument(3, topFilename)
-  if (topFilename == "com" .or. topFilename == "COM") then
-    com_mode = .true.
-    num_argPerData = 3
+        allocate(sys%mol(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(charge(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(start_index(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: start_index"
+          call exit(1)
+        end if 
+
+        do n = 1, numMolType
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          read(arg, *) start_index(n)
+          i = i + 1
+        end do
+
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "start_index = ", start_index
+        end if
+
+        !read topFile
+        topFileHandle = open_top(topFilename)
+        call read_top(topFileHandle, sys)
+        call close_top(topFileHandle)
+        if (myrank == root) call print_sys(sys)
+
+        do n = 1, numMolType
+          charge(n) = sum(sys%mol(n)%atom(:)%charge)
+        end do
+        totNumMol = sum(sys%mol(:)%num)
+
+      case ('-pm')
+        if (is_pa_mode) then
+          if (myrank == root) then
+            write(*,*) "-pa and -pm cannot be given at the same time!"
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+        is_pm_mode = .true.
+        num_subArg = count_arg(i, num_arg)
+        num_argPerMolType = 3
+        if (mod(num_subArg, num_argPerMolType) > 0 .or. num_subArg < num_argPerMolType) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -pm: ", num_subArg
+            call print_usage()
+          end if
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if
+
+        numMolType = num_subArg / num_argPerMolType
+
+        allocate(sys%mol(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        allocate(charge(numMolType), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        end if 
+
+        do n = 1, numMolType
+          call get_command_argument(i, sys%mol(n)%type) 
+          i = i + 1
+          call get_command_argument(i, arg) 
+          i = i + 1
+          read(arg, *) charge(n)
+          call get_command_argument(i, arg) 
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totNumMol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "charge = ", charge
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+      case ('-o')
+        call get_command_argument(i, outFilename)
+        i = i + 1
+
+      case ('-s')
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) skip
+
+      case ('-l')
+        call get_command_argument(i, arg) ! in the unit of frame number
+        i = i + 1
+        read(arg, *) maxLag
+
+      case ('-nosd')
+        is_sd = .false.
+        if (outFilename == 'corr.h5') outFilename = 'corr-nosd.h5'
+
+      case ('-r')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) rBinWidth
+
+      case ('-d')
+        num_subArg = 2
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) numDomain_r
+
+        call get_command_argument(i, arg) 
+        i = i + 1
+        read(arg, *) numDomain_c
+
+      case default
+        if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr)
+        call exit(1)
+      end select
+    end if
+  end do
+
+  if (maxLag == -1) then
+    maxLag = numFrame - 1
   end if
-
-  call get_command_argument(4, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) numFrame 
-
-  call get_command_argument(5, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) skip
-
-  call get_command_argument(6, tmp_str) ! in the unit of frame number
-  read(tmp_str, *) maxLag
-
-  call get_command_argument(7, tmp_str)
-  read(tmp_str, *) rBinWidth
-
-  call get_command_argument(8, tmp_str) 
-  read(tmp_str, *) numDomain_r
-
-  call get_command_argument(9, tmp_str) 
-  read(tmp_str, *) numDomain_c
-
-  numMolType = num_dataArg / num_argPerData
 
   !rank root output parameters read
   if (myrank == root) then
     write(*,*) "outFile = ", outFilename
     write(*,*) "inFile.trr = ", dataFilename
-    write(*,*) "topFile.top = ", topFilename
+    if (is_pa_mode) write(*,*) "topFile.top = ", topFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
-    write(*,*) "rBinWidth = ", rBinWidth
+    if (is_sd) write(*,*) "rBinWidth = ", rBinWidth
     write(*,*) "numMolType = ", numMolType
     write(*,*) "numDomain_r = ", numDomain_r
     write(*,*) "numDomain_c = ", numDomain_c
-  end if
-
-  allocate(sys%mol(numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: sys%mol"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-
-  allocate(charge(numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: charge"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-
-  if (com_mode) then
-    do n = 1, numMolType
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-      read(tmp_str, *) charge(n)
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 3, tmp_str) 
-      read(tmp_str, *) sys%mol(n)%num
-    end do
-    totNumMol = sum(sys%mol(:)%num)
-    if (myrank == root) then
-      write(*,*) "sys%mol%type = ", sys%mol%type
-      write(*,*) "charge = ", charge
-      write(*,*) "sys%mol%num = ", sys%mol%num
-    end if
-  else
-    allocate(start_index(numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: start_index"
-      call exit(1)
-    end if 
-
-    do n = 1, numMolType
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 1, sys%mol(n)%type) 
-      call get_command_argument(num_parArg + num_argPerData*(n-1) + 2, tmp_str) 
-      read(tmp_str, *) start_index(n)
-    end do
-    if (myrank == root) then
-      write(*,*) "sys%mol%type = ", sys%mol%type
-      write(*,*) "start_index = ", start_index
-    end if
-
-    !read topFile
-    topFileHandle = open_top(topFilename)
-    call read_top(topFileHandle, sys)
-    call close_top(topFileHandle)
-    if (myrank == root) call print_sys(sys)
-
-    do n = 1, numMolType
-      charge(n) = sum(sys%mol(n)%atom(:)%charge)
-    end do
-    totNumMol = sum(sys%mol(:)%num)
   end if
 
   !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
@@ -316,7 +416,7 @@ program decompose_mpi
     write(*,*) "start reading trajectory..."
     starttime = MPI_Wtime()
     sysNumAtom = get_natom(dataFilename)
-    if (com_mode .and. sysNumAtom /= totNumMol) then
+    if (is_pm_mode .and. sysNumAtom /= totNumMol) then
       write(*,*) "sysNumAtom = ", sysNumAtom, ", totNumMol = ", totNumMol
       write(*,*) "In COM mode, sysNumAtom should equal to totNumMol!"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -365,7 +465,7 @@ program decompose_mpi
         call exit(1)
       end if 
       numFrameRead = numFrameRead + 1
-      if (com_mode) then
+      if (is_pm_mode) then
         pos(:, i, :) = pos_tmp
         vel(:, i, :) = vel_tmp
       else
@@ -450,20 +550,20 @@ program decompose_mpi
   deallocate(pos)
   deallocate(vel)
 
-  ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
-  num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
-  if (myrank == root) write(*,*) "num_rBin = ", num_rBin
-
-  !spatial decomposition correlation
-  if (myrank == root) write(*,*) "start spatial decomposition"
+  !decomposition
+  if (is_sd) then
+    if (myrank == root) write(*,*) "start spatial decomposition"
+  else
+    if (myrank == root) write(*,*) "start one-two decomposition"
+  end if
   starttime = MPI_Wtime()
-  allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
+
+  allocate(vv(numFrame))
   if (stat /=0) then
-    write(*,*) "Allocation failed: sdCorr"
+    write(*,*) "Allocation failed: vv"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
-  sdCorr = 0d0
 
   allocate(nCorr(maxLag+1, numMolType*(numMolType+1)), stat=stat)
   if (stat /=0) then
@@ -473,88 +573,124 @@ program decompose_mpi
   end if 
   nCorr = 0d0
 
-  allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: rho"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-  rho = 0d0
+  if (is_sd) then
+    ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
+    num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
+    if (myrank == root) write(*,*) "num_rBin = ", num_rBin
 
-  allocate(rBinIndex(numFrame), stat=stat)
-  if (stat /= 0) then
-    write(*,*) "Allocation failed: rBinIndex"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
+    allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: sdCorr"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+    sdCorr = 0d0
 
-  allocate(vv(numFrame))
-  if (stat /=0) then
-    write(*,*) "Allocation failed: vv"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
+    allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rho"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+    rho = 0d0
+
+    allocate(rBinIndex(numFrame), stat=stat)
+    if (stat /= 0) then
+      write(*,*) "Allocation failed: rBinIndex"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+  else
+    allocate(corr_tmp(2*maxLag+1), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: corr_tmp"
+      call exit(1)
+    end if 
+    corr_tmp = 0d0
+  end if
+
   if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
   do j = c_start, c_end
     do i = r_start, r_end
       if (i == j) then
-        !TODO: this autocorrelation part should utilize FFT
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num)
-        do k = 1, maxLag+1
-          numFrame_k = numFrame - k + 1
-          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
-          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
-        end do
+        if (is_sd) then
+          do k = 1, maxLag+1
+            numFrame_k = numFrame - k + 1
+            vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+            nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
+          end do
+        else
+          do k = 1, 3
+            corr_tmp = corr(vel_r(k, :, i-r_start+1), maxLag)
+            nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) + corr_tmp(maxLag+1:)
+          end do
+        end if
       else
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
         molTypePairAllIndex = molTypePairIndex + numMolType
-        call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
-        do k = 1, maxLag+1
-          numFrame_k = numFrame - k + 1
-          vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
-          !TODO: test if this sum should be put here or inside the following loop for better performance
-          nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
-          do n = 1, numFrame_k
-            tmp_i = rBinIndex(n)
-            if (tmp_i <= num_rBin) then
-              sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
-            end if
-            !TODO: need test
-            !nCorr(k, molTypePairIndex) = corr(k, molTypePairIndex) + vv(n)
+        if (is_sd) then
+          call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
+          do k = 1, maxLag+1
+            numFrame_k = numFrame - k + 1
+            vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
+            !TODO: test if this sum should be put here or inside the following loop for better performance
+            nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
+            do n = 1, numFrame_k
+              tmp_i = rBinIndex(n)
+              if (tmp_i <= num_rBin) then
+                sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
+              end if
+              !TODO: need test
+              !nCorr(k, molTypePairIndex) = corr(k, molTypePairIndex) + vv(n)
+            end do
           end do
-        end do
-        do t = 1, numFrame
-          tmp_i = rBinIndex(t)
-          if (tmp_i <= num_rBin) then
-            rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
-          end if
-        end do
+
+          do t = 1, numFrame
+            tmp_i = rBinIndex(t)
+            if (tmp_i <= num_rBin) then
+              rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
+            end if
+          end do
+
+        else ! one-two only
+          do k = 1, 3
+            corr_tmp = corr(vel_r(k, :, i-r_start+1), vel_c(k, :, j-c_start+1), maxLag)
+            nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) + corr_tmp(maxLag+1:)
+          end do
+        end if
       end if
       if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
       if (myrank == root) write(*,*) 
     end do
   end do
-  deallocate(rBinIndex)
+  if (is_sd) then
+    deallocate(rBinIndex)
+  end if
   endtime = MPI_Wtime()
-  if (myrank == root) write(*,*) "finished spatial decomposition. It took ", endtime - starttime, " seconds"
+  if (myrank == root) write(*,*) "finished decomposition. It took ", endtime - starttime, " seconds"
 
-  !collect sdCorr and rho
+  !collect nCorr, sdCorr and rho
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
     call mpi_reduce(MPI_IN_PLACE, nCorr, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    if (is_sd) then
+      call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
   else
     call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    if (is_sd) then
+      call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
@@ -568,17 +704,19 @@ program decompose_mpi
       call exit(1)
     end if 
 
-    rho = rho / numFrame
-
     norm = [ (numFrame - (i-1), i = 1, maxLag+1) ] * 3d0
     do n = 1, numMolType*(numMolType+1)
       nCorr(:,n) = nCorr(:,n) / norm
     end do
-    do n = 1, numMolType*numMolType
-      do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
+
+    if (is_sd) then
+      rho = rho / numFrame
+      do n = 1, numMolType*numMolType
+        do i = 1, num_rBin
+          sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
+        end do
       end do
-    end do
+    end if
 
     deallocate(norm)
 
@@ -734,13 +872,15 @@ contains
     end if 
     timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
     
-    allocate(rBins(num_rBin), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: rBins"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+    if (is_sd) then
+      allocate(rBins(num_rBin), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: rBins"
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end if 
+      rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+    end if
 
     call H5open_f(ierr)
 
@@ -757,33 +897,97 @@ contains
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
     call H5Dopen_f(fid, "nCorr", did1, ierr)
 
-    call H5LTmake_dataset_double_f(fid, "sdCorr", 3, &
-        [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
-    call H5Dopen_f(fid, "sdCorr", did2, ierr)
+    if (is_sd) then
+      call H5LTmake_dataset_double_f(fid, "sdCorr", 3, &
+          [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
+      call H5Dopen_f(fid, "sdCorr", did2, ierr)
 
-    call H5LTmake_dataset_double_f(fid, "rho", 2, &
-        [size(rho, 1, kind=hsize_t), size(rho, 2, kind=hsize_t)], rho, ierr)
-    call H5Dopen_f(fid, "rho", did3, ierr)
+      call H5LTmake_dataset_double_f(fid, "rho", 2, &
+          [size(rho, 1, kind=hsize_t), size(rho, 2, kind=hsize_t)], rho, ierr)
+      call H5Dopen_f(fid, "rho", did3, ierr)
+    end if
 
     call H5LTmake_dataset_double_f(fid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
     call H5Dopen_f(fid, "timeLags", sid1, ierr)
 
-    call H5LTmake_dataset_double_f(fid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
-    call H5Dopen_f(fid, "rBins", sid2, ierr)
+    if (is_sd) then
+      call H5LTmake_dataset_double_f(fid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
+      call H5Dopen_f(fid, "rBins", sid2, ierr)
+    end if
 
     ! attach scale dimension
     call H5DSattach_scale_f(did1, sid1, 1, ierr)
-    call H5DSattach_scale_f(did2, sid1, 1, ierr)
-    call H5DSattach_scale_f(did2, sid2, 2, ierr)
-    call H5DSattach_scale_f(did3, sid2, 1, ierr)
+    if (is_sd) then
+      call H5DSattach_scale_f(did2, sid1, 1, ierr)
+      call H5DSattach_scale_f(did2, sid2, 2, ierr)
+      call H5DSattach_scale_f(did3, sid2, 1, ierr)
+    end if
 
     call H5Dclose_f(sid1, ierr)
-    call H5Dclose_f(sid2, ierr)
     call H5Dclose_f(did1, ierr)
-    call H5Dclose_f(did2, ierr)
-    call H5Dclose_f(did3, ierr)
+    if (is_sd) then
+      call H5Dclose_f(sid2, ierr)
+      call H5Dclose_f(did2, ierr)
+      call H5Dclose_f(did3, ierr)
+    end if
     call H5Fclose_f(fid, ierr)
     call H5close_f(ierr)
   end subroutine output
+
+  integer function count_arg(i, num_arg)
+    implicit none
+    integer, intent(in) :: i, num_arg
+    character(len=128) :: arg
+    integer :: j, stat
+    logical :: is_numeric
+    !count number of arguments for the (i-1)-th option
+    count_arg = 0
+    j = i
+    do while (.true.)
+      if (j > num_arg) then
+        return
+      end if
+      call get_command_argument(number=j, value=arg, status=stat)
+      if (stat /= 0) then
+        if (myrank == root) then
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          write(*,*) "Error: unable to count the number of arguments for the ", i-1, "-th option"
+          call print_usage()
+          call exit(1)
+        end if
+      else if (arg(1:1) == '-' ) then
+        is_numeric = verify(arg(2:2), '0123456789') .eq. 0 
+        if (.not. is_numeric) return !end of data file arguments
+      end if
+      j = j + 1
+      count_arg = count_arg + 1
+    end do
+  end function count_arg
+
+  subroutine print_usage()
+    implicit none
+    write(*, *) "usage: $ decompose_mpi <infile.trr> <numFrameToRead> <-pa | -pm ...> [options]"
+    write(*, *) "options: "
+    write(*, *) "  -pa <topfile.top> <molecule1> <start_index1> [<molecule2> <start_index2>...]:"
+    write(*, *) "   read parameters from topology file. ignored when -pm is given"
+    write(*, *) 
+    write(*, *) "  -pm <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2>...]:"
+    write(*, *) "   manually assign parameters for single-atom-molecule system"
+    write(*, *) 
+    write(*, *) "  -o <outfile>: output filename. default = corr.h5"
+    write(*, *) 
+    write(*, *) "  -s <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "             skip=2 means reading every 2nd frame."
+    write(*, *) 
+    write(*, *) "  -l <maxlag>: maximum time lag. default = <numFrameToRead - 1>"
+    write(*, *) 
+    write(*, *) "  -nosd: no spatial decomposition, do only one-two decomposition"
+    write(*, *) 
+    write(*, *) "  -r <rbinwidth(nm)>:"
+    write(*, *) "   spatial decomposition r-bin width. default = 0.01, ignored when -nosd is given"
+    write(*, *) 
+    write(*, *) "  -d <numDomain_r> <numDomain_c>:" 
+    write(*, *) "   manually assign the MPI decomposition pattern"
+  end subroutine print_usage
 
 end program decompose_mpi
