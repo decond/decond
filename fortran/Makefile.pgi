@@ -12,10 +12,12 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
+#FCFLAGS = $(MODFLAG) $(MODDIR) -g
 FCFLAGS = $(MODFLAG) $(MODDIR) -fastsse -Minfo=all
 
-FFTWDIR = $(HOME)/kmtu/local/fftw-3.3.4
-FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+FFTWDIR = $(HOME)/kmtu/local/fftw-3.3.4-pgi
+#FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
 
 XDRFILEDIR = $(HOME)/kmtu/local/xdrfile-1.1.1-d-pgi
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
@@ -35,7 +37,7 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
-trjconv2com : trjconv2com.o utility.o xdr.o top.o
+trjconv2com : utility.o xdr.o top.o trjconv2com.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
 trjconv2com.o : trjconv2com.f90
