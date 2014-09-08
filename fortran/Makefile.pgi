@@ -7,25 +7,17 @@ FCMPI = mpif90
 MODFLAG = -module
 
 SRCDIR = ./src/
-#OBJDIR = ./obj/
 MODDIR = ./mod/
-#LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-#FCFLAGS = -g -traceback -gen-interfaces -warn interfaces -check all -debug all -fp-stack-check -heap-arrays 327680 $(MODFLAG) $(MODDIR)
 FCFLAGS = $(MODFLAG) $(MODDIR) -fastsse -Minfo=all
-#FFTWDIR = /usr/
-FFTWDIR = $(HOME)/kmtu/local/fftw-3.3.4
-FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
 XDRFILEDIR = $(HOME)/kmtu/local/xdrfile-1.1.1-d-pgi
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = decompose_mpi oneTwoDecompose trjconv2com
+PROGRAM = decompose_mpi trjconv2com
 
 vpath %.f90 $(SRCDIR)
-#vpath %.o $(SRCDIR)
-#vpath % $(OUTDIR)
 
 DIR = $(MODDIR) $(OUTDIR)
 
@@ -36,22 +28,16 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
-trjconv2com : trjconv2com.o utility.o xdr.o top.o
+trjconv2com : utility.o xdr.o top.o trjconv2com.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
-	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
-
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
-	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
-
-decompose_mpi : decompose_mpi.o utility.o xdr.o top.o
+decompose_mpi : utility.o xdr.o top.o decompose_mpi.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
-decompose_mpi.o : decompose_mpi.f90 utility.o xdr.o top.o
+decompose_mpi.o : decompose_mpi.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
@@ -64,11 +50,6 @@ xdr.o : xdr.f90 utility.o
 utility.o : utility.f90
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-correlation.o : correlation.f90 fftw.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
-
-fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
 #==================================================
 .PHONY: clean
 clean :

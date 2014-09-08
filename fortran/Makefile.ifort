@@ -1,8 +1,8 @@
 # Defining variables ===============================
 FC = ifort
-H5FC = h5fc
-H5PFC = h5pfc
-FCMPI = mpiifort
+H5FC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13/bin/h5fc
+H5PFC = /home/usr4/12IH0167/kmtu/local/hdf5-1.8.13_mpi/bin/h5pfc
+FCMPI = mpif90
 #OMPFLAGS = -openmp
 MODFLAG = -module
 
@@ -12,16 +12,13 @@ MODDIR = ./mod/
 #LIBDIR = $(SRCDIR)lib/
 OUTDIR = ./out/
 
-FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
+FCFLAGS = $(MODFLAG) $(MODDIR) -fast
 #FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
-#FFTWDIR = /usr/
-FFTWDIR = $(HOME)/local/fftw-3.3.4
-FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
-XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
+XDRFILEDIR = $(HOME)/kmtu/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = decompose_mpi oneTwoDecompose trjconv2com
+PROGRAM = decompose_mpi trjconv2com
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -36,22 +33,16 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
-trjconv2com : trjconv2com.o utility.o xdr.o top.o
+trjconv2com : utility.o xdr.o top.o trjconv2com.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
-	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
-
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
-	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
-
-decompose_mpi : decompose_mpi.o utility.o xdr.o top.o
+decompose_mpi : utility.o xdr.o top.o decompose_mpi.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
-decompose_mpi.o : decompose_mpi.f90 utility.o xdr.o top.o
+decompose_mpi.o : decompose_mpi.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
@@ -64,11 +55,6 @@ xdr.o : xdr.f90 utility.o
 utility.o : utility.f90
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-correlation.o : correlation.f90 fftw.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
-
-fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
 #==================================================
 .PHONY: clean
 clean :
