@@ -14,15 +14,15 @@ OUTDIR = ./out/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 #FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
-#FFTWDIR = /usr/
+
 FFTWDIR = $(HOME)/local/fftw-3.3.4
-FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
-FFTWLINK_STATIC = $(FFTWDIR)/lib/libfftw3.a
+#FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
 
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
-PROGRAM = decompose_mpi oneTwoDecompose trjconv2com
+PROGRAM = decompose_mpi trjconv2com
 
 vpath %.f90 $(SRCDIR)
 #vpath %.o $(SRCDIR)
@@ -37,21 +37,14 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
-trjconv2com : trjconv2com.o utility.o xdr.o top.o
+trjconv2com : utility.o xdr.o top.o trjconv2com.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-oneTwoDecompose: oneTwoDecompose.o correlation.o utility.o xdr.o top.o
-	$(H5FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
-
-oneTwoDecompose.o : oneTwoDecompose.f90 correlation.o utility.o xdr.o top.o
-	$(H5FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
-
-decompose_mpi : decompose_mpi.o correlation.o utility.o xdr.o top.o
-	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK_STATIC) $(XDRFILELINK)
-#	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
+decompose_mpi : correlation.o utility.o xdr.o top.o decompose_mpi.o
+	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
 decompose_mpi.o : decompose_mpi.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
