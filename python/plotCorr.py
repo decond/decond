@@ -16,6 +16,7 @@ parser.add_argument('--color', nargs='*', help="manually assign line color for e
                                     "<auto1>...<autoN> <cross11>...<cross1N> <cross22>...<cross2N> .. <crossNN>")
 parser.add_argument('--label', nargs='*', help="manually assign label for each component. <mol1>...<molN>")
 parser.add_argument('--nosd', action='store_true', help="no-SD mode, i.e. one-two only mode")
+parser.add_argument('-p', '--plugin', nargs='*', help="plugin files which will be executed at the end")
 args = parser.parse_args()
 
 threshold = args.threshold
@@ -101,6 +102,7 @@ for i in range(numIonTypes):
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure()
+plt.gca().axhline(1, linestyle=':', color='black', linewidth=1.0)
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
   plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
@@ -197,3 +199,10 @@ if (not args.nosd):
 
 plt.ion()
 plt.show()
+
+# execute plugin scripts
+if (args.plugin is not None):
+  for plug in args.plugin:
+    with open(plug) as f:
+      code = compile(f.read(), plug, 'exec')
+      exec(code)
