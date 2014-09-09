@@ -86,7 +86,7 @@ program decompose_mpi
     else
       i = i + 1
       select case (arg)
-      case ('-pa')
+      case ('-pa', '--pa')
         if (is_pm_mode) then
           if (myrank == root) then
             write(*,*) "-pa and -pm cannot be given at the same time!"
@@ -155,7 +155,7 @@ program decompose_mpi
         end do
         totNumMol = sum(sys%mol(:)%num)
 
-      case ('-pm')
+      case ('-pm', '--pm')
         if (is_pa_mode) then
           if (myrank == root) then
             write(*,*) "-pa and -pm cannot be given at the same time!"
@@ -224,7 +224,7 @@ program decompose_mpi
         i = i + 1
         read(arg, *) maxLag
 
-      case ('-nosd')
+      case ('-nosd', '--nosd')
         is_sd = .false.
         if (outFilename == 'corr.h5') outFilename = 'corr-nosd.h5'
 
