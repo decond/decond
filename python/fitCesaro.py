@@ -8,8 +8,7 @@ from itertools import accumulate
 parser = argparse.ArgumentParser(description="Fit the no-average Cesaro of corr calculated by calCesaro.py")
 parser.add_argument('cesaroData', nargs='+',
                     help="no-average Cesaro data to be averaged and fit. <cesaro.h5>")
-parser.add_argument('-o', '--out', default='cesaro.fit.h5',
-                    help="output file, default = 'cesaro.fit.h5'")
+parser.add_argument('-o', '--out', help="output file, default = 'cesaro.fit.h5'")
 parser.add_argument('-r', '--fitRange', nargs=2, type=float, metavar=('BEGIN', 'END'),
                     action='append', required=True,
                     help="fitting range in ps. Multiple ranges are allowed,"
@@ -17,9 +16,26 @@ parser.add_argument('-r', '--fitRange', nargs=2, type=float, metavar=('BEGIN', '
 parser.add_argument('-m', '--memoryFriendly', action='store_true',
                     help="turn on memory-friendly mode. Files are loaded and processed one by one,"
                          "thus slower but more memory friendly")
+parser.add_argument('--nosd', action='store_true', help="no-SD mode, i.e. one-two only mode")
 args = parser.parse_args()
 
-outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
+if (not args.nosd):
+  try:
+    for data in args.cesaroData:
+      with h5py.File(data, 'r') as f:
+        rBins = f['rBins'][...]
+  except KeyError as e:
+    print("Warning: no 'rBins' dataset is found in (at least)", data)
+    print("Automatically change to --nosd mode")
+    args.nosd = True
+
+if (args.out is None):
+  if (args.nosd):
+    outFilename = 'cesaro-nosd.fit.h5'
+  else:
+    outFilename = 'cesaro.fit.h5'
+else:
+  outFilename = args.out if args.out.split('.')[-1] == 'h5' else args.out + '.h5'
 
 def zipIndexPair2(idx_r, idx_c, size):
   """
@@ -62,45 +78,52 @@ if (args.memoryFriendly):
             else:
               ww[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = 2
         timeLags = f['timeLags'][...]
-        rBins = f['rBins'][...]
         nDCesaro = np.zeros([numIonTypes + numIonTypePairs, timeLags.size])
-        sdDCesaro = np.zeros([numIonTypePairs, rBins.size, timeLags.size])
-        rho2 = np.zeros([numIonTypePairs, rBins.size])
         volume = 0.
+        if (not args.nosd):
+          rBins = f['rBins'][...]
+          sdDCesaro = np.zeros([numIonTypePairs, rBins.size, timeLags.size])
+          rho2 = np.zeros([numIonTypePairs, rBins.size])
 
       if (f['timeLags'].size != timeLags.size):
         isTimeLagsChanged = True
         if (f['timeLags'].size < timeLags.size):
           timeLags = f[timeLags][...]
           nDCesaro = nDCesaro[:, :timeLags.size]
-          sdDCesaro = sdDCesaro[:, :, :timeLags.size]
+          if (not args.nosd):
+            sdDCesaro = sdDCesaro[:, :, :timeLags.size]
 
-      if (f['rBins'].size < rBins.size):
-        rBins = f['rBins'][...]
-        sdDCesaro = sdDCesaro[:, :rBins.size, :]
-        rho2 = rho2[:, :rBins.size]
+      if (not args.nosd):
+        if (f['rBins'].size < rBins.size):
+          rBins = f['rBins'][...]
+          sdDCesaro = sdDCesaro[:, :rBins.size, :]
+          rho2 = rho2[:, :rBins.size]
 
       nDCesaro += f['nDCesaro'][:, :timeLags.size]
-      sdDCesaro += f['sdDCesaro'][:, :rBins.size, :timeLags.size]
-      rho2 += f['rho2'][:, :rBins.size]
       if ('cell' in f.attrs.keys()):
         volume += f.attrs['cell'].prod()
       else:
         volume += f['volume'][...]
 
+      if (not args.nosd):
+        sdDCesaro += f['sdDCesaro'][:, :rBins.size, :timeLags.size]
+        rho2 += f['rho2'][:, :rBins.size]
+
   nDCesaro /= numMD
   nDCesaroTotal = np.sum(nDCesaro * (zz * ww)[:, np.newaxis], axis=0)
-  sdDCesaro /= numMD
-  rho2 /= numMD
   volume /= numMD
+  if (not args.nosd):
+    sdDCesaro /= numMD
+    rho2 /= numMD
 
   if (numMD > 1):
     print("determine the errors... ")
     nDCesaro_std = np.zeros_like(nDCesaro)
     nDCesaroTotal_std = np.zeros_like(nDCesaroTotal)
-    sdDCesaro_std = np.zeros_like(sdDCesaro)
-    rho2_std = np.zeros_like(rho2)
     volume_std = 0.
+    if (not args.nosd):
+      sdDCesaro_std = np.zeros_like(sdDCesaro)
+      rho2_std = np.zeros_like(rho2)
 
     for n, data in enumerate(args.cesaroData):
       print("reading " + data)
@@ -108,24 +131,27 @@ if (args.memoryFriendly):
         tmp_nDCesaro = f['nDCesaro'][:, :timeLags.size]
         nDCesaro_std += (tmp_nDCesaro - nDCesaro)**2
         nDCesaroTotal_std += (np.sum(tmp_nDCesaro * (zz * ww)[:, np.newaxis], axis=0) - nDCesaroTotal)**2
-        sdDCesaro_std += (f['sdDCesaro'][:, :rBins.size, :timeLags.size] - sdDCesaro)**2
-        rho2_std += (f['rho2'][:, :rBins.size] - rho2)**2
         if ('cell' in f.attrs.keys()):
           volume_std += (f.attrs['cell'].prod() - volume)**2
         else:
           volume_std += (f['volume'] - volume)**2
 
+        if (not args.nosd):
+          sdDCesaro_std += (f['sdDCesaro'][:, :rBins.size, :timeLags.size] - sdDCesaro)**2
+          rho2_std += (f['rho2'][:, :rBins.size] - rho2)**2
+
     nDCesaro_std = np.sqrt(nDCesaro_std / (numMD - 1)) 
     nDCesaroTotal_std = np.sqrt(nDCesaroTotal_std / (numMD - 1)) 
-    sdDCesaro_std = np.sqrt(sdDCesaro_std / (numMD - 1)) 
-    rho2_std = np.sqrt(rho2_std / (numMD - 1))
-    volume_std = np.sqrt(volume_std / (numMD - 1))
-
     nDCesaro_err = nDCesaro_std / np.sqrt(numMD)
     nDCesaroTotal_err = nDCesaroTotal_std / np.sqrt(numMD)
-    sdDCesaro_err = sdDCesaro_std / np.sqrt(numMD)
-    rho2_err = rho2_std / np.sqrt(numMD)
+    volume_std = np.sqrt(volume_std / (numMD - 1))
     volume_err = volume_std / np.sqrt(numMD)
+
+    if (not args.nosd):
+      sdDCesaro_std = np.sqrt(sdDCesaro_std / (numMD - 1)) 
+      rho2_std = np.sqrt(rho2_std / (numMD - 1))
+      sdDCesaro_err = sdDCesaro_std / np.sqrt(numMD)
+      rho2_err = rho2_std / np.sqrt(numMD)
 
   else:
     # numMD = 1
@@ -133,12 +159,13 @@ if (args.memoryFriendly):
     nDCesaro_err.fill(np.nan)
     nDCesaroTotal_err = np.empty_like(nDCesaroTotal)
     nDCesaroTotal_err.fill(np.nan)
-    sdDCesaro_err = np.empty_like(sdDCesaro)
-    sdDCesaro_err.fill(np.nan)
-    rho2_err = np.empty_like(rho2)
-    rho2_err.fill(np.nan)
     volume_err = np.empty_like(volume)
     volume_err.fill(np.nan)
+    if (not args.nosd):
+      sdDCesaro_err = np.empty_like(sdDCesaro)
+      sdDCesaro_err.fill(np.nan)
+      rho2_err = np.empty_like(rho2)
+      rho2_err.fill(np.nan)
 
 else:
   for n, data in enumerate(args.cesaroData):
@@ -165,62 +192,70 @@ else:
             else:
               ww[numIonTypes + zipIndexPair2(i, j, numIonTypes)] = 2
         timeLags = f['timeLags'][...]
-        rBins = f['rBins'][...]
         nDCesaroRaw = np.empty([numMD, numIonTypes + numIonTypePairs, timeLags.size])
-        sdDCesaroRaw = np.empty([numMD, numIonTypePairs, rBins.size, timeLags.size])
-        rho2Raw = np.empty([numMD, numIonTypePairs, rBins.size])
         volumeRaw = np.empty([numMD])
+        if (not args.nosd):
+          rBins = f['rBins'][...]
+          sdDCesaroRaw = np.empty([numMD, numIonTypePairs, rBins.size, timeLags.size])
+          rho2Raw = np.empty([numMD, numIonTypePairs, rBins.size])
 
       if (f['timeLags'].size != timeLags.size):
         isTimeLagsChanged = True
         if (f['timeLags'].size < timeLags.size):
           timeLags = f[timeLags][...]
           nDCesaroRaw = nDCesaroRaw[:, :, :timeLags.size]
-          sdDCesaroRaw = sdDCesaroRaw[:, :, :, :timeLags.size]
+          if (not args.nosd):
+            sdDCesaroRaw = sdDCesaroRaw[:, :, :, :timeLags.size]
 
-      if (f['rBins'].size < rBins.size):
-        rBins = f['rBins'][...]
-        sdDCesaroRaw = sdDCesaroRaw[:, :, :rBins.size, :]
-        rho2Raw = rho2Raw[:, :, :rBins.size]
+      if (not args.nosd):
+        if (f['rBins'].size < rBins.size):
+          rBins = f['rBins'][...]
+          sdDCesaroRaw = sdDCesaroRaw[:, :, :rBins.size, :]
+          rho2Raw = rho2Raw[:, :, :rBins.size]
 
       nDCesaroRaw[n] = f['nDCesaro'][:, :timeLags.size]
-      sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :timeLags.size]
-      rho2Raw[n] = f['rho2'][:, :rBins.size]
       if ('cell' in f.attrs.keys()):
         volumeRaw[n] = f.attrs['cell'].prod()
       else:
         volumeRaw[n] = f['volume'][...]
 
+      if (not args.nosd):
+        sdDCesaroRaw[n] = f['sdDCesaro'][:, :rBins.size, :timeLags.size]
+        rho2Raw[n] = f['rho2'][:, :rBins.size]
+
   nDCesaroTotalRaw = np.sum(nDCesaroRaw * (zz * ww)[:, np.newaxis], axis=1)
 
   nDCesaroTotal = np.mean(nDCesaroTotalRaw, axis=0)
   nDCesaro = np.mean(nDCesaroRaw, axis=0)
-  sdDCesaro = np.mean(sdDCesaroRaw, axis=0)
-  rho2 = np.mean(rho2Raw, axis=0)
   volume = np.mean(volumeRaw)
+  if (not args.nosd):
+    sdDCesaro = np.mean(sdDCesaroRaw, axis=0)
+    rho2 = np.mean(rho2Raw, axis=0)
 
   if (numMD > 1):
     nDCesaro_std = np.std(nDCesaroRaw, axis=0)
     nDCesaro_err = nDCesaro_std / np.sqrt(numMD)
     nDCesaroTotal_std = np.std(nDCesaroTotalRaw, axis=0)
     nDCesaroTotal_err = nDCesaroTotal_std / np.sqrt(numMD)
-    sdDCesaro_std = np.std(sdDCesaroRaw, axis=0)
-    sdDCesaro_err = sdDCesaro_std / np.sqrt(numMD)
-    rho2_std = np.std(rho2Raw, axis=0)
-    rho2_err = rho2_std / np.sqrt(numMD)
     volume_std = np.std(volumeRaw)
     volume_err = volume_std / np.sqrt(numMD)
+    if (not args.nosd):
+      sdDCesaro_std = np.std(sdDCesaroRaw, axis=0)
+      sdDCesaro_err = sdDCesaro_std / np.sqrt(numMD)
+      rho2_std = np.std(rho2Raw, axis=0)
+      rho2_err = rho2_std / np.sqrt(numMD)
   else:
     nDCesaro_err = np.empty_like(nDCesaro)
     nDCesaro_err.fill(np.nan)
     nDCesaroTotal_err = np.empty_like(nDCesaroTotal)
     nDCesaroTotal_err.fill(np.nan)
-    sdDCesaro_err = np.empty_like(sdDCesaro)
-    sdDCesaro_err.fill(np.nan)
-    rho2_err = np.empty_like(rho2)
-    rho2_err.fill(np.nan)
     volume_err = np.empty_like(volume)
     volume_err.fill(np.nan)
+    if (not args.nosd):
+      sdDCesaro_err = np.empty_like(sdDCesaro)
+      sdDCesaro_err.fill(np.nan)
+      rho2_err = np.empty_like(rho2)
+      rho2_err.fill(np.nan)
 
 if (isTimeLagsChanged):
   print("Note: the maximum timeLags are different among the sdcorr files\n"
@@ -240,13 +275,14 @@ for fit, fitBoundary in zip(fitRange, args.fitRange):
   nD[getKeyFromFitBoundary(fitBoundary)] = np.polyfit(timeLags[fit], nDCesaro[:, fit].T, 1)[0, :]
   nDTotal[getKeyFromFitBoundary(fitBoundary)] = np.polyfit(timeLags[fit], nDCesaroTotal[fit], 1)[0]
 
-sdD = {}
-for fit, fitBoundary in zip(fitRange, args.fitRange):
-  sdD[getKeyFromFitBoundary(fitBoundary)] = np.empty([numIonTypePairs, rBins.size])
-  for tp in range(numIonTypePairs):
-    # I don't know why the array should not be transposed?
-    # sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit].T, 1)[0, :]
-    sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit], 1)[0, :]
+if (not args.nosd):
+  sdD = {}
+  for fit, fitBoundary in zip(fitRange, args.fitRange):
+    sdD[getKeyFromFitBoundary(fitBoundary)] = np.empty([numIonTypePairs, rBins.size])
+    for tp in range(numIonTypePairs):
+      # I don't know why the array should not be transposed?
+      # sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit].T, 1)[0, :]
+      sdD[getKeyFromFitBoundary(fitBoundary)][tp, ...] = np.polyfit(timeLags[fit], sdDCesaro[tp, ..., fit], 1)[0, :]
 
 def fitErr(timeLags, cesaro, cesaro_std, fit):
   rec_sig2 = 1 / cesaro_std[..., fit] ** 2  # [type, rBins, timeLags] or [type, timeLags]
@@ -263,12 +299,14 @@ def fitErr(timeLags, cesaro, cesaro_std, fit):
 
 nD_err = {}
 nDTotal_err = {}
-sdD_err = {}
+if (not args.nosd):
+  sdD_err = {}
 if (numMD > 1):
   for fit, fitBoundary in zip(fitRange, args.fitRange):
     nD_err[getKeyFromFitBoundary(fitBoundary)] = fitErr(timeLags, nDCesaro, nDCesaro_std, fit)
     nDTotal_err[getKeyFromFitBoundary(fitBoundary)] = fitErr(timeLags, nDCesaroTotal, nDCesaroTotal_std, fit)
-    sdD_err[getKeyFromFitBoundary(fitBoundary)] = fitErr(timeLags, sdDCesaro, sdDCesaro_std, fit)
+    if (not args.nosd):
+      sdD_err[getKeyFromFitBoundary(fitBoundary)] = fitErr(timeLags, sdDCesaro, sdDCesaro_std, fit)
 
 else:
   for fitBoundary in args.fitRange:
@@ -276,21 +314,21 @@ else:
     nD_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
     nDTotal_err[getKeyFromFitBoundary(fitBoundary)] = np.empty_like(nDTotal[getKeyFromFitBoundary(fitBoundary)])
     nDTotal_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
-    sdD_err[getKeyFromFitBoundary(fitBoundary)] = np.zeros_like([sdD[getKeyFromFitBoundary(fitBoundary)]])
-    sdD_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
+    if (not args.nosd):
+      sdD_err[getKeyFromFitBoundary(fitBoundary)] = np.zeros_like([sdD[getKeyFromFitBoundary(fitBoundary)]])
+      sdD_err[getKeyFromFitBoundary(fitBoundary)][...] = np.nan
 
 def saveDictToH5(h5g, name, dict):
   g = h5g.create_group(name)
   for k, v in dict.items():
     g[k] = v
 
-with h5py.File(args.cesaroData[0], 'r') as f, h5py.File(args.out, 'w') as outFile:
+with h5py.File(args.cesaroData[0], 'r') as f, h5py.File(outFilename, 'w') as outFile:
   for (name, value) in f.attrs.items():
     if (name != 'cell' and name != 'timestep'):
       outFile.attrs[name] = value
 
   outFile['timeLags'] = timeLags
-  outFile['rBins'] = rBins
   outFile['zzCross'] = zzCross
   outFile['zz'] = zz
   outFile['ww'] = ww
@@ -300,36 +338,42 @@ with h5py.File(args.cesaroData[0], 'r') as f, h5py.File(args.out, 'w') as outFil
   outFile['nDCesaro_err'] = nDCesaro_err
   outFile['nDCesaroTotal'] = nDCesaroTotal
   outFile['nDCesaroTotal_err'] = nDCesaroTotal_err
-  outFile['sdDCesaro'] = sdDCesaro
-  outFile['sdDCesaro_err'] = sdDCesaro_err
-  outFile['rho2'] = rho2
-  outFile['rho2_err'] = rho2_err
 
   saveDictToH5(outFile, 'nD', nD)
   saveDictToH5(outFile, 'nD_err', nD_err)
   saveDictToH5(outFile, 'nDTotal', nDTotal)
   saveDictToH5(outFile, 'nDTotal_err', nDTotal_err)
-  saveDictToH5(outFile, 'sdD', sdD)
-  saveDictToH5(outFile, 'sdD_err', sdD_err)
 
   outFile['timeLags'].dims.create_scale(outFile['timeLags'], 't')
-  outFile['rBins'].dims.create_scale(outFile['rBins'], 'r')
 
   outFile['nDCesaro'].dims[1].attach_scale(outFile['timeLags'])
   outFile['nDCesaro_err'].dims[1].attach_scale(outFile['timeLags'])
   outFile['nDCesaroTotal'].dims[0].attach_scale(outFile['timeLags'])
   outFile['nDCesaroTotal_err'].dims[0].attach_scale(outFile['timeLags'])
-  outFile['sdDCesaro'].dims[1].attach_scale(outFile['rBins'])
-  outFile['sdDCesaro'].dims[2].attach_scale(outFile['timeLags'])
-  outFile['sdDCesaro_err'].dims[1].attach_scale(outFile['rBins'])
-  outFile['sdDCesaro_err'].dims[2].attach_scale(outFile['timeLags'])
-  outFile['rho2'].dims[1].attach_scale(outFile['rBins'])
-  outFile['rho2_err'].dims[1].attach_scale(outFile['rBins'])
 
-  for dset in outFile['sdD'].values():
-    dset.dims[1].attach_scale(outFile['rBins'])
+  if (not args.nosd):
+    outFile['rBins'] = rBins
+    outFile['sdDCesaro'] = sdDCesaro
+    outFile['sdDCesaro_err'] = sdDCesaro_err
+    outFile['rho2'] = rho2
+    outFile['rho2_err'] = rho2_err
 
-  for dset in outFile['sdD_err'].values():
-    dset.dims[1].attach_scale(outFile['rBins'])
+    saveDictToH5(outFile, 'sdD', sdD)
+    saveDictToH5(outFile, 'sdD_err', sdD_err)
+
+    outFile['rBins'].dims.create_scale(outFile['rBins'], 'r')
+
+    outFile['sdDCesaro'].dims[1].attach_scale(outFile['rBins'])
+    outFile['sdDCesaro'].dims[2].attach_scale(outFile['timeLags'])
+    outFile['sdDCesaro_err'].dims[1].attach_scale(outFile['rBins'])
+    outFile['sdDCesaro_err'].dims[2].attach_scale(outFile['timeLags'])
+    outFile['rho2'].dims[1].attach_scale(outFile['rBins'])
+    outFile['rho2_err'].dims[1].attach_scale(outFile['rBins'])
+
+    for dset in outFile['sdD'].values():
+      dset.dims[1].attach_scale(outFile['rBins'])
+
+    for dset in outFile['sdD_err'].values():
+      dset.dims[1].attach_scale(outFile['rBins'])
 
 print("File is output as: " + outFilename)
