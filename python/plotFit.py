@@ -105,15 +105,12 @@ if (args.color is not None):
   assert(len(args.color) == numIonTypes + numIonTypePairs )
   mpl.rcParams['axes.color_cycle'] = args.color
 
-def connectLabel(label):
-  return label[0] + '-' + label[1]
-
 if (args.label is not None):
   assert(len(args.label) == numIonTypes)
   label = args.label
 else:
   label = ['{}'.format(i+1) for i in range(numIonTypes)]
-label += [connectLabel(l) for l in it.combinations_with_replacement(label, 2)]
+label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
 DI = {}
 DI_err = {}
@@ -171,7 +168,12 @@ plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)")
 
 if (not args.nosd):
   # plot g-D-sig
-  density = numMol / volume
+  # TODO: when dealing with ion pair with unequal charges, extra care is needed
+  # for the numMolPair, since N_I * (N_L - 1) != N_L * (N_I - 1) in that case
+  numMolPair = np.array([n1 * (n2-1) if e1 == e2 else n1*n2
+                         for (e1, n1) in enumerate(numMol)
+                         for (e2, n2) in enumerate(numMol) if e2 >= e1])
+  density2 = numMolPair / volume**2
   cellLengthHalf = volume**(1/3) / 2
   dr = rBins[1] - rBins[0]
   dv = 4 * np.pi * dr * rBins**2
@@ -185,15 +187,25 @@ if (not args.nosd):
   rho_dvsim = rho_Vdvsim / volume
   rho = rho_V / volume
 
-  density2 = np.array([d1 * d2 for (e1, d1) in enumerate(density)
-                               for (e2, d2) in enumerate(density) if e2 >= e1]
-                      )[:, np.newaxis]
-  g = rho / density2
+  g = rho / density2[:, np.newaxis]
+
+  # determine D_IL(\infty)
+  sdDInfty = {}
+  sigNonLocal = {}
+  halfCellIndex = rBins.size / np.sqrt(3)
+  aveWidth = 25
+  for fit in sdD:
+    sdDInfty[fit] = np.mean(sdD[fit][:, halfCellIndex - aveWidth: halfCellIndex + aveWidth], axis=1)
+#    sdDInfty[fit] = np.zeros_like(sdDInfty[fit])
+    sigNonLocal[fit] = numMolPair / (volume * Const.nm**3) * sdDInfty[fit] * Const.nm**2 / Const.ps *\
+                       zzCross * Const.beta * Const.basicCharge**2
 
   sigIL = {}
   for i, fit in enumerate(sdD):
-    sigIL[fit] = rho_dvsim / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
-                 zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
+#    sigIL[fit] = rho_dvsim / Const.nm**3 * sdD[fit] * Const.nm**2 / Const.ps * \
+#                 zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
+    sigIL[fit] = rho_dvsim / Const.nm**3 * (sdD[fit] - sdDInfty[fit][:, np.newaxis]) *\
+                 Const.nm**2 / Const.ps * zzCross[:, np.newaxis] * Const.beta * Const.basicCharge**2
     sigIL[fit][np.isnan(sigIL[fit])] = 0
     sigIL[fit] = integrate.cumtrapz(sigIL[fit], initial=0)
 
@@ -202,9 +214,11 @@ if (not args.nosd):
     sigI[fit] = sigAutoI[fit][:, np.newaxis] * np.ones_like(rBins)
     for r in range(numIonTypes):
       for c in range(r, numIonTypes):
-        sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)]
+        sigI[fit][r] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)] +\
+                        sigNonLocal[fit][zipIndexPair2(r,c, numIonTypes)]
         if (r != c):
-          sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)]
+          sigI[fit][c] += sigIL[fit][zipIndexPair2(r,c, numIonTypes)] +\
+                          sigNonLocal[fit][zipIndexPair2(r,c, numIonTypes)]
 
   rBins *= Const.nm2AA
   numPlots = 3
@@ -229,6 +243,7 @@ if (not args.nosd):
 
     # plot D
     DI[fitKey] *= Const.D2AA2_ps
+    axs[1].axhline(0, linestyle=':', color='black', linewidth=1.0)
     for i, D in enumerate(DI[fitKey]):
       axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i])
 
@@ -251,7 +266,7 @@ if (not args.nosd):
     axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
     axs[2].set_xlabel(r"$r$  ($\AA$)")
 
-    plt.xlim(xmax=rBins[rBins.size / 2])
+    plt.xlim(xmax=cellLengthHalf*Const.nm2AA)
 
 plt.ion()
 plt.show()
