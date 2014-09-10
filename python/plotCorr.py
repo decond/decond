@@ -102,7 +102,7 @@ for i in range(numIonTypes):
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure()
-plt.gca().axhline(1, linestyle=':', color='black', linewidth=1.0)
+plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
   plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
