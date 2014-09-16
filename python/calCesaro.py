@@ -46,6 +46,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   return idx_r * size - ([0]+list(accumulate(range(4))))[idx_r] + idx_c - idx_r
 
 with h5py.File(args.corrData, 'r') as f:
+  print("processing", args.corrData, "...")
   timestep = f.attrs['timestep'][...]
   numMol = f.attrs['numMol'][...]
 
