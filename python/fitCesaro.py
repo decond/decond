@@ -13,9 +13,9 @@ parser.add_argument('-r', '--fitRange', nargs=2, type=float, metavar=('BEGIN', '
                     action='append', required=True,
                     help="fitting range in ps. Multiple ranges are allowed,"
                          "ex. -r <b1> <e1> -r <b2> <e2> ...")
-parser.add_argument('-m', '--memoryFriendly', action='store_true',
-                    help="turn on memory-friendly mode. Files are loaded and processed one by one,"
-                         "thus slower but more memory friendly")
+parser.add_argument('-m', '--memoryForSpeed', action='store_true',
+                    help="turn on memoryForSpeed mode. Files are loaded all at once. "
+                         "Faster but consume much more memory.")
 parser.add_argument('--nosd', action='store_true', help="no-SD mode, i.e. one-two only mode")
 args = parser.parse_args()
 
@@ -52,8 +52,7 @@ numMD = len(args.cesaroData)
 
 isTimeLagsChanged = False
 
-if (args.memoryFriendly):
-  print("proceed with memory-friendly mode")
+if (not args.memoryForSpeed):
   print("determine the averages... ")
   for n, data in enumerate(args.cesaroData):
     print("reading " + data)
@@ -169,6 +168,7 @@ if (args.memoryFriendly):
       rho2_err.fill(np.nan)
 
 else:
+  print("proceed with memoryForSpeed mode")
   for n, data in enumerate(args.cesaroData):
     print("reading " + data)
     with h5py.File(data, 'r') as f:

@@ -11,12 +11,12 @@ parser.add_argument('-o', '--out',
                          "if <window> > 1")
 parser.add_argument('-w', '--window', type=int, default=1,
                     help="combine every <window> rBins into one bin, default = 1")
-parser.add_argument('-m', '--memoryFriendly', action='store_true',
-                    help="turn on memory-friendly mode. Files are loaded and processed one by one."
-                         "When combined with -e, files are loaded twice thus much slower.")
+parser.add_argument('-m', '--memoryForSpeed', action='store_true',
+                    help="turn on memoryForSpeed mode. Files are loaded all at once. "
+                         "Faster but consume much more memory.")
 parser.add_argument('-e', '--error', action='store_true',
-                    help="calculate and output the errors."
-                         "Files are loaded twice if memory-friendly mode is on.")
+                    help="calculate and store the errors of data. "
+                         "If memory size is allowed, turning on memoryForSpeed mode is much more efficient.")
 parser.add_argument('--nosd', action='store_true', help="no-SD mode, i.e. one-two only mode")
 args = parser.parse_args()
 
@@ -63,8 +63,7 @@ else:
 
 isTimeLagsChanged = False
 
-if (args.memoryFriendly):
-  print("proceed with memory-friendly mode")
+if (not args.memoryForSpeed):
   print("determine the averages... ")
   for n, data in enumerate(args.corrData):
     print("reading " + data)
@@ -173,6 +172,7 @@ if (args.memoryFriendly):
         rho_err.fill(np.nan)
 
 else:
+  print("proceed with memoryForSpeed mode")
   for n, data in enumerate(args.corrData):
     with h5py.File(data, 'r') as f:
       print("reading " + data)
