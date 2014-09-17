@@ -193,7 +193,7 @@ if (not args.nosd):
   sdDInfty = {}
   sigNonLocal = {}
   halfCellIndex = rBins.size / np.sqrt(3)
-  aveWidth = 25
+  aveWidth = 0.25 / dr
   for fit in sdD:
     sdDInfty[fit] = np.mean(sdD[fit][:, halfCellIndex - aveWidth: halfCellIndex + aveWidth], axis=1)
 #    sdDInfty[fit] = np.zeros_like(sdDInfty[fit])
