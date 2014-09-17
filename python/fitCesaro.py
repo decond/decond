@@ -20,6 +20,7 @@ parser.add_argument('--nosd', action='store_true', help="no-SD mode, i.e. one-tw
 args = parser.parse_args()
 
 if (not args.nosd):
+  print("checking if all cesaroData contain sdData ...")
   try:
     for data in args.cesaroData:
       with h5py.File(data, 'r') as f:
@@ -182,7 +183,8 @@ else:
             zzCross[zipIndexPair2(i, j, numIonTypes)] = charge[i] * charge[j]
         zz = np.ones([numIonTypes + numIonTypePairs])
         ww = np.ones([numIonTypes + numIonTypePairs])
-        # ww: weight of each component. ex. for NaCl, ww = [1, 1, 1, 2, 1]
+        # ww: weight of each term.
+        # ex. for a 2-component molecule such as NaCl, ww = [1, 1, 1, 2, 1]
         for i in range(numIonTypes):
           zz[i] = charge[i] ** 2
           for j in range(i,numIonTypes):

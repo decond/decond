@@ -1,6 +1,7 @@
 def plotSdDWindow(window):
   """
   Plots D_IL(r) with windowed averages for determining D_IL(\infty)
+  window: window size in AA for averaging r
   """
   idxPerWindow = window // (dr * Const.nm2AA)
   numWindow = rBins.size // idxPerWindow
