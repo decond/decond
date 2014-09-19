@@ -255,7 +255,7 @@ if (not args.nosd):
                                      for j, c in enumerate(g_masked < threshold)], D)
       axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
 
-    axs[1].set_ylabel(r"$D_I$, $D_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
+    axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
     axs[1].legend(loc='upper right')
     axs[1].set_title("threshold {}".format(threshold))
 
