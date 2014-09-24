@@ -143,27 +143,62 @@ for k in sortedKeys:
   print(DI[k] * Const.D2cm2_s * 1E5)
   print("+/-\n", DI_err[k] * Const.D2cm2_s * 1E5, '\n', sep="")
 
+rc = {'legend': {'fontsize': 34},
+      'axes': {'labelsize': 34},
+      'xtick': {'labelsize': 34,
+                'major.pad': 10,
+                'major.size': 8,
+                'major.width': 1},
+      'ytick': {'labelsize': 34,
+                'major.pad': 10,
+                'major.size': 8,
+                'major.width': 1},
+      'lines': {'linewidth': 3}
+     }
+
+for key in rc:
+  mpl.rc(key, **rc[key])
+
+labelpad = 10
+spineLineWidth = 1
+
+figsize1 = (12, 10)
+figsize3 = (11, 24)
+format='pdf'
+
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 # plot fitting results of nCorr
-plt.figure()
+plt.figure(figsize=figsize1)
 for i in range(numIonTypes + numIonTypePairs):
-  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys], linestyle=lineStyle[i], label=label[i])
+  plt.plot(range(len(ecTotal)), [ec[k][i] for k in sortedKeys],
+           linestyle=lineStyle[i], label=label[i])
   if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 
 plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], linestyle=':', label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
-plt.xlabel("fit range  (ps)")
-plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
+plt.xlabel("fit range  (ps)", labelpad=labelpad)
+plt.ylabel(r"$\sigma$  (S m$^{-1}$)", labelpad=labelpad)
+for sp in plt.gca().spines.values():
+  sp.set_linewidth(spineLineWidth)
+plt.tight_layout()
+plt.savefig('ec-fitrange.' + format)
 
-plt.figure()
+plt.figure(figsize=figsize1)
 numErrBars = 5
 for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
-    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, linestyle=lineStyle[i], label=label[i])
+    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars,
+                 linestyle=lineStyle[i], label=label[i])
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
-plt.legend(loc='upper left')
-plt.xlabel("$\Lambda$  (ps)")
-plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)")
+#plt.legend(loc='upper left')
+plt.legend(loc='upper left', fontsize=31, labelspacing=0.2)
+plt.xlabel("$\Lambda$  (ps)", labelpad=labelpad)
+plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)", labelpad=labelpad)
+for sp in plt.gca().spines.values():
+  sp.set_linewidth(spineLineWidth)
+plt.xlim([-100, 1100])
+plt.tight_layout()
+plt.savefig('cesaro.' + format)
 
 
 if (not args.nosd):
@@ -229,7 +264,7 @@ if (not args.nosd):
   print("small-rdf region =", smallRegion)
 
   for fitKey in sorted(sdD, key=lambda x:x.split(sep='-')[0]):
-    fig, axs = plt.subplots(numPlots, 1, sharex=True)
+    fig, axs = plt.subplots(numPlots, 1, sharex=True, figsize=figsize3)
 
     # plot rdf
     if (args.color is not None):
@@ -238,8 +273,8 @@ if (not args.nosd):
     for i, rdf in enumerate(g):
       axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
     axs[0].legend(loc='upper right')
-    axs[0].set_title("Fit {} ps".format(fitKey))
-    axs[0].set_ylabel(r"$\mathsf{g}_{IL}(r)$")
+#    axs[0].set_title("Fit {} ps".format(fitKey))
+    axs[0].set_ylabel(r"$\mathsf{g}_{IL}(r)$", labelpad=labelpad)
 
     # plot D
     DI[fitKey] *= Const.D2AA2_ps
@@ -255,21 +290,32 @@ if (not args.nosd):
                                      for j, c in enumerate(g_masked < threshold)], D)
       axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
 
-    axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  ($\AA^2$ ps$^{-1}$)")
-    axs[1].legend(loc='upper right')
-    axs[1].set_title("threshold {}".format(threshold))
+    axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  ($\AA^2$ ps$^{-1}$)", labelpad=labelpad)
+#    axs[1].legend(loc='center right')
+    axs[1].legend(loc=(0.48, 0.2))
+#    axs[1].set_title("threshold {}".format(threshold))
 
     # plot sig
     for i, sig in enumerate(sigI[fitKey]):
       axs[2].plot(rBins, sig, label=label[i])
       axs[2].legend(loc='upper right')
-    axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)")
-    axs[2].set_xlabel(r"$r$  ($\AA$)")
+    axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)", labelpad=labelpad)
+    axs[2].set_xlabel(r"$r$  ($\AA$)", labelpad=labelpad)
 
     plt.xlim(xmax=cellLengthHalf*Const.nm2AA)
 
+    axs[1].set_ylim(bottom=-0.0005, top=0.0040)
+    axs[1].set_yticks(np.arange(-0.000,0.0041,0.001))
+
+    for ax in axs:
+      for sp in ax.spines.values():
+        sp.set_linewidth(spineLineWidth)
+
+    plt.tight_layout()
+    plt.savefig('g-D-sig.' + fitKey + '.' + format)
+
 plt.ion()
-plt.show()
+#plt.show()
 
 # execute plugin scripts
 if (args.plugin is not None):

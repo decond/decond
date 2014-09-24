@@ -187,8 +187,8 @@ if (not args.nosd):
 
   nm2AA = 10
 
-  tmin, tmax, tstep = 0, 125, 1
-  rmin, rmax, rstep = 35, 101, 1
+  tmin, tmax, tstep = 0, 201, 1
+  rmin, rmax, rstep = 19, 71, 1
   T, R = np.meshgrid(timeLags[tmin:tmax:tstep], rBins[rmin:rmax:rstep] * nm2AA)
   cmap = cm.get_cmap('RdYlBu_r')
 
@@ -210,8 +210,8 @@ if (not args.nosd):
 
   vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2,
                 np.nanmax(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2)
-  norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-0.2, vmax=0.3)
-  bounds = np.arange(-0.05, 0.301, 0.0125)
+  norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-1.2, vmax=1.8)
+  bounds = np.arange(-0.20, 1.801, 0.1)
   fig, axs = plt.subplots(1, numIonTypePairs, sharex=True, sharey=True, figsize=figsize3)
   for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr2_masked)):
     c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
@@ -221,13 +221,14 @@ if (not args.nosd):
 #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
+    plt.xticks([0, 0.1, 0.2, 0.3])
     if (i == 0):
       ax.set_ylabel(r'$r$  ($\AA$)', labelpad=labelpad)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
   plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
-  cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(-0.05, 0.301, 0.05), pad=0.01)
-  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
+  cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(0, 1.801, 0.4), pad=0.01)
+  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)', labelpad=labelpad)
 #  plt.tight_layout()
   plt.savefig(outFilename + '.sd.' + format)
 
