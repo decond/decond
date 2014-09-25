@@ -190,10 +190,14 @@ for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
     plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars,
                  linestyle=lineStyle[i], label=label[i])
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
-#plt.legend(loc='upper left')
-plt.legend(loc='upper left', fontsize=31, labelspacing=0.2)
+
+ax = plt.gca()
+handles, labels = ax.get_legend_handles_labels()
+# remove the errorbars
+handles = [h[0] for h in handles]
+plt.legend(handles, labels, loc='upper left', fontsize=31, labelspacing=0.2)
 plt.xlabel("$\Lambda$  (ps)", labelpad=labelpad)
-plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)", labelpad=labelpad)
+plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$  ($\AA^2$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
 plt.xlim([-100, 1100])
