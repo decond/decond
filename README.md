@@ -2,7 +2,6 @@ decond
 =====
 A framework for calculating the electrical conductivity from MD trajectories and performing various decomposition methods
 
-----------
 
 Project structure
 -----
@@ -14,12 +13,17 @@ This project consists of two parts:
 Dependency
 -----
 Fortran:
-   - [XTC library](http://www.gromacs.org/Developer_Zone/Programming_Guide/XTC_Library): Please use the customized version in `fortran/lib/xdrfile-1.1.1-d`, which has been modified to double precision.
-   - [HDF5](http://www.hdfgroup.org/HDF5/): You can use the system built-in HDF5 if available, or download it from the [HDF5 group page](http://www.hdfgroup.org/HDF5/).
+   - [XTC library](http://www.gromacs.org/Developer_Zone/Programming_Guide/XTC_Library):
+     Please use the customized version in `fortran/lib/xdrfile-1.1.1-d`, which has been modified to double precision.
+   - [HDF5](http://www.hdfgroup.org/HDF5/):
+     You can use the system built-in HDF5 if available, or download it from the [HDF5 group page](http://www.hdfgroup.org/HDF5/).
 
 Python 3:
-   - [SciPy](http://www.scipy.org/): Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way, which includes many packages useful for scientific purposes including SciPy.
-   
+   - [SciPy](http://www.scipy.org/):
+     Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way,
+     which includes many packages useful for scientific purposes including SciPy.
+
+
 General setup instructions
 -----
 The general idea of the setup process is:
@@ -31,5 +35,4 @@ The general idea of the setup process is:
 More details may be added to the [wiki page](https://github.com/kmtu/decond/wiki).
 
 ----------
-
-#### This project uses [semantic versioning (2.0.0)](http://semver.org/)
+This project uses [semantic versioning (2.0.0)](http://semver.org/)
