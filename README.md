@@ -6,6 +6,7 @@ A framework for calculating the electrical conductivity from MD trajectories and
 Project structure
 -----
 This project consists of two parts:
+
 1. Decomposition of the velocity time correlation functions of ions calculated from the [Gromacs](http://www.gromacs.org/) MD trajectories. It is done throught the Fortran program `fortran/decompose_mpi`.
 2. Analysis of the decomposed correlation data. It is done through the Python scripts in `python/` folder.
 
@@ -27,10 +28,11 @@ Python 3:
 General setup instructions
 -----
 The general idea of the setup process is:
-1. Compile and install the customized XTC library `fortran/lib/xdrfile-1.1.1-d`
+
+1. Compile and install the customized XTC library `fortran/lib/xdrfile-1.1.1-d`.
 2. Compile and install the HDF5 library, if it is not available on your system.
-3. Manually edit the file `fortran/Makefile` to suit your environment and then compile with `make`
-4. Download and install [Anaconda Python Distribution](http://continuum.io/downloads#34)
+3. Manually edit the file `fortran/Makefile` to suit your environment and then compile with `make`.
+4. Download and install [Anaconda Python Distribution](http://continuum.io/downloads#34).
 
 More details may be added to the [wiki page](https://github.com/kmtu/decond/wiki).
 
