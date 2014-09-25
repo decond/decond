@@ -1,7 +1,7 @@
-econd
+decond
 ==============
 
-A framework that calculates electrical conductivities from MD trajectories and performs various decomposition methods
+A framework that calculates the electrical conductivity from MD trajectories and performs various decomposition methods on the conductivity
 
 ### Note
 
