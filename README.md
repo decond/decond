@@ -19,10 +19,11 @@ Fortran:
    - [HDF5](http://www.hdfgroup.org/HDF5/):
      You can use the system built-in HDF5 if available, or download it from the [HDF5 group page](http://www.hdfgroup.org/HDF5/).
 
-Python 3:
-   - [SciPy](http://www.scipy.org/):
-     Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way,
-     which includes many packages useful for scientific purposes including SciPy.
+Python:
+   - Version >= 3.0
+   - [SciPy](http://www.scipy.org/)
+
+Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way, which includes many packages useful for scientific calculations including SciPy.
 
 
 General setup instructions
