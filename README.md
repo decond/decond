@@ -35,7 +35,7 @@ The general idea of the setup process is:
 3. Manually edit the file `fortran/Makefile` to suit your environment and then compile with `make`.
 4. Download and install [Anaconda Python Distribution](http://continuum.io/downloads#34). (Rememeber to download the Python 3+ version)
 
-More details may be added to the [wiki page](https://github.com/kmtu/decond/wiki).
+More details can be found in [wiki page](https://github.com/kmtu/decond/wiki).
 
 ----------
 This project uses [semantic versioning (2.0.0)](http://semver.org/)
