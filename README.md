@@ -31,7 +31,7 @@ General setup instructions
 The general idea of the setup process is:
 
 1. Compile and install the customized XTC library `fortran/lib/xdrfile-1.1.1-d`.
-2. Compile and install the HDF5 library, if it is not available on your system.
+2. Compile and install the HDF5 library, if it is not available on your system already.
 3. Manually edit the file `fortran/Makefile` to suit your environment and then compile with `make`.
 4. Download and install [Anaconda Python Distribution](http://continuum.io/downloads#34). (Rememeber to download the Python 3+ version)
 
