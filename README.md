@@ -23,7 +23,7 @@ Python:
    - Version >= 3.0
    - [SciPy](http://www.scipy.org/)
 
-Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way, which includes many packages useful for scientific calculations including SciPy.
+Using the [Anaconda Python Distribution](http://continuum.io/downloads#34) is the easiest way, which includes many packages useful for scientific calculations including SciPy. Rememeber to download the Python 3+ version.
 
 
 General setup instructions
