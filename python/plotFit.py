@@ -163,7 +163,7 @@ for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 plt.legend(loc='upper left')
 plt.xlabel("$\Lambda$  (ps)")
-plt.ylabel(r"$\tilde D_I(\Lambda)$, $\tilde D_{IL}(\Lambda)$  ($\AA^2$)")
+plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$  ($\AA^2$)")
 
 
 if (not args.nosd):
