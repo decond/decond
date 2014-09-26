@@ -2,7 +2,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-rc = {'legend': {'fontsize': 34},
+rc = {'font': {'size': 34,
+               'family': 'serif',
+               'serif': 'Times New Roman'},
+      'text': {'usetex': True},
+      'legend': {'fontsize': 34},
       'axes': {'labelsize': 34},
       'xtick': {'labelsize': 34,
                 'major.pad': 10,
@@ -18,11 +22,12 @@ rc = {'legend': {'fontsize': 34},
 for key in rc:
   mpl.rc(key, **rc[key])
 
-labelPad = 10
-spineLineWidth = 1
+xlabelpad = 5
+ylabelpad = 8 
+spineLineWidth = 1.1
 
-figsize = (11.5, 10)
-format='pdf'
+figsize = (12, 10)
+format='eps'
 
 fitKey = '80.0-100.0'
 rBins = np.load('sigI-old.npz')['rBins']
@@ -43,8 +48,8 @@ for i, sig in enumerate(sigI_new):
   plt.plot(rBins, sig, label=labelNew[i], linestyle="-")
 
 plt.legend(loc='upper right')
-plt.ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)", labelpad=labelPad)
-plt.xlabel(r"$r$  ($\AA$)", labelpad=labelPad)
+plt.ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)", labelpad=ylabelpad)
+plt.xlabel(r"$r$  (\AA)", labelpad=xlabelpad)
 
 halfCellIndex = rBins.size / np.sqrt(3)
 plt.xlim(xmax=rBins[halfCellIndex])
@@ -52,8 +57,8 @@ plt.xlim(xmax=rBins[halfCellIndex])
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
 
-plt.tight_layout()
-plt.savefig("sigI-NaCl.pdf")
+#plt.tight_layout()
+plt.savefig("sigI-NaCl." + format, bbox_inches="tight")
 
 plt.ion()
 #plt.show()

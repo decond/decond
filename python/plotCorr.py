@@ -100,7 +100,11 @@ for i in range(numIonTypes):
       idx1_ji = numIonTypes + zipIndexPair(j, i, numIonTypes)
       nCorr2[idx2] = (nCorr[idx1_ij] + nCorr[idx1_ji]) / 2
 
-rc = {'legend': {'fontsize': 38},
+rc = {'font': {'size': 38,
+               'family': 'serif',
+               'serif': 'Times New Roman'},
+      'text': {'usetex': True},
+      'legend': {'fontsize': 38},
       'axes': {'labelsize': 38,
                'titlesize': 38},
       'xtick': {'labelsize': 38,
@@ -117,12 +121,13 @@ rc = {'legend': {'fontsize': 38},
 for key in rc:
   mpl.rc(key, **rc[key])
 
-labelpad = 10
-spineLineWidth = 1
+xlabelpad = 5
+ylabelpad = 0.5 
+spineLineWidth = 1.1
 
 figsize1 = (12, 10)
 figsize3 = (30, 10)
-format='pdf'
+format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure(figsize=figsize1)
@@ -132,10 +137,10 @@ for i, corr in enumerate(nCorr2*Const.nm2AA**2):
     
 leg = plt.legend()
 plt.xlim(xmax=3)
-plt.xlabel(r'$t$  (ps)', labelpad=labelpad)
-plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$  ($\AA^2$ ps$^{-2}$)', labelpad=labelpad)
-plt.tight_layout()
-plt.savefig(outFilename + '.oneTwo.' + format)
+plt.xlabel(r'$t$  (ps)', labelpad=xlabelpad)
+plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$  (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+#plt.tight_layout()
+plt.savefig(outFilename + '.oneTwo.' + format, bbox_inches="tight", pad_inches=0.20)
 
 if (not args.nosd):
   # plot sdCorr
@@ -201,12 +206,13 @@ if (not args.nosd):
                      32, norm=norm, cmap=cmap)
   #  plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
     ax = plt.gca()
-    ax.set_xlabel(r'$t$  (ps)', labelpad=labelpad)
+    ax.set_xlabel(r'$t$  (ps)', labelpad=xlabelpad)
+    ax.set_ylabel(r'$r$  (\AA)', labelpad=ylabelpad)
     ax.set_title(label[numIonTypes + i])
     cb = plt.colorbar(c)
-    cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
-    plt.tight_layout()
-    plt.savefig(outFilename + '.sd' + str(i) + '.' + format)
+    cb.set_label(r'$c_{IL}^{(2)}(t;r)$  (\AA$^2$ ps$^{-2}$)')
+#    plt.tight_layout()
+    plt.savefig(outFilename + '.sd' + str(i) + '.' + format, bbox_inches="tight", pad_inches=0.15)
 
   vmin, vmax = (np.nanmin(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2,
                 np.nanmax(sdCorr2_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]) * nm2AA**2)
@@ -217,19 +223,19 @@ if (not args.nosd):
     c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
                     bounds, norm=norm, cmap=cmap)
   #  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
-    ax.set_xlabel(r'$t$  (ps)', labelpad=labelpad)
+    ax.set_xlabel(r'$t$  (ps)', labelpad=xlabelpad)
 #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
     if (i == 0):
-      ax.set_ylabel(r'$r$  ($\AA$)', labelpad=labelpad)
+      ax.set_ylabel(r'$r$  (\AA)', labelpad=ylabelpad)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
   plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
   cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(-0.05, 0.301, 0.05), pad=0.01)
-  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
+  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  (\AA$^2$ ps$^{-2}$)')
 #  plt.tight_layout()
-  plt.savefig(outFilename + '.sd.' + format)
+  plt.savefig(outFilename + '.sd.' + format, bbox_inches="tight", pad_inches=0.15)
 
 
 plt.ion()

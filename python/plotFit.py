@@ -143,7 +143,11 @@ for k in sortedKeys:
   print(DI[k] * Const.D2cm2_s * 1E5)
   print("+/-\n", DI_err[k] * Const.D2cm2_s * 1E5, '\n', sep="")
 
-rc = {'legend': {'fontsize': 34},
+rc = {'font': {'size': 34,
+               'family': 'serif',
+               'serif': 'Times New Roman'},
+      'text': {'usetex': True},
+      'legend': {'fontsize': 34},
       'axes': {'labelsize': 34},
       'xtick': {'labelsize': 34,
                 'major.pad': 10,
@@ -160,11 +164,11 @@ for key in rc:
   mpl.rc(key, **rc[key])
 
 labelpad = 10
-spineLineWidth = 1
+spineLineWidth = 1.1
 
 figsize1 = (12, 10)
 figsize3 = (11, 24)
-format='pdf'
+format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 # plot fitting results of nCorr
@@ -181,8 +185,8 @@ plt.xlabel("fit range  (ps)", labelpad=labelpad)
 plt.ylabel(r"$\sigma$  (S m$^{-1}$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
-plt.tight_layout()
-plt.savefig('ec-fitrange.' + format)
+#plt.tight_layout()
+plt.savefig('ec-fitrange.' + format, bbox_inches="tight")
 
 plt.figure(figsize=figsize1)
 numErrBars = 5
@@ -195,14 +199,16 @@ ax = plt.gca()
 handles, labels = ax.get_legend_handles_labels()
 # remove the errorbars
 handles = [h[0] for h in handles]
-plt.legend(handles, labels, loc='upper left', fontsize=31, labelspacing=0.2)
+plt.legend(handles, labels, loc='upper left', fontsize=31, labelspacing=0.2,
+           borderpad=0.2, handletextpad=0.4)
 plt.xlabel("$\Lambda$  (ps)", labelpad=labelpad)
-plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$  ($\AA^2$)", labelpad=labelpad)
+plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$  (\AA$^2$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
 plt.xlim([-100, 1100])
-plt.tight_layout()
-plt.savefig('cesaro.' + format)
+ax.xaxis.labelpad = 6
+ax.yaxis.labelpad = 1
+plt.savefig('cesaro.' + format, bbox_inches="tight")
 
 
 if (not args.nosd):
@@ -315,8 +321,8 @@ if (not args.nosd):
       for sp in ax.spines.values():
         sp.set_linewidth(spineLineWidth)
 
-    plt.tight_layout()
-    plt.savefig('g-D-sig.' + fitKey + '.' + format)
+#    plt.tight_layout()
+#    plt.savefig('g-D-sig.' + fitKey + '.' + format)
 
 plt.ion()
 #plt.show()

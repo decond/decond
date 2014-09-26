@@ -118,7 +118,7 @@ for i, D in enumerate(sdD[fitKey]):
   axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
 
 axs[1].set_xlabel(r"$r$  (\AA)", labelpad=labelpad)
-axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  ($\AA^2$ ps$^{-1}$)", labelpad=labelpad)
+axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
 #    axs[1].legend(loc='center right')
 axs[1].legend(loc=(0.437, 0.18), labelspacing=0.2)
 #    axs[1].set_title("threshold {}".format(threshold))
