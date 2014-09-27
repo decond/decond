@@ -122,7 +122,8 @@ for key in rc:
   mpl.rc(key, **rc[key])
 
 xlabelpad = 5
-ylabelpad = 0.5 
+ylabelpad = 10
+clabelpad = 20
 spineLineWidth = 1.1
 
 figsize1 = (12, 10)
@@ -137,8 +138,8 @@ for i, corr in enumerate(nCorr2*Const.nm2AA**2):
     
 leg = plt.legend()
 plt.xlim(xmax=0.5)
-plt.xlabel(r'$t$  (ps)', labelpad=xlabelpad)
-plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$  (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
+plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
 #plt.tight_layout()
 plt.savefig(outFilename + '.oneTwo.' + format, bbox_inches="tight", pad_inches=0.20)
 
@@ -206,11 +207,11 @@ if (not args.nosd):
                      32, norm=norm, cmap=cmap)
   #  plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
     ax = plt.gca()
-    ax.set_xlabel(r'$t$  (ps)', labelpad=xlabelpad)
-    ax.set_ylabel(r'$r$  (\AA)', labelpad=ylabelpad)
+    ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
+    ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
     ax.set_title(label[numIonTypes + i])
     cb = plt.colorbar(c)
-    cb.set_label(r'$c_{IL}^{(2)}(t;r)$  (\AA$^2$ ps$^{-2}$)')
+    cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)')
 #    plt.tight_layout()
     plt.savefig(outFilename + '.sd' + str(i) + '.' + format, bbox_inches="tight", pad_inches=0.15)
 
@@ -223,18 +224,18 @@ if (not args.nosd):
     c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
                     bounds, norm=norm, cmap=cmap)
   #  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0], colors='black')
-    ax.set_xlabel(r'$t$  (ps)', labelpad=xlabelpad)
+    ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
 #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
     plt.xticks([0, 0.1, 0.2, 0.3])
     if (i == 0):
-      ax.set_ylabel(r'$r$  (\AA)', labelpad=ylabelpad)
+      ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
   plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
   cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(0, 1.801, 0.4), pad=0.01)
-  cb.set_label(r'$c_{IL}^{(2)}(t;r)$  ($\AA^2$ ps$^{-2}$)')
+  cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=clabelpad)
 #  plt.tight_layout()
   plt.savefig(outFilename + '.sd.' + format, bbox_inches="tight", pad_inches=0.15)
 

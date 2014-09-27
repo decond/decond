@@ -100,7 +100,7 @@ for i, rdf in enumerate(g_w1):
   axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i])
 axs[0].legend(loc='upper right')
 #    axs[0].set_title("Fit {} ps".format(fitKey))
-axs[0].set_xlabel(r"$r$  (\AA)", labelpad=labelpad)
+axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='top')
@@ -117,8 +117,8 @@ for i, D in enumerate(sdD[fitKey]):
                                  for j, c in enumerate(g_masked < threshold)], D)
   axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
 
-axs[1].set_xlabel(r"$r$  (\AA)", labelpad=labelpad)
-axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$  (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
+axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
+axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
 #    axs[1].legend(loc='center right')
 axs[1].legend(loc=(0.437, 0.18), labelspacing=0.2)
 #    axs[1].set_title("threshold {}".format(threshold))
@@ -129,8 +129,8 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 for i, sig in enumerate(sigI[fitKey]):
   axs[2].plot(rBins, sig, label=label[i])
   axs[2].legend(loc='upper right')
-axs[2].set_xlabel(r"$\lambda$  (\AA)", labelpad=labelpad)
-axs[2].set_ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)", labelpad=labelpad)
+axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
+axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 

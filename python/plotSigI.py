@@ -48,8 +48,8 @@ for i, sig in enumerate(sigI_new):
   plt.plot(rBins, sig, label=labelNew[i], linestyle="-")
 
 plt.legend(loc='upper right')
-plt.ylabel(r"$\sigma_I(\lambda)$  (S m$^{-1}$)", labelpad=ylabelpad)
-plt.xlabel(r"$r$  (\AA)", labelpad=xlabelpad)
+plt.ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=ylabelpad)
+plt.xlabel(r"$r$\ \ (\AA)", labelpad=xlabelpad)
 
 halfCellIndex = rBins.size / np.sqrt(3)
 plt.xlim(xmax=rBins[halfCellIndex])

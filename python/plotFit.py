@@ -181,8 +181,8 @@ for i in range(numIonTypes + numIonTypePairs):
 plt.plot(range(len(ecTotal)), [ecTotal[k] for k in sortedKeys], linestyle=':', label='total')
 plt.xticks(range(len(ecTotal)), sortedKeys)
 plt.legend()
-plt.xlabel("fit range  (ps)", labelpad=labelpad)
-plt.ylabel(r"$\sigma$  (S m$^{-1}$)", labelpad=labelpad)
+plt.xlabel("fit range\ \ (ps)", labelpad=labelpad)
+plt.ylabel(r"$\sigma$\ \ (S m$^{-1}$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
 #plt.tight_layout()
@@ -201,11 +201,11 @@ handles, labels = ax.get_legend_handles_labels()
 handles = [h[0] for h in handles]
 plt.legend(handles, labels, loc='upper left', fontsize=31, labelspacing=0.2,
            borderpad=0.2, handletextpad=0.4)
-plt.xlabel("$\Lambda$  (ps)", labelpad=labelpad)
-plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$  (\AA$^2$)", labelpad=labelpad)
+plt.xlabel("$\Lambda$\ \ (ps)", labelpad=labelpad)
+plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$\ \ (\AA$^2$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
-plt.xlim([-100, 1100])
+plt.xlim([0, 1000])
 ax.xaxis.labelpad = 6
 ax.yaxis.labelpad = 1
 plt.savefig('cesaro.' + format, bbox_inches="tight")
