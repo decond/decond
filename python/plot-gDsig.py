@@ -4,21 +4,21 @@ import matplotlib as mpl
 import matplotlib.ticker as ticker
 import itertools as it
 
-rc = {'font': {'size': 34,
+rc = {'font': {'size': 28,
                'family': 'serif',
                'serif': 'Times New Roman'},
       'pdf': {'fonttype': 42},
       'text': {'usetex': True},
-      'legend': {'fontsize': 34},
-      'axes': {'labelsize': 34},
-      'xtick': {'labelsize': 34,
-                'major.pad': 10,
+      'legend': {'fontsize': 28},
+      'axes': {'labelsize': 28},
+      'xtick': {'labelsize': 28,
+                'major.pad': 8,
                 'major.size': 8,
                 'major.width': 1,
                 'minor.size': 4,
                 'minor.width': 1},
-      'ytick': {'labelsize': 34,
-                'major.pad': 10,
+      'ytick': {'labelsize': 28,
+                'major.pad': 8,
                 'major.size': 8,
                 'major.width': 1,
                 'minor.size': 4,
@@ -36,7 +36,7 @@ for key in rc:
 labelpad = 10
 spineLineWidth = 1.1
 
-figsize3 = (10, 28)
+figsize3 = (10, 18)
 format='eps'
 
 numIonTypes = 2
@@ -44,7 +44,6 @@ numIonTypePairs = numIonTypes * (numIonTypes+1) // 2
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 marker = ['s', '^', 's', 'x', '^']
 #markevery = [(start, 10) for start in np.arange(numIonTypes + numIonTypePairs)*2] 
-markevery = [(3, 9)]*(numIonTypes + numIonTypePairs)
 
 label = ['cation', 'anion']
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
@@ -95,23 +94,25 @@ for rdf in g:
 
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)
 
-abcPos = (0.03, 0.965)
+abcPos = (0.03, 0.1)
 xticks = np.arange(0, 21, 5)
 
 # plot rdf
+markevery = [(2, 15)]*(numIonTypes + numIonTypePairs)
 axs[0].set_color_cycle(color[numIonTypes:])
 axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
 for i, rdf in enumerate(g_w1):
   axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i],
               marker=marker[numIonTypes + i], markevery=markevery[numIonTypes + i], fillstyle='none')
-axs[0].legend(loc='upper right', numpoints=1)
+axs[0].legend(loc='upper right', numpoints=1, labelspacing=0.2)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
-         horizontalalignment='left', verticalalignment='top')
+         horizontalalignment='left', verticalalignment='bottom')
 
 # plot D
+markevery = [(3, 9)]*(numIonTypes + numIonTypePairs)
 axs[1].axhline(0, linestyle=':', color='black', linewidth=1.0)
 for i, D in enumerate(DI[fitKey]):
   axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i],
@@ -128,37 +129,38 @@ for i, D in enumerate(sdD[fitKey]):
 axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
 #    axs[1].legend(loc='center right')
-axs[1].legend(loc=(0.437, 0.18), labelspacing=0.2, numpoints=1)
+axs[1].legend(loc=(0.56, 0.16), labelspacing=0.05, numpoints=1, borderpad=0.15)
 #    axs[1].set_title("threshold {}".format(threshold))
 plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
-         horizontalalignment='left', verticalalignment='top')
+         horizontalalignment='left', verticalalignment='bottom')
 
 # plot sig
+markevery = [(2, 15)]*(numIonTypes + numIonTypePairs)
 for i, sig in enumerate(sigI[fitKey]):
   axs[2].plot(rBins, sig, label=label[i],
               marker=marker[i], markevery=markevery[i], fillstyle='none')
-  axs[2].legend(loc='upper right', numpoints=1)
+  axs[2].legend(loc='upper right', numpoints=1, labelspacing=0.2)
 axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
-         horizontalalignment='left', verticalalignment='top')
+         horizontalalignment='left', verticalalignment='bottom')
 
-axs[1].set_ylim(bottom=-0.0003, top=0.0043)
+axs[1].set_ylim(bottom=-0.0003, top=0.004)
 axs[1].set_yticks(np.arange(-0.000,0.0041,0.001))
-axs[2].set_ylim(top=0.75)
+axs[2].set_ylim(top=0.7)
 
 for ax in axs:
   ax.set_xticks(xticks)
   ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
   ax.set_xlim(xmax=halfCellLength)
-  ax.xaxis.labelpad = 1 
-  ax.yaxis.set_label_coords(-0.165, 0.5)
+  ax.xaxis.labelpad = 0.6 
+  ax.yaxis.set_label_coords(-0.15, 0.5)
   for sp in ax.spines.values():
     sp.set_linewidth(spineLineWidth)
 
 #plt.tight_layout()
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
-plt.subplots_adjust(hspace=0.25)
+plt.subplots_adjust(hspace=0.28)
 plt.savefig('g-D-sig.' + format, bbox_inches="tight")
 
 plt.ion()
