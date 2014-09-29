@@ -23,7 +23,9 @@ rc = {'font': {'size': 34,
                 'major.width': 1,
                 'minor.size': 4,
                 'minor.width': 1},
-      'lines': {'linewidth': 3}
+      'lines': {'linewidth': 2,
+                'markeredgewidth': 2,
+                'markersize': 10}
      }
 
 
@@ -40,11 +42,14 @@ format='eps'
 numIonTypes = 2
 numIonTypePairs = numIonTypes * (numIonTypes+1) // 2
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
+marker = ['s', '^', 's', 'x', '^']
+#markevery = [(start, 10) for start in np.arange(numIonTypes + numIonTypePairs)*2] 
+markevery = [(3, 9)]*(numIonTypes + numIonTypePairs)
 
 label = ['cation', 'anion']
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
-color = ['b', 'g', 'b', 'r', 'g']
+color = ['k', 'k', 'k', 'k', 'k']
 mpl.rcParams['axes.color_cycle'] = color
 
 class Const:
@@ -97,8 +102,9 @@ xticks = np.arange(0, 21, 5)
 axs[0].set_color_cycle(color[numIonTypes:])
 axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
 for i, rdf in enumerate(g_w1):
-  axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i])
-axs[0].legend(loc='upper right')
+  axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i],
+              marker=marker[numIonTypes + i], markevery=markevery[numIonTypes + i], fillstyle='none')
+axs[0].legend(loc='upper right', numpoints=1)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
@@ -108,27 +114,30 @@ plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
 # plot D
 axs[1].axhline(0, linestyle=':', color='black', linewidth=1.0)
 for i, D in enumerate(DI[fitKey]):
-  axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i])
+  axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i],
+              marker=marker[i], markevery=markevery[i], fillstyle='none')
 
 sdD[fitKey]
 for i, D in enumerate(sdD[fitKey]):
   g_masked = np.where(np.isnan(g[i]), -1, g[i])
   D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
                                  for j, c in enumerate(g_masked < threshold)], D)
-  axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
+  axs[1].plot(rBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i],
+              marker=marker[numIonTypes + i], markevery=markevery[numIonTypes + i], fillstyle='none')
 
 axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
 #    axs[1].legend(loc='center right')
-axs[1].legend(loc=(0.437, 0.18), labelspacing=0.2)
+axs[1].legend(loc=(0.437, 0.18), labelspacing=0.2, numpoints=1)
 #    axs[1].set_title("threshold {}".format(threshold))
 plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot sig
 for i, sig in enumerate(sigI[fitKey]):
-  axs[2].plot(rBins, sig, label=label[i])
-  axs[2].legend(loc='upper right')
+  axs[2].plot(rBins, sig, label=label[i],
+              marker=marker[i], markevery=markevery[i], fillstyle='none')
+  axs[2].legend(loc='upper right', numpoints=1)
 axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
