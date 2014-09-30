@@ -46,7 +46,7 @@ lineStyle = ['-', '--', '-', '-.', '--']
 marker = [None, None, None, None, None]
 #markevery = [(start, 10) for start in np.arange(numIonTypes + numIonTypePairs)*2] 
 
-label = ['cation', 'anion']
+label = ['Na$^+$', 'Cl$^-$']
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
 color = ['k', 'k', 'k', 'k', 'k']
@@ -67,24 +67,20 @@ class Const:
   D2AA2_ps = nm2AA**2
   D2cm2_s = nm2cm**2 / ps2s
 
-fitKey = '400.0-600.0'
+fitKey = '80.0-100.0'
 
-w1Data = np.load('g.npz')
-rBins_w1 = w1Data['rBins']
-g_w1 = w1Data['g']
-
-w3Data = np.load('g-D-sigI.w3.npz')
-rBins = w3Data['rBins']
-g = w3Data['g']
-DI = w3Data['DI'].item()
-sdD = w3Data['sdD'].item()
-sigI = w3Data['sigI'].item()
+data = np.load('g-D-sigI.npz')
+rBins = data['rBins']
+g = data['g']
+DI = data['DI'].item()
+sdD = data['sdD'].item()
+sigI = data['sigI'].item()
 
 numPlots = 2
 threshold = 0.1
 
-#halfCellIndex_w1 = rBins_w1.size / np.sqrt(3)
-#halfCellLength_w1 = rBins_w1[halfCellIndex_w1]
+#halfCellIndex_w1 = rBins.size / np.sqrt(3)
+#halfCellLength_w1 = rBins[halfCellIndex_w1]
 
 halfCellIndex = rBins.size / np.sqrt(3)
 halfCellLength = rBins[halfCellIndex]
@@ -102,15 +98,18 @@ xticks = np.arange(0, 21, 5)
 markevery = [(2, 15)]*(numIonTypes + numIonTypePairs)
 axs[0].set_color_cycle(color[numIonTypes:])
 axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
-for i, rdf in enumerate(g_w1):
-  axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i],
+for i, rdf in enumerate(g):
+  axs[0].plot(rBins, rdf, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i],
               marker=marker[numIonTypes + i], markevery=markevery[numIonTypes + i], fillstyle='none')
 axs[0].legend(loc='upper right', numpoints=1, labelspacing=0.2)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
-plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[0].transAxes,
+plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='bottom')
+axs[0].set_ylim(top=6)
+plt.text(0.22, 0.94, 'up to 43', transform=axs[0].transAxes,
+         horizontalalignment='left', verticalalignment='top')
 
 # plot D
 #markevery = [(3, 9)]*(numIonTypes + numIonTypePairs)
@@ -143,10 +142,9 @@ for i, sig in enumerate(sigI[fitKey]):
   axs[1].legend(loc='upper right', numpoints=1, labelspacing=0.2)
 axs[1].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
 axs[1].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
-plt.text(abcPos[0], abcPos[1], '(d)', transform=axs[1].transAxes,
+plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='bottom')
-
-axs[1].set_ylim(top=0.7)
+#axs[1].set_ylim(top=0.7)
 
 for ax in axs:
   ax.set_xticks(xticks)
