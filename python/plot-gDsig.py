@@ -4,25 +4,24 @@ import matplotlib as mpl
 import matplotlib.ticker as ticker
 import itertools as it
 
-rc = {'font': {'size': 34,
+rc = {'font': {'size': 36,
                'family': 'serif',
-               'serif': 'Times New Roman'},
-      'pdf': {'fonttype': 42},
+               'serif': 'Times'},
       'text': {'usetex': True},
       'legend': {'fontsize': 34},
-      'axes': {'labelsize': 34},
-      'xtick': {'labelsize': 34,
+      'axes': {'labelsize': 36},
+      'xtick': {'labelsize': 36,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1,
+                'major.width': 1.5,
                 'minor.size': 4,
-                'minor.width': 1},
-      'ytick': {'labelsize': 34,
+                'minor.width': 1.5},
+      'ytick': {'labelsize': 36,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1,
+                'major.width': 1.5,
                 'minor.size': 4,
-                'minor.width': 1},
+                'minor.width': 1.5},
       'lines': {'linewidth': 3}
      }
 
@@ -32,7 +31,8 @@ for key in rc:
   mpl.rc(key, **rc[key])
 
 labelpad = 10
-spineLineWidth = 1.1
+spineLineWidth = 1.6
+reflinewidth = 1.5
 
 figsize3 = (10, 28)
 format='eps'
@@ -95,7 +95,7 @@ xticks = np.arange(0, 21, 5)
 
 # plot rdf
 axs[0].set_color_cycle(color[numIonTypes:])
-axs[0].axhline(1, linestyle=':', color='black', linewidth=1.0)
+axs[0].axhline(1, linestyle=':', color='black', linewidth=reflinewidth)
 for i, rdf in enumerate(g_w1):
   axs[0].plot(rBins_w1, rdf, label=label[numIonTypes + i])
 axs[0].legend(loc='upper right')
@@ -106,7 +106,7 @@ plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot D
-axs[1].axhline(0, linestyle=':', color='black', linewidth=1.0)
+axs[1].axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, D in enumerate(DI[fitKey]):
   axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i], linestyle=lineStyle[i])
 

@@ -4,18 +4,18 @@ import matplotlib as mpl
 
 rc = {'font': {'size': 34,
                'family': 'serif',
-               'serif': 'Times New Roman'},
+               'serif': 'Times'},
       'text': {'usetex': True},
       'legend': {'fontsize': 34},
       'axes': {'labelsize': 34},
       'xtick': {'labelsize': 34,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
+                'major.width': 1.5},
       'ytick': {'labelsize': 34,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
+                'major.width': 1.5},
       'lines': {'linewidth': 3}
      }
 
@@ -24,9 +24,9 @@ for key in rc:
 
 xlabelpad = 5
 ylabelpad = 8 
-spineLineWidth = 1.1
+spineLineWidth = 1.6
 
-figsize = (12, 10)
+figsize = (10, 8.3)
 format='eps'
 
 fitKey = '80.0-100.0'
@@ -47,12 +47,13 @@ plt.gca().set_color_cycle(None)
 for i, sig in enumerate(sigI_new):
   plt.plot(rBins, sig, label=labelNew[i], linestyle="-")
 
-plt.legend(loc='upper right')
+plt.legend(loc='upper right', labelspacing=0.2)
 plt.ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=ylabelpad)
 plt.xlabel(r"$r$\ \ (\AA)", labelpad=xlabelpad)
 
 halfCellIndex = rBins.size / np.sqrt(3)
 plt.xlim(xmax=rBins[halfCellIndex])
+plt.ylim(top=8.5)
 
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)

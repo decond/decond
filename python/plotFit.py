@@ -143,20 +143,20 @@ for k in sortedKeys:
   print(DI[k] * Const.D2cm2_s * 1E5)
   print("+/-\n", DI_err[k] * Const.D2cm2_s * 1E5, '\n', sep="")
 
-rc = {'font': {'size': 34,
+rc = {'font': {'size': 32,
                'family': 'serif',
-               'serif': 'Times New Roman'},
+               'serif': 'Times'},
       'text': {'usetex': True},
-      'legend': {'fontsize': 34},
-      'axes': {'labelsize': 34},
-      'xtick': {'labelsize': 34,
+      'legend': {'fontsize': 32},
+      'axes': {'labelsize': 32},
+      'xtick': {'labelsize': 32,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
-      'ytick': {'labelsize': 34,
+                'major.width': 1.5},
+      'ytick': {'labelsize': 32,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
+                'major.width': 1.5},
       'lines': {'linewidth': 3}
      }
 
@@ -164,9 +164,9 @@ for key in rc:
   mpl.rc(key, **rc[key])
 
 labelpad = 10
-spineLineWidth = 1.1
+spineLineWidth = 1.6
 
-figsize1 = (12, 10)
+figsize1 = (10, 8.3)
 figsize3 = (11, 24)
 format='eps'
 
@@ -199,15 +199,17 @@ ax = plt.gca()
 handles, labels = ax.get_legend_handles_labels()
 # remove the errorbars
 handles = [h[0] for h in handles]
-plt.legend(handles, labels, loc='upper left', fontsize=31, labelspacing=0.2,
+plt.legend(handles, labels, loc='upper left', fontsize=28, labelspacing=0.2,
            borderpad=0.2, handletextpad=0.4)
 plt.xlabel("$\Lambda$\ \ (ps)", labelpad=labelpad)
 plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$\ \ (\AA$^2$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
 plt.xlim([0, 1000])
-ax.xaxis.labelpad = 6
-ax.yaxis.labelpad = 1
+plt.ylim([-6, 11])
+plt.yticks([-5, 0, 5, 10])
+ax.xaxis.labelpad = 4
+ax.yaxis.labelpad = 0
 plt.savefig('cesaro.' + format, bbox_inches="tight")
 
 

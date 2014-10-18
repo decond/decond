@@ -100,21 +100,20 @@ for i in range(numIonTypes):
       idx1_ji = numIonTypes + zipIndexPair(j, i, numIonTypes)
       nCorr2[idx2] = (nCorr[idx1_ij] + nCorr[idx1_ji]) / 2
 
-rc = {'font': {'size': 38,
+rc = {'font': {'size': 34,
                'family': 'serif',
-               'serif': 'Times New Roman'},
+               'serif': 'Times'},
       'text': {'usetex': True},
-      'legend': {'fontsize': 38},
-      'axes': {'labelsize': 38,
-               'titlesize': 38},
-      'xtick': {'labelsize': 38,
+      'legend': {'fontsize': 34},
+      'axes': {'labelsize': 34},
+      'xtick': {'labelsize': 34,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
-      'ytick': {'labelsize': 38,
+                'major.width': 1.5},
+      'ytick': {'labelsize': 34,
                 'major.pad': 10,
                 'major.size': 8,
-                'major.width': 1},
+                'major.width': 1.5},
       'lines': {'linewidth': 3}
      }
 
@@ -123,15 +122,15 @@ for key in rc:
 
 xlabelpad = 5
 ylabelpad = 0.5 
-spineLineWidth = 1.1
+reflinewidth = 1.5
+spineLineWidth = 1.6
 
-figsize1 = (12, 10)
-figsize3 = (30, 10)
+figsize1 = (10, 8.3)
 format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure(figsize=figsize1)
-plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
+plt.gca().axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
   plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
@@ -140,10 +139,41 @@ plt.xlim(xmax=3)
 plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
 plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
 #plt.tight_layout()
+
+ax = plt.gca()
+for sp in ax.spines.values():
+  sp.set_linewidth(spineLineWidth)
+
 plt.savefig(outFilename + '.oneTwo.' + format, bbox_inches="tight", pad_inches=0.20)
 
 if (not args.nosd):
   # plot sdCorr
+  rc = {'font': {'size': 46,
+                 'family': 'serif',
+                 'serif': 'Times'},
+        'text': {'usetex': True},
+        'legend': {'fontsize': 46},
+        'axes': {'labelsize': 46,
+                 'titlesize': 50},
+        'xtick': {'labelsize': 46,
+                  'major.pad': 10,
+                  'major.size': 8,
+                  'major.width': 1.5},
+        'ytick': {'labelsize': 46,
+                  'major.pad': 10,
+                  'major.size': 8,
+                  'major.width': 1.5},
+        'lines': {'linewidth': 3}
+       }
+
+  for key in rc:
+    mpl.rc(key, **rc[key])
+
+  xlabelpad = 5
+  ylabelpad = 0.5 
+  spineLineWidth = 1.6
+  figsize3 = (30, 10)
+
   sdCorr2 = np.empty([numIonTypePairs, rBins.size, timeLags.size])
   rho2 = np.empty([numIonTypes * (numIonTypes + 1) / 2, rBins.size])
   for i in range(numIonTypes):
@@ -235,6 +265,13 @@ if (not args.nosd):
   cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(-0.05, 0.301, 0.05), pad=0.01)
   cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)')
 #  plt.tight_layout()
+
+  for sp in cb.ax.spines.values():
+    sp.set_linewidth(spineLineWidth)
+  for ax in axs:
+    for sp in ax.spines.values():
+      sp.set_linewidth(spineLineWidth)
+
   plt.savefig(outFilename + '.sd.' + format, bbox_inches="tight", pad_inches=0.15)
 
 
