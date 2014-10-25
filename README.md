@@ -38,4 +38,4 @@ The general idea of the setup process is:
 More details can be found on the [wiki page](https://github.com/kmtu/decond/wiki).
 
 ----------
-This project uses [semantic versioning (2.0.0)](http://semver.org/)
+This project follows [semantic versioning](http://semver.org/)
