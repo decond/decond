@@ -114,7 +114,8 @@ rc = {'font': {'size': 34,
                 'major.pad': 10,
                 'major.size': 8,
                 'major.width': 1.5},
-      'lines': {'linewidth': 3}
+      'lines': {'linewidth': 3},
+      'savefig': {'transparent': True}
      }
 
 for key in rc:

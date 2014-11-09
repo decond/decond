@@ -115,15 +115,15 @@ rc = {'font': {'size': 34,
                 'major.pad': 10,
                 'major.size': 8,
                 'major.width': 1.5},
-      'lines': {'linewidth': 3}
+      'lines': {'linewidth': 3},
+      'savefig': {'transparent': True}
      }
 
 for key in rc:
   mpl.rc(key, **rc[key])
 
 xlabelpad = 5
-ylabelpad = 10
-clabelpad = 20
+ylabelpad = 0.5
 reflinewidth = 1.5
 spineLineWidth = 1.6
 
@@ -141,6 +141,11 @@ plt.xlim(xmax=0.5)
 plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
 plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
 #plt.tight_layout()
+
+ax = plt.gca()
+for sp in ax.spines.values():
+  sp.set_linewidth(spineLineWidth)
+
 plt.savefig(outFilename + '.oneTwo.' + format, bbox_inches="tight", pad_inches=0.20)
 
 if (not args.nosd):
@@ -168,6 +173,7 @@ if (not args.nosd):
 
   xlabelpad = 5
   ylabelpad = 0.5 
+  clabelpad = 20
   spineLineWidth = 1.6
   figsize3 = (30, 10)
 
