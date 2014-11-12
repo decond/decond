@@ -34,7 +34,7 @@ labelpad = 10
 spineLineWidth = 1.6
 reflinewidth = 1.5
 
-figsize3 = (10, 28)
+figsize3 = (8, 20)
 format='eps'
 
 numIonTypes = 2
@@ -84,19 +84,22 @@ for rdf in g:
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)
 
 abcPos = (0.03, 0.965)
-xticks = np.arange(0, 21, 5)
+xticks = np.arange(2, 8)
 
 # plot rdf
 axs[0].set_color_cycle(color[numIonTypes:])
 axs[0].axhline(1, linestyle=':', color='black', linewidth=reflinewidth)
 for i, rdf in enumerate(g):
+#  if (i==1):
+#    axs[0].plot(rBins, rdf, label=label[numIonTypes + i], color='r')
   axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
+
 axs[0].legend(loc='upper right')
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
-plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
-         horizontalalignment='left', verticalalignment='top')
+#plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
+#         horizontalalignment='left', verticalalignment='top')
 
 # plot D
 axs[1].axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
@@ -135,9 +138,9 @@ axs[2].set_ylim(bottom=2.5, top=8.6)
 for ax in axs:
   ax.set_xticks(xticks)
   ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-  ax.set_xlim(xmax=halfCellLength)
+  ax.set_xlim(xmin=1.95, xmax=7.05)
   ax.xaxis.labelpad = 1 
-  ax.yaxis.set_label_coords(-0.12, 0.5)
+#  ax.yaxis.set_label_coords(-0.12, 0.5)
   for sp in ax.spines.values():
     sp.set_linewidth(spineLineWidth)
 

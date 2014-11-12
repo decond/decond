@@ -127,19 +127,22 @@ ylabelpad = 0.5
 reflinewidth = 1.5
 spineLineWidth = 1.6
 
-figsize1 = (10, 8.3)
+figsize1 = (8, 5)
 format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure(figsize=figsize1)
 plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
+#  if (i == 3):
+#    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i], color='r')
   plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
 leg = plt.legend()
-plt.xlim(xmax=0.5)
+plt.xlim(xmax=0.4)
+plt.xticks([0, 0.1, 0.2, 0.3, 0.4])
 plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
-plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+plt.ylabel(r'$C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
 #plt.tight_layout()
 
 ax = plt.gca()
@@ -175,7 +178,7 @@ if (not args.nosd):
   ylabelpad = 0.5 
   clabelpad = 20
   spineLineWidth = 1.6
-  figsize3 = (30, 10)
+  figsize3 = (40, 9)
 
   sdCorr2 = np.empty([numIonTypePairs, rBins.size, timeLags.size])
   rho2 = np.empty([numIonTypes * (numIonTypes + 1) / 2, rBins.size])
@@ -260,12 +263,12 @@ if (not args.nosd):
 #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
-    plt.xticks([0, 0.1, 0.2, 0.3])
+    plt.xticks([0, 0.1, 0.2, 0.3, 0.4])
     if (i == 0):
       ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=None, hspace=None)
-  plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
+#  plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
   cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(0, 1.801, 0.4), pad=0.01)
   cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=clabelpad)
 #  plt.tight_layout()
