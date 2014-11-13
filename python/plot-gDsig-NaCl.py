@@ -90,9 +90,9 @@ xticks = np.arange(2, 8)
 axs[0].set_color_cycle(color[numIonTypes:])
 axs[0].axhline(1, linestyle=':', color='black', linewidth=reflinewidth)
 for i, rdf in enumerate(g):
-#  if (i==1):
-#    axs[0].plot(rBins, rdf, label=label[numIonTypes + i], color='r')
-  axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
+  if (i==1):
+    axs[0].plot(rBins, rdf, label=label[numIonTypes + i], color='b')
+#  axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
 
 axs[0].legend(loc='upper right')
 #    axs[0].set_title("Fit {} ps".format(fitKey))

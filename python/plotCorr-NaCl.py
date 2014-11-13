@@ -132,11 +132,11 @@ format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure(figsize=figsize1)
-plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
+plt.gca().axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, corr in enumerate(nCorr2*Const.nm2AA**2):
-#  if (i == 3):
-#    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i], color='r')
-  plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
+  if (i == 3):
+    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i], color='g')
+#  plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
 leg = plt.legend()
 plt.xlim(xmax=0.4)
@@ -280,6 +280,65 @@ if (not args.nosd):
       sp.set_linewidth(spineLineWidth)
 
   plt.savefig(outFilename + '.sd.' + format, bbox_inches="tight", pad_inches=0.15)
+
+#plot c(t;r) at given r
+rc = {'font': {'size': 34,
+               'family': 'serif',
+               'serif': 'Times'},
+      'text': {'usetex': True},
+      'legend': {'fontsize': 34},
+      'axes': {'labelsize': 34,
+               'titlesize': 34},
+      'xtick': {'labelsize': 34,
+                'major.pad': 10,
+                'major.size': 8,
+                'major.width': 1.5},
+      'ytick': {'labelsize': 34,
+                'major.pad': 10,
+                'major.size': 8,
+                'major.width': 1.5},
+      'lines': {'linewidth': 3},
+      'savefig': {'transparent': True}
+     }
+
+for key in rc:
+  mpl.rc(key, **rc[key])
+
+xlabelpad = 5
+ylabelpad = 0.5
+
+figsize1 = (8, 5)
+
+rr = [29, 37, 45]
+for ri in rr:
+  plt.figure(figsize=figsize1)
+  plt.gca().axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
+  #for i, corr in enumerate(nCorr2*Const.nm2AA**2):
+  #  if (i == 3):
+  #    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i], color='r')
+  #  plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
+    
+  for i, sd in enumerate(sdCorr2_masked):
+  #  c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2,
+  #                  bounds, norm=norm, cmap=cmap)
+    if (i==1):
+      plt.plot(timeLags[tmin:tmax:tstep], sd[ri, tmin:tmax:tstep]* nm2AA**2, label=label[numIonTypes+i], linestyle=lineStyle[numIonTypes+i], color='r')
+
+  #leg = plt.legend()
+  plt.xlim(xmax=0.4)
+  plt.ylim(bottom=-0.3, top=2)
+  plt.xticks([0, 0.1, 0.2, 0.3, 0.4])
+  plt.yticks([0, 1, 2])
+  plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
+  plt.ylabel(r'$c^{(2)}_{IL}(t; r)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+  #plt.tight_layout()
+
+  ax = plt.gca()
+  for sp in ax.spines.values():
+    sp.set_linewidth(spineLineWidth)
+
+  plt.savefig(outFilename + '.oneTwo.r' + str(ri) + '.' + format, bbox_inches="tight", pad_inches=0.20)
+
 
 plt.ion()
 #plt.show()
