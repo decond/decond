@@ -127,7 +127,7 @@ ylabelpad = 0.5
 reflinewidth = 1.5
 spineLineWidth = 1.6
 
-figsize1 = (8, 5)
+figsize1 = (8, 6.64)
 format='eps'
 
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
@@ -138,11 +138,12 @@ for i, corr in enumerate(nCorr2*Const.nm2AA**2):
     plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i], color='g')
 #  plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
     
-leg = plt.legend()
+#leg = plt.legend()
 plt.xlim(xmax=0.4)
 plt.xticks([0, 0.1, 0.2, 0.3, 0.4])
 plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
-plt.ylabel(r'$C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+#plt.ylabel(r'$C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+plt.ylabel(r'$\left<\sum v_1(t)v_2(0)\right>$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
 #plt.tight_layout()
 
 ax = plt.gca()
