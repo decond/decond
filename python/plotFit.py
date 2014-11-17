@@ -191,7 +191,8 @@ plt.savefig('ec-fitrange.' + format, bbox_inches="tight")
 plt.figure(figsize=figsize1)
 numErrBars = 5
 for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
-    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars,
+    plt.errorbar(timeLags, nDC*Const.nm2AA**2, yerr=nDC_err*Const.nm2AA**2,
+                 errorevery=timeLags.size//numErrBars,
                  linestyle=lineStyle[i], label=label[i])
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 
@@ -205,9 +206,12 @@ plt.xlabel("$\Lambda$\ \ (ps)", labelpad=labelpad)
 plt.ylabel(r"$\tilde D^{(1)}_I(\Lambda)$, $\tilde D^{(2)}_{IL}(\Lambda)$\ \ (\AA$^2$)", labelpad=labelpad)
 for sp in plt.gca().spines.values():
   sp.set_linewidth(spineLineWidth)
-plt.xlim([0, 1000])
-plt.ylim([-6, 11])
-plt.yticks([-5, 0, 5, 10])
+plt.xlim([0, 1000])  #IL
+plt.ylim([-600, 1100])  #IL
+plt.yticks([-500, 0, 500, 1000])  #IL
+#plt.xlim([0, 100])  #NaCl
+#plt.ylim([-100, 400])  #NaCl
+#plt.yticks([-100, 0, 100, 200, 300, 400])  #NaCl
 ax.xaxis.labelpad = 4
 ax.yaxis.labelpad = 0
 plt.savefig('cesaro.' + format, bbox_inches="tight")
