@@ -156,10 +156,12 @@ plt.legend()
 plt.xlabel("fit range  (ps)")
 plt.ylabel(r"$\sigma$  (S m$^{-1}$)")
 
+# plot Cesaro
 plt.figure()
 numErrBars = 5
 for i, (nDC, nDC_err)  in enumerate(zip(nDCesaro, nDCesaro_err)):
-    plt.errorbar(timeLags, nDC, yerr=nDC_err, errorevery=timeLags.size//numErrBars, linestyle=lineStyle[i], label=label[i])
+    plt.errorbar(timeLags, nDC*Const.nm2AA**2, yerr=nDC_err*Const.nm2AA**2,
+                 errorevery=timeLags.size//numErrBars, linestyle=lineStyle[i], label=label[i])
     if (args.color is None and i == numIonTypes - 1): plt.gca().set_color_cycle(None)
 plt.legend(loc='upper left')
 plt.xlabel("$\Lambda$  (ps)")
