@@ -63,7 +63,10 @@ def zipIndexPair2(idx_r, idx_c, size):
 with h5py.File(args.corrData, 'r') as f:
   timeLags = f['timeLags'][...]
   nCorr = f['nCorr'][...]  # nm^2 / ps^2
-  volume = f['volume'][...]
+  if ('cell' not in f.attrs):
+    volume = f['volume'][...]
+  else:
+    volume = np.prod(f.attrs['cell'][...])
   numMol = f.attrs['numMol'][...]
   numIonTypes = numMol.size
   numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2;
