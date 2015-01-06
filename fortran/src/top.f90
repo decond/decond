@@ -150,7 +150,7 @@ contains
     type(atom), intent(inout) :: at
     integer :: stat
     character(len=LINE_LEN) :: line, atype, dum_s
-    integer :: i, j, num_atom, num_rec, dum_i
+    integer :: i, j, num_atom, num_rec
     real(8) :: dum_r, mass, charge
     logical :: is_read
 
@@ -175,7 +175,7 @@ contains
           case (6)
             read(line, *, iostat=stat) atype, mass, charge, dum_s, dum_r, dum_r
           case (7)
-            read(line, *, iostat=stat) atype, dum_i, mass, charge, dum_s, dum_r, dum_r
+            read(line, *, iostat=stat) atype, dum_s, mass, charge, dum_s, dum_r, dum_r
           case default
             write(*,*) "Error: I cannot deal with num_rec=", num_rec, " for atomtype ", trim(at%type)
             write(*,*) trim(line)
