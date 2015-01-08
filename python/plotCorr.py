@@ -147,6 +147,24 @@ for sp in ax.spines.values():
 
 plt.savefig(outFilename + '.oneTwo.' + format, bbox_inches="tight", pad_inches=0.20)
 
+# plot total nCorr
+plt.figure(figsize=figsize1)
+plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
+plt.plot(timeLags, np.sum(nCorr*Const.nm2AA**2, axis=0), label="total corr", linestyle='-')
+
+leg = plt.legend()
+plt.xlim(xmax=3)
+plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
+plt.ylabel(r'$C(t)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=ylabelpad)
+#plt.tight_layout()
+
+ax = plt.gca()
+for sp in ax.spines.values():
+  sp.set_linewidth(spineLineWidth)
+
+plt.savefig(outFilename + '.totalCorr.' + format, bbox_inches="tight", pad_inches=0.20)
+
+
 if (not args.nosd):
   # plot sdCorr
   rc = {'font': {'size': 46,
