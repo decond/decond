@@ -1,171 +1,221 @@
+!  XDR Fortran Interface with Wrappers
+!  2014 (c) James W. Barnett <jbarnet4@tulane.edu>
+!  https://github.com/wesbarnett/
+
+!  Modified by Kai-Min Tu (2014)
+!  Based on Barnett's work, the interface for TRR file is incorporated
+!  https://github.com/kmtu/
+
 module xdr
-  use, intrinsic::iso_c_binding
-  use utility, only : handle, f2c_string
 
-  private 
-  public :: open_trajectory, close_trajectory, read_trajectory, write_trajectory, get_natom
+    use, intrinsic :: iso_c_binding, only: C_PTR, C_CHAR, C_FLOAT, C_INT
 
-  integer, parameter :: line_len = 128, XDRFILE_MAX = 100
-  type(C_PTR), dimension(XDRFILE_MAX) :: xdr_iohandle = c_null_ptr
-  
-  interface
-    subroutine read_trr_natoms(filename, natoms) bind(C)
-      use, intrinsic::iso_c_binding
-      implicit none
-      character(len=1, kind=C_CHAR), dimension(*), intent(in) :: filename
-      integer(C_INT), intent(out) :: natoms
-    end subroutine
+    implicit none
+    private
 
-    integer(C_INT) function read_trr(xd, natoms, step, t, lambda, box, x, v, f) bind(C)
-      use, intrinsic :: iso_c_binding
-      implicit none
-      type(C_PTR), value :: xd
-      integer(C_INT), value :: natoms
-      integer(C_INT) :: step
-      real(C_DOUBLE) :: t, lambda
-      real(C_DOUBLE) :: box(*), x(*), v(*)
-      type(C_PTR), value :: f
-    end function
+    type, abstract :: trjfile
+      type(xdrfile), pointer :: xd
+      integer(C_INT) :: NATOMS, STEP, STAT
+      real(C_FLOAT) :: box(3,3), time
+    contains
+      procedure :: init => init_xdr
+      procedure :: read => read_xdr
+      procedure :: close => close_xdr
+    end type
 
-    integer(C_INT) function write_trr(xd, natoms, step, t, lambda, box, x, v, f) bind(C)
-      use, intrinsic :: iso_c_binding
-      implicit none
-      type(C_PTR), value :: xd
-      integer(C_INT), value :: natoms
-      integer(C_INT), value :: step
-      real(C_DOUBLE), value :: t, lambda
-      real(C_DOUBLE) :: box(*), x(*), v(*)
-      type(C_PTR), value :: f
-    end function
+!   *** xtcfile type
+!   box     - triclinic pbc box of the configuration
+!   NATOMS  - number of atoms in the configuration.
+!   pos     - positions read in (3,NATOMS)
+!   prec    - precision of the coordinates read in
+!   STEP    - step number of configuration.
+!   STAT    - status of operation. 0 = good
+!   time    - time of the configuration
+!   xd      - pointer from libxdrfile.
 
-    type(C_PTR) function xdrfile_open(path, mode) bind(C)
-      use, intrinsic :: iso_c_binding
-      implicit none
-      character(len=1, kind=C_CHAR), dimension(*) :: path, mode
-    end function
+!   Should always call init first. Then call read in a loop and do your
+!   calculations. After the loops call close.
 
-    integer function xdrfile_close(xfp) bind(C)
-      use, intrinsic :: iso_c_binding
-      implicit none
-      type(C_PTR), intent(in), value :: xfp
-    end function
-  end interface
+    type, extends(trjfile), public :: xtcfile
+      real(C_FLOAT), allocatable :: pos(:,:)
+      real(C_FLOAT) :: prec
+    end type
+
+!   *** trrfile type
+!   box     - triclinic pbc box of the configuration
+!   NATOMS  - number of atoms in the configuration.
+!   pos     - positions read in (3,NATOMS)
+!   vel     - velocities read in (3,NATOMS)
+!   force   - forces read in (3,NATOMS)
+!   lambda  - lambda value for free energy perturbation calculations
+!   STEP    - step number of configuration.
+!   STAT    - status of operation. 0 = good
+!   time    - time of the configuration
+!   xd      - pointer from libxdrfile.
+
+    type, extends(trjfile), public :: trrfile
+      real(C_FLOAT), allocatable :: pos(:,:), vel(:,:), force(:,:)
+      real(C_FLOAT) :: lambda
+    end type
+
+    ! the data type located in libxdrfile
+    type, bind(C) :: xdrfile
+      type(C_PTR) :: fp, xdr
+      character(kind=C_CHAR) :: mode
+      type(C_PTR) :: buf1, buf2
+      integer(C_INT) :: buf1size, buf2size
+    end type xdrfile
+
+    ! interface with libxdrfile
+    interface 
+
+      type(C_PTR) function xdrfile_open(filename,mode) bind(C, name='xdrfile_open')
+        import
+        character(kind=C_CHAR), intent(in) :: filename(*), mode(*)
+      end function
+
+      integer(C_INT) function xdrfile_close(xd) bind(C,name='xdrfile_close')
+        import
+        type(xdrfile), intent(in) :: xd
+      end function
+
+      ! xtc
+      integer(C_INT) function read_xtc_natoms(filename,NATOMS) bind(C, name='read_xtc_natoms')
+        import
+        character(kind=C_CHAR), intent(in) :: filename
+        integer(C_INT), intent(out) :: NATOMS
+      end function
+
+      integer(C_INT) function read_xtc(xd,NATOMS,STEP,time,box,x,prec) bind(C, name='read_xtc')
+        import
+        type(xdrfile), intent(in) :: xd
+        integer(C_INT), intent(out) :: NATOMS, STEP
+        real(C_FLOAT), intent(out) :: time, prec, box(*), x(*)
+      end function
+
+      ! trr
+      integer(C_INT) function read_trr_natoms(filename,NATOMS) bind(C, name='read_trr_natoms')
+        import
+        character(kind=C_CHAR), intent(in) :: filename
+        integer(C_INT), intent(out) :: NATOMS
+      end function
+
+      integer(C_INT) function read_trr(xd,NATOMS,STEP,time,lambda,box,x,v,f) bind(C, name='read_trr')
+        import
+        type(xdrfile), intent(in) :: xd
+        integer(C_INT), intent(out) :: NATOMS, STEP
+        real(C_FLOAT), intent(out) :: time, lambda, box(*), x(*), v(*), f(*)
+      end function
+
+    end interface
 
 contains
-  integer function newunit(unit)
-    use, intrinsic :: iso_c_binding
-    implicit none
-    integer, intent(out), optional :: unit
-    integer, parameter :: LUN_MIN=1, LUN_MAX=XDRFILE_MAX
-    integer :: lun
-    ! begin
-    newunit=-1
-    do lun=LUN_MIN,LUN_MAX
-       if (.not. c_associated(xdr_iohandle(lun))) then
-          newunit=lun
-          exit
-       end if
-    end do
-    if (present(unit)) unit=newunit
-  end function
-  
-  ! Open trajectory and returns handle as htraj. 
-  ! Should open fails, the program abends.
-  subroutine open_trajectory(htraj, fname, mode)
-    implicit none
-    type(handle), intent(inout) :: htraj
-    character(len=*), intent(in) :: fname
-    character(len=1), optional, intent(in) :: mode
-    character(len=1) :: fmode
 
-    if (present(mode)) then
-      fmode = mode
-    else
-      fmode = 'r'
-    end if
+    ! our wrappers for the trjfile class
+    subroutine init_xdr(trj,filename_in)
 
-    xdr_iohandle(newunit(htraj%iohandle)) = xdrfile_open(f2c_string(fname), fmode)
-  end subroutine open_trajectory
+        use, intrinsic :: iso_c_binding, only: C_NULL_CHAR, C_CHAR, c_f_pointer
 
-  ! Close trajectory specified by handle
-  subroutine close_trajectory(htraj)
-    implicit none
-    type(handle), intent(inout) :: htraj
-    integer(C_INT) :: ret
+        implicit none
+        class(trjfile), intent(inout) :: trj
+        type(C_PTR) :: xd_c
+        character (len=*), intent(in) :: filename_in
+        character (len=206) :: filename
+        logical :: ex
 
-    ret = xdrfile_close(xdr_iohandle(htraj%iohandle)) 
-    xdr_iohandle(htraj%iohandle) = c_null_ptr
-  end subroutine close_trajectory
+        inquire(file=trim(filename_in),exist=ex)
 
-  ! Read trajectory and returns [crd] as a coordinates, and [cell] as a
-  ! periodic cell, represented in nanometer.
-  ! [status] is non-zero if any error occurs. In such a case, [crd] and
-  ! [cell] may be an arbitrary value if the trajectory does not contain
-  ! cell information.
-  ! The coordinate is not guaranteed to be within a unit cell.
-  subroutine read_trajectory(htraj, natoms, is_periodic, crd, vel, cell, time, status)
-    use, intrinsic :: iso_c_binding
-    implicit none
-    type(handle), intent(in) :: htraj
-    integer(C_INT), intent(in) :: natoms
-    logical, intent(in) :: is_periodic
-    real(C_DOUBLE), intent(out) :: crd(3,natoms), vel(3,natoms)
-    real(8), intent(out) :: cell(3)
-    real(C_DOUBLE), intent(out) :: time
-    integer, intent(out) :: status
+        if (ex .eqv. .false.) then
+            write(0,*)
+            write(0,'(a)') " Error: "//trim(filename_in)//" does not exist."
+            write(0,*)
+            stop
+        end if
 
-    integer(C_INT) :: ret, step
-    real(C_DOUBLE) :: lambda, box(3, 3)
-    type(C_PTR), parameter :: f = C_NULL_PTR
+        ! Set the file name to be read in for C.
+        filename = trim(filename_in)//C_NULL_CHAR
 
-    integer :: i
+        select type (trj)
 
-    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
+        type is (xtcfile)
+          ! Get number of atoms in system and allocate position array.
+          trj % STAT = read_xtc_natoms(filename,trj % NATOMS)
 
-    do i = 1, 3
-      cell(i) = box(i, i)
-    end do
+          if (trj % STAT /= 0) then
+              write(0,*)
+              write(0,'(a)') " Error reading in "//trim(filename_in)//". Is it really an xtc file?"
+              write(0,*)
+              stop
+          end if
 
-    status = ret
-  end subroutine read_trajectory
-  
-  function get_natom(fname)
-    implicit none
-    integer :: get_natom
-    character(len=*), intent(in):: fname
+          allocate(trj % pos(3,trj % NATOMS))
 
-    get_natom = 0
-    call read_trr_natoms(f2c_string(fname), get_natom)
-  end function get_natom
+        type is (trrfile)
+          ! Get number of atoms in system and allocate position, velocity, force arrays.
+          trj % STAT = read_trr_natoms(filename,trj % NATOMS)
 
-  subroutine write_trajectory(htraj, natoms, is_periodic, crd, vel, cell, step, time, status)
-    use, intrinsic :: iso_c_binding
-    implicit none
-    type(handle), intent(in) :: htraj
-    integer(C_INT), intent(in) :: natoms
-    logical, intent(in) :: is_periodic
-    real(C_DOUBLE), intent(in) :: crd(3,natoms), vel(3,natoms)
-    real(8), intent(in) :: cell(3)
-    integer(C_INT) :: step
-    real(C_DOUBLE), intent(in) :: time
-    integer, intent(out) :: status
+          if (trj % STAT /= 0) then
+              write(0,*)
+              write(0,'(a)') " Error reading in "//trim(filename_in)//". Is it really an trr file?"
+              write(0,*)
+              stop
+          end if
 
-    integer(C_INT) :: ret
-    real(C_DOUBLE) :: lambda, box(3, 3)
-    type(C_PTR), parameter :: f = C_NULL_PTR
+          allocate(trj % pos(3,trj % NATOMS))
+          allocate(trj % vel(3,trj % NATOMS))
+          allocate(trj % force(3,trj % NATOMS))
+        end select
 
-    integer :: i
+        ! Open the file for reading. Convert C pointer to Fortran pointer.
+        xd_c = xdrfile_open(filename,"r")
+        call c_f_pointer(xd_c,trj % xd)
 
-    lambda = 0d0
-    box = 0d0
-    do i = 1, 3
-      box(i, i) = cell(i)
-    end do
+        write(0,'(a)') " Opened "//trim(filename)//" for reading."
+        write(0,'(a,i0,a)') " ",trj % NATOMS, " atoms present in system."
+        write(0,*)
 
-    ret = write_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
+    end subroutine init_xdr
 
-    status = ret
-  end subroutine write_trajectory
+    subroutine read_xdr(trj)
+
+        implicit none
+        class(trjfile), intent(inout) :: trj
+        real :: box_trans(3,3)
+
+        select type (trj)
+
+        type is (xtcfile)
+          trj % STAT = read_xtc(trj % xd,trj % NATOMS,trj % STEP,trj % time,box_trans,trj % pos,trj % prec)
+
+        type is (trrfile)
+          trj % STAT = read_trr(trj % xd,trj % NATOMS,trj % STEP,trj % time,trj % lambda, box_trans,trj % pos,trj % vel,trj % force)
+
+        end select
+
+        ! C is row-major, whereas Fortran is column major. Hence the following.
+        trj % box = transpose(box_trans)
+
+    end subroutine read_xdr
+
+    subroutine close_xdr(trj)
+
+        implicit none
+        class(trjfile), intent(inout) :: trj
+
+        trj % STAT = xdrfile_close(trj % xd)
+
+        select type (trj)
+
+        type is (xtcfile)
+          deallocate(trj % pos)
+
+        type is (trrfile)
+          deallocate(trj % pos)
+          deallocate(trj % vel)
+          deallocate(trj % force)
+
+        end select
+
+    end subroutine close_xdr
 
 end module xdr
-

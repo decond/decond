@@ -1,15 +1,16 @@
 program trjconv2com
   use utility, only : handle
-  use xdr, only : open_trajectory, close_trajectory, read_trajectory, write_trajectory, get_natom
+  use xdr, only : trrfile
   use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
   integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
   character(len=128) :: outFilename 
-  character(len=128) :: dataFilename
+  character(len=128) :: inFilename
   character(len=128) :: topFilename
-  type(handle) :: outFileHandle, dataFileHandle, topFileHandle
+  type(trrfile) :: outTrrfile, inTrrfile
+  type(handle) ::  topFileHandle
   integer :: numFrame, stat, numMolType, numFrameRead, percent
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
   integer, allocatable :: charge(:), start_index(:)
@@ -35,7 +36,7 @@ program trjconv2com
   !read parameters for all ranks
   call get_command_argument(1, outFilename)
 
-  call get_command_argument(2, dataFilename)
+  call get_command_argument(2, inFilename)
 
   call get_command_argument(3, topFilename)
 
@@ -49,7 +50,7 @@ program trjconv2com
 
   !output parameters read
   write(*,*) "outFile = ", outFilename
-  write(*,*) "inFile.trr = ", dataFilename
+  write(*,*) "inFile.trr = ", inFilename
   write(*,*) "topFile.trr = ", topFilename
   write(*,*) "numFrame= ", numFrame
   write(*,*) "numMolType = ", numMolType
@@ -92,8 +93,9 @@ program trjconv2com
   totNumMol = sum(sys%mol(:)%num)
 
   !read trajectory
+  call inTrrfile % init(inFilename)
   write(*,*) "start converting trajectory..."
-  sysNumAtom = get_natom(dataFilename)
+  sysNumAtom = inTrrfile % natoms
   write(*,*) "sysNumAtom=", sysNumAtom
 
   allocate(pos_com(3, totNumMol), stat=stat)
@@ -123,12 +125,13 @@ program trjconv2com
   end if 
 
   numFrameRead = 0
-  call open_trajectory(dataFileHandle, dataFilename)
-  call open_trajectory(outFileHandle, outFilename, 'w')
+  call open_trajectory(inTrrfile, inFilename)
+  call open_trajectory(outTrrfile, outFilename, 'w')
+  call outTrrfile % init(outFilename)
   percent = numFrame / 100
   do i = 1, numFrame
     if (mod(i, percent) == 0) write(*,*) "progress: ", i / percent, "%"
-    call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+    call read_trajectory(inTrrfile, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
     if (stat /= 0) then
       write(*,*) "Reading trajectory error"
       call exit(1)
@@ -136,9 +139,9 @@ program trjconv2com
     numFrameRead = numFrameRead + 1
     call com_pos(pos_com, pos_tmp, start_index, sys, cell)
     call com_vel(vel_com, vel_tmp, start_index, sys)
-    call write_trajectory(outFileHandle, totNumMol, is_periodic, pos_com, vel_com, cell, i-1, time(i), stat)
+    call write_trajectory(outTrrfile, totNumMol, is_periodic, pos_com, vel_com, cell, i-1, time(i), stat)
     do j = 1, skip-1
-      call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+      call read_trajectory(inTrrfile, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
         write(*,*) "Reading trajectory error"
         call exit(1)
@@ -148,8 +151,8 @@ program trjconv2com
       end if 
     end do
   end do
-  call close_trajectory(dataFileHandle)
-  call close_trajectory(outFileHandle)
+  call close_trajectory(inTrrfile)
+  call close_trajectory(outTrrfile)
   write(*,*) "numFrameRead = ", numFrameRead
   if (numFrameRead /= numFrame) then
     write(*,*) "Number of frames expected to read is not the same as actually read!"
