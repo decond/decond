@@ -117,13 +117,13 @@ if (not args.memoryForSpeed):
         rhoTmp = np.array(np.split(rhoTmp, rBins.size, axis=1)) # [rBin, type, window]
         rhoTmp = np.sum(rhoTmp, axis=2).T # [type, rBin]
 
-        sdCorr += sdCorrTmp / rhoTmp[:, :, np.newaxis]
+        sdCorr += sdCorrTmp
         rho += rhoTmp
 
   nCorr /= numMD
   volume /= numMD
   if (not args.nosd):
-    sdCorr /= numMD
+    sdCorr /= rho[:, :, np.newaxis]
     rho /= numMD
 
   if (args.error):
@@ -225,14 +225,14 @@ else:
         rhoTmp = np.array(np.split(rhoTmp, rBins.size, axis=1)) # [rBin, type, window]
         rhoTmp = np.sum(rhoTmp, axis=2).T # [type, rBin]
 
-        sdCorrN[n] = sdCorrTmp / rhoTmp[:, :, np.newaxis]
+        sdCorrN[n] = sdCorrTmp
         rhoN[n] = rhoTmp
 
   nCorr = np.mean(nCorrN, axis=0)
   volume = np.mean(volumeN, axis=0)
   if (not args.nosd):
     rho = np.mean(rhoN, axis=0)
-    sdCorr = np.mean(sdCorrN, axis=0)
+    sdCorr = np.average(sdCorrN, axis=0, weights=rhoN[..., np.newaxis])
 
   if (args.error):
     if (numMD > 1):
