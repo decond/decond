@@ -106,14 +106,15 @@ if (not args.memoryForSpeed):
         volume += f['volume'][...]
 
       if (not args.nosd):
-        sdDCesaro += f['sdDCesaro'][:, :rBins.size, :timeLags.size]
-        rho2 += f['rho2'][:, :rBins.size]
+        rho2_tmp = f['rho2'][:, :rBins.size]
+        sdDCesaro += f['sdDCesaro'][:, :rBins.size, :timeLags.size] * rho2_tmp[:, :rBins.size, np.newaxis]
+        rho2 += rho2_tmp
 
   nDCesaro /= numMD
   nDCesaroTotal = np.sum(nDCesaro * (zz * ww)[:, np.newaxis], axis=0)
   volume /= numMD
   if (not args.nosd):
-    sdDCesaro /= numMD
+    sdDCesaro /= rho2[..., np.newaxis]
     rho2 /= numMD
 
   if (numMD > 1):
@@ -231,7 +232,7 @@ else:
   nDCesaro = np.mean(nDCesaroRaw, axis=0)
   volume = np.mean(volumeRaw)
   if (not args.nosd):
-    sdDCesaro = np.mean(sdDCesaroRaw, axis=0)
+    sdDCesaro = np.average(sdDCesaroRaw, axis=0, weights=rho2Raw[..., np.newaxis])
     rho2 = np.mean(rho2Raw, axis=0)
 
   if (numMD > 1):
