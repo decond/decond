@@ -59,7 +59,7 @@ def zipIndexPair2(idx_r, idx_c, size):
   be the same for (i,j) and (j,i)
   """
   assert(idx_r <= idx_c)
-  return idx_r * size - ([0]+list(it.accumulate(range(4))))[idx_r] + idx_c - idx_r
+  return idx_r * size + idx_c - list(accumulate(range(size)))[idx_r]
 
 def loadDictFromH5(h5g):
   dict = {}
