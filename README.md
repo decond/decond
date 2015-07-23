@@ -1,9 +1,8 @@
-decond
+Decond
 =====
-A framework for calculating the electrical conductivity from molecular dynamics trajectories and performing various decomposition methods.
+Decond is a framework to **dec**ompose the electrical **cond**uctivity calculated from molecular dynamics trajectories.
 
-Currently only the spatial decomposiiton is implemented, and it is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
-
+Currently only the spatial decomposiiton is implemented and is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
 
 Project structure
 -----
