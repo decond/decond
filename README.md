@@ -1,6 +1,8 @@
 decond
 =====
-A framework for calculating the electrical conductivity from MD trajectories and performing various decomposition methods
+A framework for calculating the electrical conductivity from molecular dynamics trajectories and performing various decomposition methods.
+
+Currently only the spatial decomposiiton is implemented, and it is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
 
 
 Project structure
