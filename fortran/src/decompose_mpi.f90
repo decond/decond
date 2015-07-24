@@ -1,45 +1,38 @@
 program decompose_mpi
-  use mpi
+  use mpiproc
   use utility, only : handle
   use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only : open_top, close_top, read_top, system, print_sys
   use correlation
+  use spatial_dec, only : sd_init, rBinWidth, pos_r, pos_c, rho, sdCorr, pos, num_rBin, &
+                          com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
+                          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
+                          sd_collectCorr, sd_normalize
   implicit none
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
   character(len=128) :: outFilename, dataFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
-  integer :: numFrame, maxLag, num_rBin, stat, numMolType, numFrameRead, numFrame_k
+  integer :: numFrame, maxLag, stat, numMolType, numFrameRead, numFrame_k
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
-  integer, allocatable :: charge(:), rBinIndex(:), norm(:), start_index(:)
-  real(8) :: cell(3), timestep, rBinWidth, tmp_r, dummy_null
+  integer, allocatable :: charge(:), norm(:), start_index(:)
+  real(8) :: cell(3), timestep, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
-  real(8), allocatable :: pos(:, :, :), vel(:, :, :)
+  real(8), allocatable :: vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), rho(:, :), sdCorr(:, :, :), nCorr(:, :), corr_tmp(:)
+  real(8), allocatable :: time(:), nCorr(:, :), corr_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd
   type(system) :: sys
 
   !MPI variables
-  integer :: ierr, nprocs, myrank
-  integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
-  integer, parameter :: root = 0
-  integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime, starttime2, prog_starttime
-  integer :: r_start_offset, c_start_offset
-  integer :: residueMol_r, residueMol_c, num_r, num_c
-  real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :), vel_r(:, :, :), vel_c(:, :, :)
-  integer :: row_comm, col_comm, r_group_idx, c_group_idx, offset
-  integer, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
+  real(8), allocatable :: vel_r(:, :, :), vel_c(:, :, :)
 
   !initialize
-  call mpi_init(ierr)
-  call mpi_comm_size(MPI_COMM_WORLD, nprocs, ierr)
-  call mpi_comm_rank(MPI_COMM_WORLD, myrank, ierr)
+  call mpi_setup('init')
 
   prog_starttime = MPI_Wtime()
 
@@ -52,9 +45,9 @@ program decompose_mpi
   skip = 1
   maxLag = -1
   is_sd = .true.
-  rBinWidth = 0.01
   numDomain_r = 0
   numDomain_c = 0
+  call sd_init()
 
   !root checks the number of the input arguments
   is_periodic = .true.
@@ -268,139 +261,12 @@ program decompose_mpi
     write(*,*) "numDomain_c = ", numDomain_c
   end if
 
-  !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
-  !numMolPerDomain_r * numDomain_r ~= totNumMol
-  if (numDomain_r == 0 .and. numDomain_c == 0) then
-    numDomain_c = nint(sqrt(dble(nprocs)))
-    do while(mod(nprocs, numDomain_c) /= 0)
-      numDomain_c = numDomain_c - 1
-    end do
-    numDomain_r = nprocs / numDomain_c
-  else if (numDomain_r > 0) then
-    numDomain_c = nprocs / numDomain_r
-  else if (numDomain_c > 0) then
-    numDomain_c = nprocs / numDomain_r
-  else
-    write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c 
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if
-
-  if (numDomain_r * numDomain_c /= nprocs) then
-    write(*,*) "Domain decomposition failed: ", numDomain_r, " x ", numDomain_c, " /= ", nprocs
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-
-  !Determine row and column position for the node
-  r_group_idx = mod(myrank, numDomain_r) !column-major mapping
-  c_group_idx = myrank / numDomain_r
-
-  !Split comm into row and column comms
-  call mpi_comm_split(MPI_COMM_WORLD, c_group_idx, r_group_idx, col_comm, ierr)
-  !color by row, rank by column
-  call mpi_comm_split(MPI_COMM_WORLD, r_group_idx, c_group_idx, row_comm, ierr)
-  !color by column, rank by row
-
-  numMolPerDomain_r = totNumMol / numDomain_r
-  numMolPerDomain_c = totNumMol / numDomain_c
-  residueMol_r = mod(totNumMol, numDomain_r)
-  residueMol_c = mod(totNumMol, numDomain_c)
-
-  allocate(displs_r(numDomain_r), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: displs_r"
-    call exit(1)
-  end if 
-  allocate(displs_c(numDomain_c), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: displs_c"
-    call exit(1)
-  end if 
-  allocate(scounts_r(numDomain_r), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: scounts_r"
-    call exit(1)
-  end if 
-  allocate(scounts_c(numDomain_c), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: scounts_c"
-    call exit(1)
-  end if 
-
-  offset = 0
-  do i = 1, numDomain_r
-    displs_r(i) = offset
-    if (i-1 < residueMol_r) then
-      scounts_r(i) = numMolPerDomain_r + 1
-    else
-      scounts_r(i) = numMolPerDomain_r
-    end if
-    offset = offset + scounts_r(i)
-  end do
-
-  offset = 0
-  do i = 1, numDomain_c
-    displs_c(i) = offset
-    if (i-1 < residueMol_c) then
-      scounts_c(i) = numMolPerDomain_c + 1
-    else
-      scounts_c(i) = numMolPerDomain_c
-    end if
-    offset = offset + scounts_c(i)
-  end do
-
-  num_r = scounts_r(r_group_idx + 1)
-  num_c = scounts_c(c_group_idx + 1)
-  r_start = displs_r(r_group_idx + 1) + 1
-  r_end = r_start + num_r - 1
-  c_start = displs_c(c_group_idx + 1) + 1
-  c_end = c_start + num_c - 1
-
-  displs_r = displs_r * 3 * numFrame
-  displs_c = displs_c * 3 * numFrame
-  scounts_r = scounts_r * 3 * numFrame
-  scounts_c = scounts_c * 3 * numFrame
-
-  !check if myrank is at the ending boundary and if indexes are coincident
-  if (r_group_idx == numDomain_r - 1) then
-    if (r_end /= totNumMol) then
-      write(*,*) "Error: r_end /= totNumMol, r_end =", r_end
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
-  end if
-  if (c_group_idx == numDomain_c - 1) then
-    if (c_end /= totNumMol) then
-      write(*,*) "Error: c_end /= totNumMol"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
-  end if
-  if (myrank == root) then
-    write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c 
-  end if
-!  write(*,*) "my rank =", myrank
-!  write(*,*) "r_start, r_end =", r_start, r_end
-!  write(*,*) "c_start, c_end =", c_start, c_end
-!  write(*,*)
+  call domainDecomposition(totNumMol, numFrame)
 
   !prepare memory for all ranks
-  allocate(pos_r(3, numFrame, num_r), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: pos_r"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
   allocate(vel_r(3, numFrame, num_r), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel_r"
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
-  end if 
-  allocate(pos_c(3, numFrame, num_c), stat=stat)
-  if (stat /=0) then
-    write(*,*) "Allocation failed: pos_c"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
@@ -410,6 +276,10 @@ program decompose_mpi
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
     call exit(1)
   end if 
+
+  if (is_sd) then
+    call sd_prepPosMemory(numFrame, totNumMol, num_r, num_c)
+  end if
 
   !read trajectory at root
   if (myrank == root) then
@@ -424,12 +294,6 @@ program decompose_mpi
     end if
     write(*,*) "sysNumAtom=", sysNumAtom
 
-    allocate(pos(3, numFrame, totNumMol), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: pos"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
     allocate(vel(3, numFrame, totNumMol), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: vel"
@@ -466,11 +330,15 @@ program decompose_mpi
       end if 
       numFrameRead = numFrameRead + 1
       if (is_pm_mode) then
-        pos(:, i, :) = pos_tmp
         vel(:, i, :) = vel_tmp
+        if (is_sd) then
+          pos(:, i, :) = pos_tmp
+        end if
       else
-        call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
         call com_vel(vel(:, i, :), vel_tmp, start_index, sys)
+        if (is_sd) then
+          call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
+        end if
       end if
       do j = 1, skip-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
@@ -501,13 +369,7 @@ program decompose_mpi
     write(*,*) "timestep = ", timestep
     write(*,*) "cell = ", cell
   else
-    !not root, allocate dummy pos to inhibit error messages
-    allocate(pos(1, 1, 1), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: dummy pos on rank", myrank
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
+    !not root, allocate dummy vel to inhibit error messages
     allocate(vel(1, 1, 1), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: dummy vel on rank", myrank
@@ -520,18 +382,6 @@ program decompose_mpi
   if (myrank == root) write(*,*) "start broadcasting trajectory"
   starttime = MPI_Wtime()
   if (r_group_idx == 0) then
-    call mpi_scatterv(pos, scounts_c, displs_c, mpi_double_precision, pos_c,&
-                      scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
-  end if
-  call mpi_bcast(pos_c, scounts_c(c_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
-
-  if (c_group_idx == 0) then
-    call mpi_scatterv(pos, scounts_r, displs_r, mpi_double_precision, pos_r,&
-                      scounts_r(r_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
-  end if
-  call mpi_bcast(pos_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
-
-  if (r_group_idx == 0) then
     call mpi_scatterv(vel, scounts_c, displs_c, mpi_double_precision, vel_c,&
                       scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
   end if
@@ -543,12 +393,14 @@ program decompose_mpi
   end if
   call mpi_bcast(vel_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
 
+  deallocate(vel)
+
   call mpi_bcast(cell, 3, mpi_double_precision, root, MPI_COMM_WORLD, ierr)
+
+  if (is_sd) call sd_broadcastPos()
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
 
-  deallocate(pos)
-  deallocate(vel)
 
   !decomposition
   if (is_sd) then
@@ -574,32 +426,8 @@ program decompose_mpi
   nCorr = 0d0
 
   if (is_sd) then
-    ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
-    num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
-    if (myrank == root) write(*,*) "num_rBin = ", num_rBin
-
-    allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: sdCorr"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-    sdCorr = 0d0
-
-    allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: rho"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
-    rho = 0d0
-
-    allocate(rBinIndex(numFrame), stat=stat)
-    if (stat /= 0) then
-      write(*,*) "Allocation failed: rBinIndex"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if 
+    call sd_cal_num_rBin(cell)
+    call sd_prepCorrMemory(maxLag, numMolType, numFrame)
   else
     allocate(corr_tmp(2*maxLag+1), stat=stat)
     if (stat /=0) then
@@ -610,6 +438,7 @@ program decompose_mpi
   end if
 
   if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
+
   do j = c_start, c_end
     do i = r_start, r_end
       if (i == j) then
@@ -636,14 +465,14 @@ program decompose_mpi
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
         molTypePairAllIndex = molTypePairIndex + numMolType
         if (is_sd) then
-          call getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), rBinWidth, rBinIndex)
+          call sd_getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), sd_binIndex)
           do k = 1, maxLag+1
             numFrame_k = numFrame - k + 1
             vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
             !TODO: test if this sum should be put here or inside the following loop for better performance
             nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
             do n = 1, numFrame_k
-              tmp_i = rBinIndex(n)
+              tmp_i = sd_binIndex(n)
               if (tmp_i <= num_rBin) then
                 sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
               end if
@@ -653,7 +482,7 @@ program decompose_mpi
           end do
 
           do t = 1, numFrame
-            tmp_i = rBinIndex(t)
+            tmp_i = sd_binIndex(t)
             if (tmp_i <= num_rBin) then
               rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
             end if
@@ -671,7 +500,7 @@ program decompose_mpi
     end do
   end do
   if (is_sd) then
-    deallocate(rBinIndex)
+    deallocate(sd_binIndex)
   end if
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished decomposition. It took ", endtime - starttime, " seconds"
@@ -681,17 +510,10 @@ program decompose_mpi
   starttime = MPI_Wtime()
   if (myrank == root) then
     call mpi_reduce(MPI_IN_PLACE, nCorr, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    if (is_sd) then
-      call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    end if
   else
     call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    if (is_sd) then
-      call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-    end if
   end if
+  if (is_sd) call sd_collectCorr()
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
 
@@ -709,14 +531,8 @@ program decompose_mpi
       nCorr(:,n) = nCorr(:,n) / norm
     end do
 
-    if (is_sd) then
-      rho = rho / numFrame
-      do n = 1, numMolType*numMolType
-        do i = 1, num_rBin
-          sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
-        end do
-      end do
-    end if
+    ! normalize rho and sdCorr
+    if (is_sd) call sd_normalize(numFrame, numMolType, norm)
 
     deallocate(norm)
 
@@ -730,32 +546,10 @@ program decompose_mpi
 
   if (myrank == root) write(*,*)
   if (myrank == root) write(*,*) "time for the whole program (sec):", MPI_Wtime() - prog_starttime
-  call mpi_finalize(ierr)
+  call mpi_setup('stop')
   stop
 
 contains
-  subroutine getBinIndex(p1, p2, cell, rBinWidth, rBinIndex)
-    implicit none
-    real(8), intent(in) :: p1(:,:), p2(:,:), cell(3), rBinWidth
-    !p1(dim,timeFrame)
-    integer, intent(out) :: rBinIndex(:)
-    real(8) :: pp(size(p1,1), size(p1,2))
-    integer :: d
-    
-    pp = p1 - p2
-    do d = 1, 3
-      pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
-    end do
-    rBinIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
-    where (rBinIndex == 0)
-      rBinIndex = 1
-    end where
-!    where (rBinIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
-!    where (rBinIndex > num_rBin)
-!      rBinIndex = -1
-!    end where
-  end subroutine getBinIndex
-
   integer function getMolTypeIndex(i, numMol)
     implicit none
     integer, intent(in) :: i, numMol(:)
@@ -783,54 +577,6 @@ contains
     jj = getMolTypeIndex(j, numMol)
     getMolTypePairIndex = (ii-1)*numMolType + jj
   end function getMolTypePairIndex
-
-  subroutine com_pos(com_p, pos, start_index, sys, cell)
-    implicit none
-    real(8), dimension(:, :), intent(out) :: com_p
-    real(8), dimension(:, :), intent(in) :: pos 
-    real(8), dimension(:, :), allocatable :: pos_gathered
-    integer, dimension(:), intent(in) :: start_index
-    type(system), intent(in) :: sys
-    real(8), dimension(3), intent(in) :: cell
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
-
-    idx_com = 0
-    do i = 1, size(sys%mol)
-      num_atom = size(sys%mol(i)%atom)
-      allocate(pos_gathered(3, num_atom), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: pos_gathered"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
-      end if
-      do j = 1, sys%mol(i)%num
-        idx_begin = start_index(i) + (j-1) * num_atom
-        idx_end = idx_begin + num_atom - 1
-        idx_com = idx_com + 1
-        call gatherMolPos(pos_gathered, pos(:, idx_begin:idx_end), cell)
-        do d = 1, 3
-          com_p(d, idx_com) = sum(pos_gathered(d, :) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
-        end do
-      end do
-      deallocate(pos_gathered)
-    end do
-  end subroutine com_pos
-
-  subroutine gatherMolPos(pos_gathered, pos, cell)
-    implicit none
-    real(8), dimension(:, :), intent(out) :: pos_gathered
-    real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(3), intent(in) :: cell
-    real(8), dimension(3) :: ref_pos
-    integer :: d
-
-    ref_pos = pos(:, 1)
-    do d = 1, 3
-      pos_gathered(d, :) = pos(d, :) - ref_pos(d)
-      pos_gathered(d, :) = ref_pos(d) + pos_gathered(d, :) - &
-                           nint(pos_gathered(d, :) / cell(d)) * cell(d)
-    end do
-  end subroutine gatherMolPos
 
   subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
