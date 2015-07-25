@@ -2,7 +2,7 @@
 FC = ifort
 H5FC = h5fc
 H5PFC = h5pfc
-FCMPI = mpiifort
+FCMPI = mpif90
 MODFLAG = -module
 
 SRCDIR = ./src/
@@ -40,13 +40,19 @@ trjconv2com : utility.o xdr.o top.o trjconv2com.o
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-decompose_mpi : correlation.o utility.o xdr.o top.o decompose_mpi.o
+decompose_mpi : mpiproc.o spatial_dec.o correlation.o utility.o xdr.o top.o decompose_mpi.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
 decompose_mpi.o : decompose_mpi.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
+spatial_dec.o : spatial_dec.f90 mpiproc.o
+	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+mpiproc.o : mpiproc.f90
+	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
 top.o : top.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
