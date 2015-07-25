@@ -21,27 +21,27 @@ contains
     implicit none
     integer, intent(in) :: numFrame, totNumMol, num_r, num_c
 
+    allocate(pos_r(3, numFrame, num_r), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: pos_r"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+
+    allocate(pos_c(3, numFrame, num_c), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: pos_c"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+
     if (myrank == root) then
       allocate(pos(3, numFrame, totNumMol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos"
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
-      end if
-
-      allocate(pos_r(3, numFrame, num_r), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: pos_r"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
-      end if
-
-      allocate(pos_c(3, numFrame, num_c), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: pos_c"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
-      end if
+      end if 
     else
       !not root, allocate dummy pos to inhibit error messages
       allocate(pos(1, 1, 1), stat=stat)
