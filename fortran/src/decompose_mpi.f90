@@ -8,11 +8,13 @@ program decompose_mpi
                           com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
                           sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
                           sd_collectCorr, sd_normalize
+  use engdec, only : engtrjFilename
+
   implicit none
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
-  character(len=128) :: outFilename, dataFilename, topFilename, arg
+  character(len=128) :: outCorrFilename, dataFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, stat, numMolType, numFrameRead, numFrame_k
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
@@ -25,8 +27,9 @@ program decompose_mpi
   real(8), allocatable :: time(:), nCorr(:, :), corr_tmp(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
   !rho: (num_rBin, molTypePairIndex)
-  logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd
+  logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd, is_ed
   type(system) :: sys
+  integer(hid_t) :: outCorrFileid
 
   !MPI variables
   real(8), allocatable :: vel_r(:, :, :), vel_c(:, :, :)
@@ -41,13 +44,15 @@ program decompose_mpi
   is_pm_mode = .false.
 
   !default values
-  outFilename = 'corr.h5'
+  outCorrFilename = 'corr.h5'
   skip = 1
   maxLag = -1
-  is_sd = .true.
+  is_sd = .false.
+  is_ed = .false.
   numDomain_r = 0
   numDomain_c = 0
   call sd_init()
+  call ed_init()
 
   !root checks the number of the input arguments
   is_periodic = .true.
@@ -204,7 +209,7 @@ program decompose_mpi
         end if
 
       case ('-o')
-        call get_command_argument(i, outFilename)
+        call get_command_argument(i, outCorrFilename)
         i = i + 1
 
       case ('-s')
@@ -217,9 +222,13 @@ program decompose_mpi
         i = i + 1
         read(arg, *) maxLag
 
-      case ('-nosd', '--nosd')
-        is_sd = .false.
-        if (outFilename == 'corr.h5') outFilename = 'corr-nosd.h5'
+      case ('-sd')
+        is_sd = .true.
+
+      case ('-ed')
+        is_ed = .true.
+        call get_command_argument(i, engtrjFilename)
+        i = i + 1
 
       case ('-r')
         call get_command_argument(i, arg)
@@ -250,7 +259,7 @@ program decompose_mpi
 
   !rank root output parameters read
   if (myrank == root) then
-    write(*,*) "outFile = ", outFilename
+    write(*,*) "outFile = ", outCorrFilename
     write(*,*) "inFile.trr = ", dataFilename
     if (is_pa_mode) write(*,*) "topFile.top = ", topFilename
     write(*,*) "numFrame= ", numFrame
@@ -259,6 +268,24 @@ program decompose_mpi
     write(*,*) "numMolType = ", numMolType
     write(*,*) "numDomain_r = ", numDomain_r
     write(*,*) "numDomain_c = ", numDomain_c
+  end if
+
+  if (myrank == root) then
+    ! create an HDF5 file
+    call H5open_f(ierr)
+    call H5Fcreate_f(outCorrFilename, H5F_ACC_EXCL, outCorrFileid, ierr)
+    if (ierr /= 0) then
+      write(*,*) "Failed to create HDF5 file: ", outCorrFilename
+      write(*,*) "Probably the file already exists?"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+  end if
+
+
+  ! prepare eBinIndex for each rank
+  if (is_ed) then
+    call ed_readEng(engtrjFilename, numFrame, skip)
   end if
 
   call domainDecomposition(totNumMol, numFrame)
@@ -608,7 +635,7 @@ contains
     implicit none
     real(8), allocatable :: timeLags(:), rBins(:)
     integer :: ierr
-    integer(hid_t) :: fid, did1, did2, did3, sid1, sid2
+    integer(hid_t) :: did1, did2, did3, sid1, sid2
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -628,37 +655,32 @@ contains
       rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
     end if
 
-    call H5open_f(ierr)
-
-    ! create a HDF5 file
-    call H5Fcreate_f(outFilename, H5F_ACC_TRUNC_F, fid, ierr)
-
     ! create and write dataset
-    call H5LTset_attribute_double_f(fid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
-    call H5LTset_attribute_int_f(fid, "/", "charge", charge, size(charge, kind=size_t), ierr)
-    call H5LTset_attribute_int_f(fid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
-    call H5LTset_attribute_double_f(fid, "/", "cell", cell, size(cell, kind=size_t), ierr)
+    call H5LTset_attribute_double_f(outCorrFileid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
+    call H5LTset_attribute_int_f(outCorrFileid, "/", "charge", charge, size(charge, kind=size_t), ierr)
+    call H5LTset_attribute_int_f(outCorrFileid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
+    call H5LTset_attribute_double_f(outCorrFileid, "/", "cell", cell, size(cell, kind=size_t), ierr)
 
-    call H5LTmake_dataset_double_f(fid, "nCorr", 2, &
+    call H5LTmake_dataset_double_f(outCorrFileid, "nCorr", 2, &
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
-    call H5Dopen_f(fid, "nCorr", did1, ierr)
+    call H5Dopen_f(outCorrFileid, "nCorr", did1, ierr)
 
     if (is_sd) then
-      call H5LTmake_dataset_double_f(fid, "sdCorr", 3, &
+      call H5LTmake_dataset_double_f(outCorrFileid, "sdCorr", 3, &
           [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
-      call H5Dopen_f(fid, "sdCorr", did2, ierr)
+      call H5Dopen_f(outCorrFileid, "sdCorr", did2, ierr)
 
-      call H5LTmake_dataset_double_f(fid, "rho", 2, &
+      call H5LTmake_dataset_double_f(outCorrFileid, "rho", 2, &
           [size(rho, 1, kind=hsize_t), size(rho, 2, kind=hsize_t)], rho, ierr)
-      call H5Dopen_f(fid, "rho", did3, ierr)
+      call H5Dopen_f(outCorrFileid, "rho", did3, ierr)
     end if
 
-    call H5LTmake_dataset_double_f(fid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
-    call H5Dopen_f(fid, "timeLags", sid1, ierr)
+    call H5LTmake_dataset_double_f(outCorrFileid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
+    call H5Dopen_f(outCorrFileid, "timeLags", sid1, ierr)
 
     if (is_sd) then
-      call H5LTmake_dataset_double_f(fid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
-      call H5Dopen_f(fid, "rBins", sid2, ierr)
+      call H5LTmake_dataset_double_f(outCorrFileid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
+      call H5Dopen_f(outCorrFileid, "rBins", sid2, ierr)
     end if
 
     ! attach scale dimension
@@ -676,7 +698,7 @@ contains
       call H5Dclose_f(did2, ierr)
       call H5Dclose_f(did3, ierr)
     end if
-    call H5Fclose_f(fid, ierr)
+    call H5Fclose_f(outCorrFileid, ierr)
     call H5close_f(ierr)
   end subroutine output
 
@@ -727,13 +749,17 @@ contains
     write(*, *) 
     write(*, *) "  -l <maxlag>: maximum time lag. default = <numFrameToRead - 1>"
     write(*, *) 
-    write(*, *) "  -nosd: no spatial decomposition, do only one-two decomposition"
-    write(*, *) 
-    write(*, *) "  -r <rbinwidth(nm)>:"
-    write(*, *) "   spatial decomposition r-bin width. default = 0.01, ignored when -nosd is given"
+    write(*, *) "  -sd: do spatial decomposition. default no sd."
+    write(*, *)
+    write(*, *) "  -ed <engtrj.dat>: do energy decomposition. default no ed."
+    write(*, *)
+    write(*, *) "  -sbwidth <sBinWidth(nm)>: spatial-decomposition bin width. default = 0.01."
+    write(*, *) "                            only meaningful when -sd is given."
+    write(*, *)
+    write(*, *) "  -ebnum <num_eBin>: number of energy-decomposition bins. default = 500"
+    write(*, *) "                     only meaningful when -ed is given."
     write(*, *) 
     write(*, *) "  -d <numDomain_r> <numDomain_c>:" 
     write(*, *) "   manually assign the MPI decomposition pattern"
   end subroutine print_usage
-
 end program decompose_mpi

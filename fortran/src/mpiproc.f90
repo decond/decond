@@ -117,6 +117,7 @@ contains
     offset = 0
     do i = 1, numDomain_r
       displs_r(i) = offset
+      ! distribute the residue molecules one by one from the first node
       if (i-1 < residueMol_r) then
         scounts_r(i) = numMolPerDomain_r + 1
       else
@@ -128,6 +129,7 @@ contains
     offset = 0
     do i = 1, numDomain_c
       displs_c(i) = offset
+      ! distribute the residue molecules one by one from the first node
       if (i-1 < residueMol_c) then
         scounts_c(i) = numMolPerDomain_c + 1
       else
@@ -136,13 +138,17 @@ contains
       offset = offset + scounts_c(i)
     end do
 
-    num_r = scounts_r(r_group_idx + 1)
-    num_c = scounts_c(c_group_idx + 1)
-    r_start = displs_r(r_group_idx + 1) + 1
-    r_end = r_start + num_r - 1
+    ! index in view of moleulce
+    num_r = scounts_r(r_group_idx + 1)  ! number of molecules (in row/col dimension)
+    num_c = scounts_c(c_group_idx + 1)  ! distributed to this rank
+
+    r_start = displs_r(r_group_idx + 1) + 1  ! molecule index begins from 1, so plus 1
     c_start = displs_c(c_group_idx + 1) + 1
+
+    r_end = r_start + num_r - 1
     c_end = c_start + num_c - 1
 
+    ! in view of memory, for distributing array in parallel
     displs_r = displs_r * 3 * numFrame
     displs_c = displs_c * 3 * numFrame
     scounts_r = scounts_r * 3 * numFrame
