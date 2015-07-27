@@ -19,3 +19,8 @@
 *.swp
 .nfs*
 *~
+
+tags
+GPATH
+GRTAGS
+GTAGS
