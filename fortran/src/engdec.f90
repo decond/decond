@@ -2,10 +2,11 @@ module engdec
   use mpiproc
   implicit none
   integer :: num_eBin
-  character(len=128) :: engtrjFilename
-  real(8), allocatable :: eBinIndex(:, :)  !eBinIndex(numFrame, ?)
-  integer, allocatable :: storageIndexTable(:, :)
-  integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 1
+  integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
+  character(len=*), parameter :: ENGDSET_NAME = "energy"
+  character(len=128) :: engtrajFilename
+  real(8), allocatable :: eBinIndex(:, :)  !eBinIndex(numFrame, uniqueNumMolPair)
+  integer, allocatable :: engLocLookupTable(:, :)
 
 contains
   subroutine ed_init()
@@ -13,20 +14,23 @@ contains
     num_eBin = 500  ! default value
   end subroutine sd_init
 
-  subroutine ed_readEng(engtrjFilename, numFrame, skip)
+  subroutine ed_readEng(engtrajFilename, numFrame, skip)
     use HDF5
     implicit none
-    character(len=*), intent(in) :: engtrjFilename
+    character(len=*), intent(in) :: engtrajFilename
     integer, intent(in) :: numFrame, skip
-    integer(hid_t) :: engtrjFileid
+    integer(hid_t) :: engtrajFileid
     integer :: r, c, loc, lastLoc, locMax
+    integer, allocatable :: eBinIndex_single(:)
     real(8), allocatable :: eng(:)
+    real(8) :: engMax, engMin, engMax_node, engMin_node, engMin_global, engMax_global
+    logical :: isFirstRun
 
-    call openEngtrj(engtrjFileid)
-    call makeStorageIndexTable(r_start, r_end, c_start, c_end, locMax)
+    call openEngtraj(engtrajFileid)
+    call makeEngPairLookupTable(r_start, r_end, c_start, c_end, locMax)
     allocate(eBinIndex(numFrame, locMax), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: storageIndexTable"
+      write(*,*) "Allocation failed: eBinIndex"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -38,15 +42,52 @@ contains
       call exit(1)
     end if
 
+    allocate(eBinIndex_single(numFrame), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: eBinIndex_single"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+
+    ! determine max and min of engtraj records
+    engMin_node = 1.0
+    engMax_node = 1.0
+    lastLoc = 0
+    isFirstRun = .true.
+    do c = c_start, c_end
+      do r = r_start, r_end
+        if (r /= c) then
+          loc = engLocLookupTable(r, c)
+          if (loc > lastLoc) then
+            ! new location, read new data
+            call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
+            engMin = minval(eng)
+            engMax = maxval(eng)
+            if (isFirstRun) then
+              engMin_node = engMin
+              engMax_node = engMax
+              isFirstRun = .false.
+            else
+              if (engMin < engMin_node) engMin_node = engMin
+              if (engMax > engMax_node) engMax_node = engMax
+            end if
+            lastLoc = loc
+          end if
+        end if
+      end do
+    end do
+    call mpi_allreduce(engMin_node, engMin_global, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
+    call mpi_allreduce(engMax_node, engMax_global, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+
     lastLoc = 0
     do c = c_start, c_end
       do r = r_start, r_end
         if (r /= c) then
-          loc = storageIndexTable(r, c)
+          loc = engLocLookupTable(r, c)
           if (loc > lastLoc) then
             ! new loc, read new data
-            call readPairEng(eng, r, c, engtrjFileid, numFrame, skip)
-            call eng2BinIndex(eng, eBinIndex_single)
+            call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
+            call eng2BinIndex(eng, eBinIndex_single, engMin_global, engMax_global)
             eBinIndex(:, loc) = eBinIndex_single
             lastLoc = loc
           end if
@@ -54,15 +95,16 @@ contains
       end do
     end do
 
-    call H5Fclose_f(engtrjFileid, ierr)
+    deallocate(eng, eBinIndex_single, engLocLookupTable)
+    call H5Fclose_f(engtrajFileid, ierr)
   end subroutine ed_readEng
 
-  subroutine openEngtrj(engtrjFileid)
+  subroutine openEngtraj(engtrajFileid)
     use HDF5
     implicit none
-    integer(hid_t), intent(out) :: engtrjFileid
-    character(len=11) :: engtrjVer
-    integer :: engtrjVer_major
+    integer(hid_t), intent(out) :: engtrajFileid
+    character(len=11) :: engtrajVer
+    integer :: engtrajVer_major
     integer(hid_t) :: plist_id  ! property list identifier for HDF5
 
     ! initialize HDF5 Fortran predefined datatypes
@@ -72,29 +114,40 @@ contains
     call H5Pcreate_f(H5P_FILE_ACCESS_F, plist_id, ierr)
     call H5Pset_fapl_mpio_f(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL, ierr)
 
-    ! open the existing engtrj file.
-    call H5Fopen_f(engtrjFilename, H5F_ACC_RDONLY, engtrjFileid, ierr, access_prp = plist_id)
+    ! open the existing engtraj file.
+    call H5Fopen_f(engtrajFilename, H5F_ACC_RDONLY, engtrajFileid, ierr, access_prp = plist_id)
     if (ierr /= 0) then
-      write(*,*) "Failed to open HDF5 file: ", engtrjFilename
+      write(*,*) "Failed to open HDF5 file: ", engtrajFilename
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
     ! close property list
     call H5Pclose_f(plist_id, ierr)
 
+    ! read version
+    H5LTget_attribute_string_f(engtrajFileid, "/", "version", engtrajVer)
     ! check compatibility at root
     if (myrank == root) then
-      ! read version
-      H5LTget_attribute_string_f(engtrjFileid, "/", "version", engtrjVer)
-      call parseVersion(engtrjVer, engtrjVer_major)
-      if (engtrjVer_major < MIN_ENGTRJ_VER_MAJOR) then
-        write(*,*) "Only engtrj with a major version number greater than ", MIN_ENGTRJ_VER_MAJOR, " is supported."
-        write(*,*) "The major version of the file '", trim(engtrjFilename), " is: ", engtrjVer_major
+      call parseVersion(engtrajVer, engtrajVer_major)
+      if (engtrajVer_major < MIN_ENGTRJ_VER_MAJOR) then
+        write(*,*) "Only engtraj with a major version number greater than ", MIN_ENGTRJ_VER_MAJOR, " is supported."
+        write(*,*) "The major version of the file '", trim(engtrajFilename), " is: ", engtrajVer_major
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
         call exit(1)
       end if
     end if
-  end subroutine openEngtrj
+
+    ! check data consistency
+    H5LTget_attribute_int_f(engtrajFileid, "/", "nummol", nummol)
+    H5LTget_attribute_int_f(engtrajFileid, "/", "numpair", numpair)
+    if (myrank == root) then
+      if ((nummol * (nummol - 1) / 2) /= numpair) then
+        write(*,*) "Error: engtraj data inconsistent. numpair should be equal to nummol*(nummol-1)/2"
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end if
+    end if
+  end subroutine openEngtraj
 
   subroutine parseVersion(ver, major, minor, patch)
     implicit none
@@ -108,46 +161,87 @@ contains
     if (present(patch)) read(ver(p2+1:), *) patch
   end subroutine parseVersion
 
-  subroutine readPairEng(eng, r, c, engtrjFileid, numFrame, skip)
+  subroutine readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
     use HDF5
     use H5LT
     implicit none
     real(8), intent(out) :: eng(numFrame)
     integer, intent(in) :: r, c, numFrame, skip
-    integer(hid_t), intent(in) :: engtrjFileid
-    integer :: numTotMol, pairIndex
+    integer(hid_t), intent(in) :: engtrajFileid
+    integer(hid_t) :: dset_id
+    integer(hid_t) :: filespace     ! Dataspace identifier in file
+    integer(hid_t) :: memspace      ! Dataspace identifier in memory
+    integer(hid_t) :: plist_id      ! Property list identifier
+    integer(hsize_t) :: offset(2), count(2), stride(2)
+    integer :: nummol, pairIndex
 
-    H5LTget_attribute_int_f(engtrjFileid, "/", "numTotalMolecule", numTotMol)
-    pairIndex = getPairIndex(r, c, numTotMol)
+    ! open dataset in file and get the filespace (dataspace)
+    call H5Dopen_f(engtrajFileid, ENGDSET_NAME, dset_id, ierr)
+    call H5Dget_space_f(dset_id, filespace, ierr)
 
-    ! select the desired data slab
+    ! select data slab (column) for pair (r, c) in filespace
+    !          c
+    !    | 1  2  3  4
+    !  --+------------
+    !  1 |    1  2  3
+    !    |
+    !  2 |       4  5
+    !r   |
+    !  3 |          6
+    !    |
+    !  4 |
+    !
+    !  pairIndex(r, c) = (r - 1) * n + c - (r + 1) * r / 2
+    !  n = 4 in this example
+    pairIndex = getPairIndex(r, c, nummol)
+    offset = [skip - 1, pairIndex - 1]
+    count = [numFrame, 1]
+    stride = [skip, 1]
+    call H5Sselect_hyperslab_f(filespace, H5S_SELECT_SET_F, offset, count, ierr, stride)
+
+    ! create memory space
+    call H5Screate_simple_f(1, [int(numFrame, kind=hsize_t)], memspace, ierr)
+
+    ! Create property list for collective dataset write
+    call H5Pcreate_f(H5P_DATASET_XFER_F, plist_id, ierr)
+    call H5Pset_dxpl_mpio_f(plist_id, H5FD_MPIO_COLLECTIVE_F, ierr)
+
+    call H5Dread_f(dset_id, H5T_NATIVE_DOUBLE, eng, [int(numFrame, kind=hsize_t)], ierr, &
+                    file_space_id = filespace, mem_space_id = memspace, xfer_prp = plist_id)
+
+    call H5Pclose_f(plist_id, err)
+
+    call H5Sclose_f(filespace, ierr)
+    call H5Sclose_f(memspace, ierr)
+    call H5Dclose_f(dset_id, ierr)
   end subroutine readPairEng
 
   integer function getPairIndex(r, c, n)
     implicit none
     integer, intent(in) :: r, c, n
 
+    if (r < 0 .or. c < 0 .or. n < 0 .or. r >= c .or. 
     getPairIndex = (r - 1) * n + c - ((r + 1) * r) / 2
   end function getPairIndex
 
   ! index = 0 : self-interaction energy (ignore this record)
   ! index = N : N is the location of the stored data (in the eBinIndex(:, N))
-  subroutine makeStorageIndexTable(r_start, r_end, c_start, c_end, locMax)
+  subroutine makeEngPairLookupTable(r_start, r_end, c_start, c_end, locMax)
     implicit none
     integer, intent(in) :: r_start, r_end, c_start, c_end
     integer, intent(out) :: locMax
     integer :: loc, pairHash, cacheIndex
     integer :: pairHashCache((r_end - r_start + 1) * (c_end - c_start + 1))
 
-    allocate(storageIndexTable(r_start:r_end, c_start:c_end), stat=stat)
+    allocate(engLocLookupTable(r_start:r_end, c_start:c_end), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: storageIndexTable"
+      write(*,*) "Allocation failed: engLocLookupTable"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
 
     pairHashCache = -1
-    storageIndexTable = 0
+    engLocLookupTable = 0
     loc = 0
     cacheIndex = 0
 
@@ -162,20 +256,20 @@ contains
             cacheIndex = cacheIndex + 1
             loc = loc + 1
 
-            ! make a storageIndexTable so that we can know
+            ! make a engLocLookupTable so that we can know
             ! where the data for a certain pair are stored later
             pairHashCache(cacheIndex) = pairHash
-            storageIndexTable(r, c) = loc
+            engLocLookupTable(r, c) = loc
           else
             ! this is an old pair, set the index to the previous symmetric one
-            storageIndexTable(r, c) = storageIndexTable(c, r)
+            engLocLookupTable(r, c) = engLocLookupTable(c, r)
           end if
         end if
       end do
     end do
 
     locMax = loc
-  end subroutine makeStorageIndexTable
+  end subroutine makeEngPairLookupTable
 
   integer function getCantorPairHash(k1, k2)
     ! ref: https://en.wikipedia.org/wiki/Pairing_function#/Cantor_pairing_function
@@ -197,4 +291,24 @@ contains
       getUnorderedCantorPairHash = getCantorPairHash(k2, k1)
     end if
   end function getUnorderedCantorPairHash
+
+  subroutine eng2BinIndex(eng, eBinIndex_single, engMin_global, engMax_global)
+    implicit none
+    real(8), intent(in) :: eng(:), engMin_global, engMax_global
+    integer, intent(out) :: eBinIndex_single(size(eng))
+
+    eBinWidth = (engMax_global - engMin_global) / num_eBin
+    eBinIndex_single = ceiling((eng - engMin_global) / rBinWidth)
+    where (eBinIndex_single == 0)
+      eBinIndex_single = 1
+    end where
+  end subroutine eng2BinIndex
+
+  subroutine get_eBinIndex(r, c, eBin)
+    implicit none
+    integer, intent(in) :: r, c
+    real(8), intent(out) :: eBin(:)
+
+    eBin = eBinIndex(:, engLocLookupTable(r, c))
+  end subroutine get_eBinIndex
 end module engdec

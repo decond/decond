@@ -8,7 +8,7 @@ program decompose_mpi
                           com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
                           sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
                           sd_collectCorr, sd_normalize
-  use engdec, only : engtrjFilename
+  use engdec, only : engtrajFilename, ed_readEng, get_eBinIndex
 
   implicit none
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
@@ -227,7 +227,7 @@ program decompose_mpi
 
       case ('-ed')
         is_ed = .true.
-        call get_command_argument(i, engtrjFilename)
+        call get_command_argument(i, engtrajFilename)
         i = i + 1
 
       case ('-r')
@@ -285,7 +285,7 @@ program decompose_mpi
 
   ! prepare eBinIndex for each rank
   if (is_ed) then
-    call ed_readEng(engtrjFilename, numFrame, skip)
+    call ed_readEng(engtrajFilename, numFrame, skip)
   end if
 
   call domainDecomposition(totNumMol, numFrame)
@@ -349,6 +349,17 @@ program decompose_mpi
     numFrameRead = 0
     call open_trajectory(dataFileHandle, dataFilename)
     do i = 1, numFrame
+      do j = 1, skip-1
+        call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+        if (stat > 0) then
+          write(*,*) "Reading trajectory error"
+          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+          call exit(1)
+        else if (stat < 0) then
+          !end of file
+          exit
+        end if
+      end do
       call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
       if (stat /= 0) then
         write(*,*) "Reading trajectory error"
@@ -367,17 +378,6 @@ program decompose_mpi
           call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
         end if
       end if
-      do j = 1, skip-1
-        call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
-        if (stat > 0) then
-          write(*,*) "Reading trajectory error"
-          call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-          call exit(1)
-        else if (stat < 0) then
-          !end of file
-          exit
-        end if 
-      end do
     end do
     call close_trajectory(dataFileHandle)
     if (myrank == root) write(*,*) "numFrameRead = ", numFrameRead
@@ -751,7 +751,7 @@ contains
     write(*, *) 
     write(*, *) "  -sd: do spatial decomposition. default no sd."
     write(*, *)
-    write(*, *) "  -ed <engtrj.dat>: do energy decomposition. default no ed."
+    write(*, *) "  -ed <engtraj.dat>: do energy decomposition. default no ed."
     write(*, *)
     write(*, *) "  -sbwidth <sBinWidth(nm)>: spatial-decomposition bin width. default = 0.01."
     write(*, *) "                            only meaningful when -sd is given."
