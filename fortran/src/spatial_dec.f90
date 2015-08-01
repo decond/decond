@@ -5,7 +5,9 @@ module spatial_dec
   integer :: num_rBin
   integer, allocatable :: sd_binIndex(:)
   real(8) :: rBinWidth
-  real(8), allocatable :: rho(:, :), sdCorr(:, :, :), pos(:, :, :)
+  real(8), allocatable :: sdRho(:, :), sdCorr(:, :, :), pos(:, :, :), rBins(:)
+  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
+  !sdRho: (num_rBin, molTypePairIndex)
   integer :: stat
 
   !MPI variables
@@ -139,13 +141,13 @@ contains
     end if
     sdCorr = 0d0
 
-    allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
+    allocate(sdRho(num_rBin, numMolType*numMolType), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: rho"
+      write(*,*) "Allocation failed: sdRho"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    rho = 0d0
+    sdRho = 0d0
 
     allocate(sd_binIndex(numFrame), stat=stat)
     if (stat /= 0) then
@@ -155,15 +157,15 @@ contains
     end if
   end subroutine sd_prepCorrMemory
 
-  subroutine sd_getBinIndex(p1, p2, cell, sd_binIndex)
+  subroutine sd_getBinIndex(r, c, cell, sd_binIndex)
     implicit none
-    real(8), intent(in) :: p1(:,:), p2(:,:), cell(3)
-    !p1(dim,timeFrame)
+    integer, intent(in) :: r, c
+    real(8), intent(in) :: cell(3)
     integer, intent(out) :: sd_binIndex(:)
-    real(8) :: pp(size(p1,1), size(p1,2))
+    real(8) :: pp(3, size(sd_binIndex))
     integer :: d
 
-    pp = p1 - p2
+    pp = pos_r(:,:,r) - pos_c(:,:,c)
     do d = 1, 3
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
@@ -181,10 +183,10 @@ contains
     implicit none
     if (myrank == root) then
       call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, sdRho, size(sdRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdRho, dummy_null, size(sdRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
   end subroutine sd_collectCorr
 
@@ -193,11 +195,17 @@ contains
     integer, intent(in) :: numFrame, numMolType, norm(:)
     integer :: i, n
 
-    rho = rho / numFrame
+    sdRho = sdRho / numFrame
     do n = 1, numMolType*numMolType
       do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
+        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / sdRho(i, n)
       end do
     end do
   end subroutine sd_normalize
+
+  subroutine sd_finish()
+    implicit none
+    deallocate(pos_r, pos_c, sdCorr, sdRho)
+    ! sd_binIndex has been deallocated in the main program
+  end subroutine sd_finish
 end module spatial_dec

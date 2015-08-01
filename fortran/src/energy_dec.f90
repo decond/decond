@@ -1,18 +1,25 @@
-module engdec
+module energy_dec
   use mpiproc
   implicit none
   integer :: num_eBin
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
   character(len=*), parameter :: ENGDSET_NAME = "energy"
   character(len=128) :: engtrajFilename
-  real(8), allocatable :: eBinIndex(:, :)  !eBinIndex(numFrame, uniqueNumMolPair)
+  real(8), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numFrame, uniqueNumMolPair)
+  real(8), allocatable :: ed_binIndex(:)  !ed_binIndex(numFrame)
+  real(8), allocatable :: edCorr(:, :, :)  !edCorr(maxLag+1, num_eBin, numMolType*numMolType)
+  real(8), allocatable :: edRho(:, :)  !edRho(num_eBin, numMolType*numMolType)
+  real(8), allocatable :: eBins(:)  !eBins(num_eBin)
+  real(8) :: engMin_global, engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
+  real(8) :: eBinWidth
+  integer :: nummol
 
 contains
   subroutine ed_init()
     implicit none
     num_eBin = 500  ! default value
-  end subroutine sd_init
+  end subroutine ed_init
 
   subroutine ed_readEng(engtrajFilename, numFrame, skip)
     use HDF5
@@ -20,17 +27,24 @@ contains
     character(len=*), intent(in) :: engtrajFilename
     integer, intent(in) :: numFrame, skip
     integer(hid_t) :: engtrajFileid
-    integer :: r, c, loc, lastLoc, locMax
+    integer :: r, c, loc, lastLoc, locMax, stat
     integer, allocatable :: eBinIndex_single(:)
     real(8), allocatable :: eng(:)
-    real(8) :: engMax, engMin, engMax_node, engMin_node, engMin_global, engMax_global
+    real(8) :: engMax, engMin, engMax_node, engMin_node
     logical :: isFirstRun
 
     call openEngtraj(engtrajFileid)
     call makeEngPairLookupTable(r_start, r_end, c_start, c_end, locMax)
-    allocate(eBinIndex(numFrame, locMax), stat=stat)
+    allocate(eBinIndexAll(numFrame, locMax), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: eBinIndex"
+      write(*,*) "Allocation failed: eBinIndexAll"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+
+    allocate(ed_binIndex(numFrame), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: ed_binIndex"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -88,24 +102,48 @@ contains
             ! new loc, read new data
             call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
             call eng2BinIndex(eng, eBinIndex_single, engMin_global, engMax_global)
-            eBinIndex(:, loc) = eBinIndex_single
+            eBinIndexAll(:, loc) = eBinIndex_single
             lastLoc = loc
           end if
         end if
       end do
     end do
 
-    deallocate(eng, eBinIndex_single, engLocLookupTable)
+    deallocate(eng, eBinIndex_single)
     call H5Fclose_f(engtrajFileid, ierr)
   end subroutine ed_readEng
 
+  subroutine ed_prepCorrMemory(maxLag, numMolType, numFrame)
+    implicit none
+    integer, intent(in) :: maxLag, numMolType, numFrame
+    integer :: stat
+
+    allocate(edCorr(maxLag+1, num_eBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: edCorr"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    edCorr = 0d0
+
+    allocate(edRho(num_eBin, numMolType*numMolType), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: edRho"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+    edRho = 0d0
+  end subroutine ed_prepCorrMemory
+
   subroutine openEngtraj(engtrajFileid)
     use HDF5
+    use H5LT
     implicit none
     integer(hid_t), intent(out) :: engtrajFileid
     character(len=11) :: engtrajVer
-    integer :: engtrajVer_major
+    integer :: engtrajVer_major, numpair
     integer(hid_t) :: plist_id  ! property list identifier for HDF5
+    integer :: buf(1)
 
     ! initialize HDF5 Fortran predefined datatypes
     call H5open_f(ierr)
@@ -115,7 +153,7 @@ contains
     call H5Pset_fapl_mpio_f(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL, ierr)
 
     ! open the existing engtraj file.
-    call H5Fopen_f(engtrajFilename, H5F_ACC_RDONLY, engtrajFileid, ierr, access_prp = plist_id)
+    call H5Fopen_f(engtrajFilename, H5F_ACC_RDONLY_F, engtrajFileid, ierr, access_prp = plist_id)
     if (ierr /= 0) then
       write(*,*) "Failed to open HDF5 file: ", engtrajFilename
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -125,7 +163,7 @@ contains
     call H5Pclose_f(plist_id, ierr)
 
     ! read version
-    H5LTget_attribute_string_f(engtrajFileid, "/", "version", engtrajVer)
+    call H5LTget_attribute_string_f(engtrajFileid, "/", "version", engtrajVer, ierr)
     ! check compatibility at root
     if (myrank == root) then
       call parseVersion(engtrajVer, engtrajVer_major)
@@ -138,8 +176,10 @@ contains
     end if
 
     ! check data consistency
-    H5LTget_attribute_int_f(engtrajFileid, "/", "nummol", nummol)
-    H5LTget_attribute_int_f(engtrajFileid, "/", "numpair", numpair)
+    call H5LTget_attribute_int_f(engtrajFileid, "/", "nummol", buf, ierr)
+    nummol = buf(1)
+    call H5LTget_attribute_int_f(engtrajFileid, "/", "numpair", buf, ierr)
+    numpair = buf(1)
     if (myrank == root) then
       if ((nummol * (nummol - 1) / 2) /= numpair) then
         write(*,*) "Error: engtraj data inconsistent. numpair should be equal to nummol*(nummol-1)/2"
@@ -154,6 +194,8 @@ contains
     character(len=11) :: ver
     integer, intent(out) :: major
     integer, optional, intent(out) :: minor, patch
+    integer :: p1, p2
+
     p1 = scan(ver, '.')
     p2 = scan(ver, '.', .true.)
     read(ver(1:p1-1), *) major
@@ -173,7 +215,7 @@ contains
     integer(hid_t) :: memspace      ! Dataspace identifier in memory
     integer(hid_t) :: plist_id      ! Property list identifier
     integer(hsize_t) :: offset(2), count(2), stride(2)
-    integer :: nummol, pairIndex
+    integer :: pairIndex
 
     ! open dataset in file and get the filespace (dataspace)
     call H5Dopen_f(engtrajFileid, ENGDSET_NAME, dset_id, ierr)
@@ -209,7 +251,7 @@ contains
     call H5Dread_f(dset_id, H5T_NATIVE_DOUBLE, eng, [int(numFrame, kind=hsize_t)], ierr, &
                     file_space_id = filespace, mem_space_id = memspace, xfer_prp = plist_id)
 
-    call H5Pclose_f(plist_id, err)
+    call H5Pclose_f(plist_id, ierr)
 
     call H5Sclose_f(filespace, ierr)
     call H5Sclose_f(memspace, ierr)
@@ -220,17 +262,21 @@ contains
     implicit none
     integer, intent(in) :: r, c, n
 
-    if (r < 0 .or. c < 0 .or. n < 0 .or. r >= c .or. 
+    if (r < 0 .or. c < 0 .or. n < 0 .or. r >= c .or. r > n .or. c > n) then
+      write(*,*) "Error: unreasonable parameters in getPairIndex(r, c, n): ", r, c, n
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
     getPairIndex = (r - 1) * n + c - ((r + 1) * r) / 2
   end function getPairIndex
 
   ! index = 0 : self-interaction energy (ignore this record)
-  ! index = N : N is the location of the stored data (in the eBinIndex(:, N))
+  ! index = N : N is the location of the stored data (in the eBinIndexAll(:, N))
   subroutine makeEngPairLookupTable(r_start, r_end, c_start, c_end, locMax)
     implicit none
     integer, intent(in) :: r_start, r_end, c_start, c_end
     integer, intent(out) :: locMax
-    integer :: loc, pairHash, cacheIndex
+    integer :: loc, pairHash, cacheIndex, stat, r, c
     integer :: pairHashCache((r_end - r_start + 1) * (c_end - c_start + 1))
 
     allocate(engLocLookupTable(r_start:r_end, c_start:c_end), stat=stat)
@@ -298,17 +344,47 @@ contains
     integer, intent(out) :: eBinIndex_single(size(eng))
 
     eBinWidth = (engMax_global - engMin_global) / num_eBin
-    eBinIndex_single = ceiling((eng - engMin_global) / rBinWidth)
+    eBinIndex_single = ceiling((eng - engMin_global) / eBinWidth)
     where (eBinIndex_single == 0)
       eBinIndex_single = 1
     end where
   end subroutine eng2BinIndex
 
-  subroutine get_eBinIndex(r, c, eBin)
+  subroutine ed_getBinIndex(r, c, eBin)
     implicit none
     integer, intent(in) :: r, c
     real(8), intent(out) :: eBin(:)
 
-    eBin = eBinIndex(:, engLocLookupTable(r, c))
-  end subroutine get_eBinIndex
-end module engdec
+    eBin = eBinIndexAll(:, engLocLookupTable(r, c))
+  end subroutine ed_getBinIndex
+
+  subroutine ed_collectCorr()
+    implicit none
+    if (myrank == root) then
+      call mpi_reduce(MPI_IN_PLACE, edCorr, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, edRho, size(edRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    else
+      call mpi_reduce(edCorr, dummy_null, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(edRho, dummy_null, size(edRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
+  end subroutine ed_collectCorr
+
+  subroutine ed_normalize(numFrame, numMolType, norm)
+    implicit none
+    integer, intent(in) :: numFrame, numMolType, norm(:)
+    integer :: i, n
+
+    edRho = edRho / numFrame
+    do n = 1, numMolType*numMolType
+      do i = 1, num_eBin
+        edCorr(:,i,n) = edCorr(:,i,n) / norm / edRho(i, n)
+      end do
+    end do
+  end subroutine ed_normalize
+
+  subroutine ed_finish()
+    implicit none
+    deallocate(eBinIndexAll, engLocLookupTable, edCorr)
+    ! ed_binIndex has been deallocated in the main program
+  end subroutine ed_finish
+end module energy_dec

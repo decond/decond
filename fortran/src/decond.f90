@@ -1,14 +1,19 @@
-program decompose_mpi
+program decond
   use mpiproc
-  use utility, only : handle
-  use xdr, only : open_trajectory, close_trajectory, read_trajectory, get_natom
-  use top, only : open_top, close_top, read_top, system, print_sys
+  use HDF5
+  use utility, only: handle
+  use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
+  use top, only: open_top, close_top, read_top, system, print_sys
   use correlation
-  use spatial_dec, only : sd_init, rBinWidth, pos_r, pos_c, rho, sdCorr, pos, num_rBin, &
-                          com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
-                          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
-                          sd_collectCorr, sd_normalize
-  use engdec, only : engtrajFilename, ed_readEng, get_eBinIndex
+  use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdRho, sdCorr, pos, num_rBin, &
+                         com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
+                         sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
+                         sd_collectCorr, sd_normalize, sd_finish
+  use energy_dec, only: engtrajFilename, ed_readEng, ed_getBinIndex, ed_binIndex, num_eBin, &
+                        ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, &
+                        ed_collectCorr, ed_normalize, edRho, edCorr, eBinWidth, &
+                        ed_init, ed_finish
+
 
   implicit none
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
@@ -25,8 +30,6 @@ program decompose_mpi
   real(8), allocatable :: vel(:, :, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
   real(8), allocatable :: time(:), nCorr(:, :), corr_tmp(:)
-  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
-  !rho: (num_rBin, molTypePairIndex)
   logical :: is_periodic, is_pa_mode, is_pm_mode, is_sd, is_ed
   type(system) :: sys
   integer(hid_t) :: outCorrFileid
@@ -273,7 +276,7 @@ program decompose_mpi
   if (myrank == root) then
     ! create an HDF5 file
     call H5open_f(ierr)
-    call H5Fcreate_f(outCorrFilename, H5F_ACC_EXCL, outCorrFileid, ierr)
+    call H5Fcreate_f(outCorrFilename, H5F_ACC_EXCL_F, outCorrFileid, ierr)
     if (ierr /= 0) then
       write(*,*) "Failed to create HDF5 file: ", outCorrFilename
       write(*,*) "Probably the file already exists?"
@@ -430,10 +433,10 @@ program decompose_mpi
 
 
   !decomposition
-  if (is_sd) then
-    if (myrank == root) write(*,*) "start spatial decomposition"
-  else
-    if (myrank == root) write(*,*) "start one-two decomposition"
+  if (myrank == root) then
+    write(*,*) "start one-two decomposition"
+    if (is_sd) write(*,*) "start spatial decomposition"
+    if (is_ed) write(*,*) "start energy decomposition"
   end if
   starttime = MPI_Wtime()
 
@@ -452,9 +455,12 @@ program decompose_mpi
   end if 
   nCorr = 0d0
 
-  if (is_sd) then
-    call sd_cal_num_rBin(cell)
-    call sd_prepCorrMemory(maxLag, numMolType, numFrame)
+  if (is_sd .or. is_ed) then
+    if (is_sd) then
+      call sd_cal_num_rBin(cell)
+      call sd_prepCorrMemory(maxLag, numMolType, numFrame)
+    end if
+    if (is_ed) call ed_prepCorrMemory(maxLag, numMolType, numFrame)
   else
     allocate(corr_tmp(2*maxLag+1), stat=stat)
     if (stat /=0) then
@@ -473,7 +479,7 @@ program decompose_mpi
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
         molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num)
-        if (is_sd) then
+        if (is_sd .or. is_ed) then
           do k = 1, maxLag+1
             numFrame_k = numFrame - k + 1
             vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
@@ -491,17 +497,26 @@ program decompose_mpi
         starttime2 = MPI_Wtime()
         molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
         molTypePairAllIndex = molTypePairIndex + numMolType
-        if (is_sd) then
-          call sd_getBinIndex(pos_r(:,:,i-r_start+1), pos_c(:,:,j-c_start+1), cell(1), sd_binIndex)
+        if (is_sd .or. is_ed) then
+          if (is_sd) call sd_getBinIndex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
+          if (is_ed) call ed_getBinIndex(i-r_start+1, j-c_start+1, ed_binIndex)
           do k = 1, maxLag+1
             numFrame_k = numFrame - k + 1
             vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)
             !TODO: test if this sum should be put here or inside the following loop for better performance
             nCorr(k, molTypePairAllIndex) = nCorr(k, molTypePairAllIndex) + sum(vv(1:numFrame_k))
             do n = 1, numFrame_k
-              tmp_i = sd_binIndex(n)
-              if (tmp_i <= num_rBin) then
-                sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
+              if (is_sd) then
+                tmp_i = sd_binIndex(n)
+                if (tmp_i <= num_rBin) then
+                  sdCorr(k, tmp_i, molTypePairIndex) = sdCorr(k, tmp_i, molTypePairIndex) + vv(n)
+                end if
+              end if
+              if (is_ed) then
+                tmp_i = ed_binIndex(n)
+                if (tmp_i <= num_rBin) then
+                  edCorr(k, tmp_i, molTypePairIndex) = edCorr(k, tmp_i, molTypePairIndex) + vv(n)
+                end if
               end if
               !TODO: need test
               !nCorr(k, molTypePairIndex) = corr(k, molTypePairIndex) + vv(n)
@@ -509,9 +524,17 @@ program decompose_mpi
           end do
 
           do t = 1, numFrame
-            tmp_i = sd_binIndex(t)
-            if (tmp_i <= num_rBin) then
-              rho(tmp_i, molTypePairIndex) = rho(tmp_i, molTypePairIndex) + 1d0
+            if (is_sd) then
+              tmp_i = sd_binIndex(t)
+              if (tmp_i <= num_rBin) then
+                sdRho(tmp_i, molTypePairIndex) = sdRho(tmp_i, molTypePairIndex) + 1d0
+              end if
+            end if
+            if (is_ed) then
+              tmp_i = ed_binIndex(t)
+              if (tmp_i <= num_eBin) then
+                edRho(tmp_i, molTypePairIndex) = edRho(tmp_i, molTypePairIndex) + 1d0
+              end if
             end if
           end do
 
@@ -526,13 +549,13 @@ program decompose_mpi
       if (myrank == root) write(*,*) 
     end do
   end do
-  if (is_sd) then
-    deallocate(sd_binIndex)
-  end if
+  if (is_sd) deallocate(sd_binIndex)
+  if (is_ed) deallocate(ed_binIndex)
+
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished decomposition. It took ", endtime - starttime, " seconds"
 
-  !collect nCorr, sdCorr and rho
+  !collect nCorr
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
@@ -541,6 +564,7 @@ program decompose_mpi
     call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
   if (is_sd) call sd_collectCorr()
+  if (is_ed) call ed_collectCorr()
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
 
@@ -558,8 +582,8 @@ program decompose_mpi
       nCorr(:,n) = nCorr(:,n) / norm
     end do
 
-    ! normalize rho and sdCorr
     if (is_sd) call sd_normalize(numFrame, numMolType, norm)
+    if (is_ed) call ed_normalize(numFrame, numMolType, norm)
 
     deallocate(norm)
 
@@ -573,6 +597,10 @@ program decompose_mpi
 
   if (myrank == root) write(*,*)
   if (myrank == root) write(*,*) "time for the whole program (sec):", MPI_Wtime() - prog_starttime
+
+  deallocate(nCorr, charge, vel_r, vel_c, start_index)
+  if (is_sd) call sd_finish()
+  if (is_ed) call ed_finish()
   call mpi_setup('stop')
   stop
 
@@ -632,10 +660,14 @@ contains
     use H5DS
     use H5LT
     use HDF5
+    use spatial_dec, only: rBins
+    use energy_dec, only: eBins, engMin_global
     implicit none
-    real(8), allocatable :: timeLags(:), rBins(:)
+    real(8), allocatable :: timeLags(:)
     integer :: ierr
-    integer(hid_t) :: did1, did2, did3, sid1, sid2
+    integer(hid_t) :: dset_nCorr, dset_timeLags, &
+                      dset_sdCorr, dset_sdRho, dset_rBins, &
+                      dset_edCorr, dset_edRho, dset_eBins
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -655,6 +687,16 @@ contains
       rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
     end if
 
+    if (is_ed) then
+      allocate(eBins(num_eBin), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: eBins"
+        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call exit(1)
+      end if 
+      eBins = [ (i - 0.5d0, i = 1, num_eBin) ] * eBinWidth + engMin_global
+    end if
+
     ! create and write dataset
     call H5LTset_attribute_double_f(outCorrFileid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
     call H5LTset_attribute_int_f(outCorrFileid, "/", "charge", charge, size(charge, kind=size_t), ierr)
@@ -663,40 +705,65 @@ contains
 
     call H5LTmake_dataset_double_f(outCorrFileid, "nCorr", 2, &
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
-    call H5Dopen_f(outCorrFileid, "nCorr", did1, ierr)
+    call H5Dopen_f(outCorrFileid, "nCorr", dset_nCorr, ierr)
 
     if (is_sd) then
       call H5LTmake_dataset_double_f(outCorrFileid, "sdCorr", 3, &
           [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
-      call H5Dopen_f(outCorrFileid, "sdCorr", did2, ierr)
+      call H5Dopen_f(outCorrFileid, "sdCorr", dset_sdCorr, ierr)
 
-      call H5LTmake_dataset_double_f(outCorrFileid, "rho", 2, &
-          [size(rho, 1, kind=hsize_t), size(rho, 2, kind=hsize_t)], rho, ierr)
-      call H5Dopen_f(outCorrFileid, "rho", did3, ierr)
+      call H5LTmake_dataset_double_f(outCorrFileid, "sdRho", 2, &
+          [size(sdRho, 1, kind=hsize_t), size(sdRho, 2, kind=hsize_t)], sdRho, ierr)
+      call H5Dopen_f(outCorrFileid, "sdRho", dset_sdRho, ierr)
+    end if
+
+    if (is_ed) then
+      call H5LTmake_dataset_double_f(outCorrFileid, "edCorr", 3, &
+          [size(edCorr, 1, kind=hsize_t), size(edCorr, 2, kind=hsize_t), size(edCorr, 3, kind=hsize_t)], edCorr, ierr)
+      call H5Dopen_f(outCorrFileid, "edCorr", dset_edCorr, ierr)
+
+      call H5LTmake_dataset_double_f(outCorrFileid, "edRho", 2, &
+          [size(edRho, 1, kind=hsize_t), size(edRho, 2, kind=hsize_t)], edRho, ierr)
+      call H5Dopen_f(outCorrFileid, "edRho", dset_edRho, ierr)
     end if
 
     call H5LTmake_dataset_double_f(outCorrFileid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
-    call H5Dopen_f(outCorrFileid, "timeLags", sid1, ierr)
+    call H5Dopen_f(outCorrFileid, "timeLags", dset_timeLags, ierr)
 
     if (is_sd) then
       call H5LTmake_dataset_double_f(outCorrFileid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
-      call H5Dopen_f(outCorrFileid, "rBins", sid2, ierr)
+      call H5Dopen_f(outCorrFileid, "rBins", dset_rBins, ierr)
+    end if
+
+    if (is_ed) then
+      call H5LTmake_dataset_double_f(outCorrFileid, "eBins", 1, [size(eBins, kind=hsize_t)], eBins, ierr)
+      call H5Dopen_f(outCorrFileid, "eBins", dset_eBins, ierr)
     end if
 
     ! attach scale dimension
-    call H5DSattach_scale_f(did1, sid1, 1, ierr)
+    call H5DSattach_scale_f(dset_nCorr, dset_timeLags, 1, ierr)
     if (is_sd) then
-      call H5DSattach_scale_f(did2, sid1, 1, ierr)
-      call H5DSattach_scale_f(did2, sid2, 2, ierr)
-      call H5DSattach_scale_f(did3, sid2, 1, ierr)
+      call H5DSattach_scale_f(dset_sdCorr, dset_timeLags, 1, ierr)
+      call H5DSattach_scale_f(dset_sdCorr, dset_rBins, 2, ierr)
+      call H5DSattach_scale_f(dset_sdRho, dset_rBins, 1, ierr)
+    end if
+    if (is_ed) then
+      call H5DSattach_scale_f(dset_edCorr, dset_timeLags, 1, ierr)
+      call H5DSattach_scale_f(dset_edCorr, dset_eBins, 2, ierr)
+      call H5DSattach_scale_f(dset_edRho, dset_eBins, 1, ierr)
     end if
 
-    call H5Dclose_f(sid1, ierr)
-    call H5Dclose_f(did1, ierr)
+    call H5Dclose_f(dset_timeLags, ierr)
+    call H5Dclose_f(dset_nCorr, ierr)
     if (is_sd) then
-      call H5Dclose_f(sid2, ierr)
-      call H5Dclose_f(did2, ierr)
-      call H5Dclose_f(did3, ierr)
+      call H5Dclose_f(dset_rBins, ierr)
+      call H5Dclose_f(dset_sdCorr, ierr)
+      call H5Dclose_f(dset_sdRho, ierr)
+    end if
+    if (is_ed) then
+      call H5Dclose_f(dset_eBins, ierr)
+      call H5Dclose_f(dset_edCorr, ierr)
+      call H5Dclose_f(dset_edRho, ierr)
     end if
     call H5Fclose_f(outCorrFileid, ierr)
     call H5close_f(ierr)
@@ -762,4 +829,4 @@ contains
     write(*, *) "  -d <numDomain_r> <numDomain_c>:" 
     write(*, *) "   manually assign the MPI decomposition pattern"
   end subroutine print_usage
-end program decompose_mpi
+end program decond

@@ -40,15 +40,18 @@ trjconv2com : utility.o xdr.o top.o trjconv2com.o
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-decompose_mpi : mpiproc.o spatial_dec.o correlation.o utility.o xdr.o top.o decompose_mpi.o
+decompose_mpi : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decompose_mpi.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
 decompose_mpi.o : decompose_mpi.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
-spatial_dec.o : spatial_dec.f90 mpiproc.o
+spatial_dec.o : spatial_dec.f90 mpiproc.o top.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+energy_dec.o : energy_dec.f90 mpiproc.o
+	$(FCMPI) $(FCFLAGS) -I/home/kmtu/local/hdf5-1.8.15/include -o $(SRCDIR)$(@F) -c $<
 
 mpiproc.o : mpiproc.f90
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
