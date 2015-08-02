@@ -16,6 +16,7 @@ program decond
 
 
   implicit none
+  character(len=*), parameter :: DECOND_VERSION = "v0.4.0"
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
@@ -698,6 +699,7 @@ contains
     end if
 
     ! create and write dataset
+    call H5LTset_attribute_string_f(outCorrFileid, "/", "version", DECOND_VERSION, ierr)
     call H5LTset_attribute_double_f(outCorrFileid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
     call H5LTset_attribute_int_f(outCorrFileid, "/", "charge", charge, size(charge, kind=size_t), ierr)
     call H5LTset_attribute_int_f(outCorrFileid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
