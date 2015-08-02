@@ -23,7 +23,7 @@ XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
 
 #========== Basically NO modification is needed below this line ===========#
-PROGRAM = decompose_mpi trjconv2com
+PROGRAM = decond trjconv2com
 DIR = $(MODDIR) $(OUTDIR)
 vpath %.f90 $(SRCDIR)
 
@@ -40,10 +40,10 @@ trjconv2com : utility.o xdr.o top.o trjconv2com.o
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-decompose_mpi : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decompose_mpi.o
+decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decond.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
-decompose_mpi.o : decompose_mpi.f90
+decond.o : decond.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
