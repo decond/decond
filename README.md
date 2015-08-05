@@ -1,8 +1,8 @@
 Decond
 =====
-Decond is a framework to **dec**ompose the electrical **cond**uctivity calculated from molecular dynamics trajectories.
+Decond is a framework to analyze the transport properties in electrolyte solution with various decomposition methods.
 
-Currently only the spatial decomposiiton is implemented and is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
+Currently, the decomposition by species and by spatial correlation is implemented and is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
 
 Project structure
 -----
