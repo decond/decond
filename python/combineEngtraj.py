@@ -4,7 +4,7 @@ import argparse
 import h5py
 import numpy as np
 
-VERSION = "0.1.0"
+VERSION = np.string_("0.1.0")  # for compatibility (http://docs.h5py.org/en/latest/strings.html)
 
 parser = argparse.ArgumentParser(description="Combine the energy trajectories output from ERmod")
 parser.add_argument('engtrajFirst', metavar='engtraj', nargs=1)
@@ -17,12 +17,12 @@ outFile = args.out
 engtrajFiles = args.engtrajFirst + args.engtrajRest
 
 def getMajor(version):
-  return int(version.split(sep='.')[0])
+  return int(version.split(sep=b'.')[0])
 
 # Check versions
 for file in engtrajFiles:
   with h5py.File(file, 'r') as f:
-    engtrajVersion = f.attrs['version'].decode('utf-8')
+    engtrajVersion = f.attrs['version']
     engtrajMajor = getMajor(engtrajVersion)
     major = getMajor(VERSION)
     if (engtrajMajor < major):
