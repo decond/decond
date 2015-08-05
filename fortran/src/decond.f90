@@ -279,20 +279,27 @@ program decond
     call H5open_f(ierr)
     call H5Fcreate_f(outCorrFilename, H5F_ACC_EXCL_F, outCorrFileid, ierr)
     if (ierr /= 0) then
-      write(*,*) "Failed to create HDF5 file: ", outCorrFilename
+      write(*,*) "Failed to create HDF5 file: ", trim(adjustl(outCorrFilename))
       write(*,*) "Probably the file already exists?"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
   end if
 
+  call domainDecomposition(totNumMol, numFrame) ! determine r_start, c_start ...etc.
 
   ! prepare eBinIndex for each rank
   if (is_ed) then
+    if (myrank == root) then
+      write(*,*) "start preparing eBinIndex..."
+      starttime = MPI_Wtime()
+    end if
     call ed_readEng(engtrajFilename, numFrame, skip)
+    if (myrank == root) then
+      endtime = MPI_Wtime()
+      write(*,*) "finished preparing eBinIndex. It took ", endtime - starttime, "seconds"
+    end if
   end if
-
-  call domainDecomposition(totNumMol, numFrame)
 
   !prepare memory for all ranks
   allocate(vel_r(3, numFrame, num_r), stat=stat)
@@ -500,7 +507,7 @@ program decond
         molTypePairAllIndex = molTypePairIndex + numMolType
         if (is_sd .or. is_ed) then
           if (is_sd) call sd_getBinIndex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
-          if (is_ed) call ed_getBinIndex(i-r_start+1, j-c_start+1, ed_binIndex)
+          if (is_ed) call ed_getBinIndex(i, j, ed_binIndex)
           do k = 1, maxLag+1
             numFrame_k = numFrame - k + 1
             vv(1:numFrame_k) = sum(vel_r(:, k:numFrame, i-r_start+1) * vel_c(:, 1:numFrame_k, j-c_start+1), 1)

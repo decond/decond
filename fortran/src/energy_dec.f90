@@ -27,7 +27,7 @@ contains
     character(len=*), intent(in) :: engtrajFilename
     integer, intent(in) :: numFrame, skip
     integer(hid_t) :: engtrajFileid
-    integer :: r, c, loc, lastLoc, locMax, stat
+    integer :: r, c, loc, lastLoc, locMax, stat, begin_time
     integer, allocatable :: eBinIndex_single(:)
     real(8), allocatable :: eng(:)
     real(8) :: engMax, engMin, engMax_node, engMin_node
@@ -64,6 +64,10 @@ contains
     end if
 
     ! determine max and min of engtraj records
+    if (myrank == root) then
+      write(*,*) "determining min and max of engtraj"
+      begin_time = MPI_Wtime()
+    end if
     engMin_node = 1.0
     engMax_node = 1.0
     lastLoc = 0
@@ -90,9 +94,12 @@ contains
         end if
       end do
     end do
+    if (myrank == root) write(*,*) "time for determining min and max (sec):", MPI_Wtime() - begin_time
     call mpi_allreduce(engMin_node, engMin_global, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     call mpi_allreduce(engMax_node, engMax_global, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
+    if (myrank == root) write(*, *) "energy min:", engMin_node, " max:", engMax_node
 
+    if (myrank == root) write(*,*) "reading engtraj data"
     lastLoc = 0
     do c = c_start, c_end
       do r = r_start, r_end
@@ -155,7 +162,7 @@ contains
     ! open the existing engtraj file.
     call H5Fopen_f(engtrajFilename, H5F_ACC_RDONLY_F, engtrajFileid, ierr, access_prp = plist_id)
     if (ierr /= 0) then
-      write(*,*) "Failed to open HDF5 file: ", engtrajFilename
+      write(*,*) "Failed to open HDF5 file: ", trim(adjustl(engtrajFilename))
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -235,7 +242,7 @@ contains
     !
     !  pairIndex(r, c) = (r - 1) * n + c - (r + 1) * r / 2
     !  n = 4 in this example
-    pairIndex = getPairIndex(r, c, nummol)
+    pairIndex = getPairIndex(min(r, c), max(r, c), nummol)
     offset = [skip - 1, pairIndex - 1]
     count = [numFrame, 1]
     stride = [skip, 1]
@@ -244,9 +251,9 @@ contains
     ! create memory space
     call H5Screate_simple_f(1, [int(numFrame, kind=hsize_t)], memspace, ierr)
 
-    ! Create property list for collective dataset write
+    ! Create property list for reading dataset
     call H5Pcreate_f(H5P_DATASET_XFER_F, plist_id, ierr)
-    call H5Pset_dxpl_mpio_f(plist_id, H5FD_MPIO_COLLECTIVE_F, ierr)
+    call H5Pset_dxpl_mpio_f(plist_id, H5FD_MPIO_INDEPENDENT_F, ierr)
 
     call H5Dread_f(dset_id, H5T_NATIVE_DOUBLE, eng, [int(numFrame, kind=hsize_t)], ierr, &
                     file_space_id = filespace, mem_space_id = memspace, xfer_prp = plist_id)
