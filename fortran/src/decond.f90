@@ -16,7 +16,7 @@ program decond
 
 
   implicit none
-  character(len=*), parameter :: DECOND_VERSION = "v0.4.0"
+  character(len=*), parameter :: DECOND_VERSION = "0.4.0"
   integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
