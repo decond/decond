@@ -99,6 +99,8 @@ contains
     call mpi_allreduce(engMax_node, engMax_global, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
     if (myrank == root) write(*, *) "energy min:", engMin_node, " max:", engMax_node
 
+    eBinWidth = (engMax_global - engMin_global) / num_eBin
+
     if (myrank == root) write(*,*) "reading engtraj data"
     lastLoc = 0
     do c = c_start, c_end
@@ -350,7 +352,6 @@ contains
     real(8), intent(in) :: eng(:), engMin_global, engMax_global
     integer, intent(out) :: eBinIndex_single(size(eng))
 
-    eBinWidth = (engMax_global - engMin_global) / num_eBin
     eBinIndex_single = ceiling((eng - engMin_global) / eBinWidth)
     where (eBinIndex_single == 0)
       eBinIndex_single = 1
