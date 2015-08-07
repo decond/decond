@@ -21,6 +21,8 @@ FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
 XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
+HDF5_INCLUDE_DIR = /home/kmtu/local/hdf5-1.8.15/include
+
 
 #========== Basically NO modification is needed below this line ===========#
 PROGRAM = decond trjconv2com
@@ -51,7 +53,7 @@ spatial_dec.o : spatial_dec.f90 mpiproc.o top.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 energy_dec.o : energy_dec.f90 mpiproc.o
-	$(FCMPI) $(FCFLAGS) -I/home/kmtu/local/hdf5-1.8.15/include -o $(SRCDIR)$(@F) -c $<
+	$(FCMPI) $(FCFLAGS) -I$(HDF5_INCLUDE_DIR) -o $(SRCDIR)$(@F) -c $<
 
 mpiproc.o : mpiproc.f90
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
