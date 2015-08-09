@@ -675,7 +675,27 @@ contains
     integer :: ierr
     integer(hid_t) :: dset_nCorr, dset_timeLags, &
                       dset_sdCorr, dset_sdRho, dset_rBins, &
-                      dset_edCorr, dset_edRho, dset_eBins
+                      dset_edCorr, dset_edRho, dset_eBins, &
+                      grp_sd_id, grp_ed_id
+
+    !HDF5:
+    character(len=*), parameter :: GROUP_ROOT = "/", &
+                                   GROUP_SPATIAL = "spatialDec", &
+                                   GROUP_ENERGY = "energyDec"
+    !/Attributes
+    character(len=*), parameter :: ATTR_VERSION = "version", &
+                                   ATTR_CHARGE = "charge", &
+                                   ATTR_NUMMOL = "numMol", &
+                                   ATTR_CELL = "cell"
+    !/Dataset
+    character(len=*), parameter :: DSETNAME_TIMELAGS = "timeLags", &
+                                   DSETNAME_NCORR = "nCorr"
+
+    !/GROUP_SPATIAL or GROUP_ENERGY/Dataset
+    character(len=*), parameter :: DSETNAME_DECBINS = "decBins", &
+                                   DSETNAME_DECCORR = "decCorr", &
+                                   DSETNAME_DECRHO = "decRho"
+
 
     allocate(timeLags(maxLag+1), stat=stat)
     if (stat /=0) then
@@ -706,47 +726,52 @@ contains
     end if
 
     ! create and write dataset
-    call H5LTset_attribute_string_f(outCorrFileid, "/", "version", DECOND_VERSION, ierr)
-    call H5LTset_attribute_double_f(outCorrFileid, "/", "timestep", [timestep], int(1, kind=size_t), ierr)
-    call H5LTset_attribute_int_f(outCorrFileid, "/", "charge", charge, size(charge, kind=size_t), ierr)
-    call H5LTset_attribute_int_f(outCorrFileid, "/", "numMol", sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
-    call H5LTset_attribute_double_f(outCorrFileid, "/", "cell", cell, size(cell, kind=size_t), ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, GROUP_ROOT, ATTR_VERSION, DECOND_VERSION, ierr)
+    call H5LTset_attribute_int_f(outCorrFileid, GROUP_ROOT, ATTR_CHARGE, &
+                                 charge, size(charge, kind=size_t), ierr)
+    call H5LTset_attribute_int_f(outCorrFileid, GROUP_ROOT, ATTR_NUMMOL, &
+                                 sys%mol(:)%num, size(sys%mol(:)%num, kind=size_t), ierr)
+    call H5LTset_attribute_double_f(outCorrFileid, GROUP_ROOT, ATTR_CELL, cell, size(cell, kind=size_t), ierr)
 
-    call H5LTmake_dataset_double_f(outCorrFileid, "nCorr", 2, &
+    call H5LTmake_dataset_double_f(outCorrFileid, DSETNAME_NCORR, 2, &
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
-    call H5Dopen_f(outCorrFileid, "nCorr", dset_nCorr, ierr)
+    call H5Dopen_f(outCorrFileid, DSETNAME_NCORR, dset_nCorr, ierr)
 
     if (is_sd) then
-      call H5LTmake_dataset_double_f(outCorrFileid, "sdCorr", 3, &
+      !create a group for storing spatial-decomposition data
+      call H5Gcreate_f(outCorrFileid, GROUP_SPATIAL, grp_sd_id, ierr)
+      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECCORR, 3, &
           [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
-      call H5Dopen_f(outCorrFileid, "sdCorr", dset_sdCorr, ierr)
+      call H5Dopen_f(grp_sd_id, DSETNAME_DECCORR, dset_sdCorr, ierr)
 
-      call H5LTmake_dataset_double_f(outCorrFileid, "sdRho", 2, &
+      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECRHO, 2, &
           [size(sdRho, 1, kind=hsize_t), size(sdRho, 2, kind=hsize_t)], sdRho, ierr)
-      call H5Dopen_f(outCorrFileid, "sdRho", dset_sdRho, ierr)
+      call H5Dopen_f(grp_sd_id, DSETNAME_DECRHO, dset_sdRho, ierr)
     end if
 
     if (is_ed) then
-      call H5LTmake_dataset_double_f(outCorrFileid, "edCorr", 3, &
+      !create a group for storing energy-decomposition data
+      call H5Gcreate_f(outCorrFileid, GROUP_ENERGY, grp_ed_id, ierr)
+      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECCORR, 3, &
           [size(edCorr, 1, kind=hsize_t), size(edCorr, 2, kind=hsize_t), size(edCorr, 3, kind=hsize_t)], edCorr, ierr)
-      call H5Dopen_f(outCorrFileid, "edCorr", dset_edCorr, ierr)
+      call H5Dopen_f(grp_ed_id, DSETNAME_DECCORR, dset_edCorr, ierr)
 
-      call H5LTmake_dataset_double_f(outCorrFileid, "edRho", 2, &
+      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECRHO, 2, &
           [size(edRho, 1, kind=hsize_t), size(edRho, 2, kind=hsize_t)], edRho, ierr)
-      call H5Dopen_f(outCorrFileid, "edRho", dset_edRho, ierr)
+      call H5Dopen_f(grp_ed_id, DSETNAME_DECRHO, dset_edRho, ierr)
     end if
 
-    call H5LTmake_dataset_double_f(outCorrFileid, "timeLags", 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
-    call H5Dopen_f(outCorrFileid, "timeLags", dset_timeLags, ierr)
+    call H5LTmake_dataset_double_f(outCorrFileid, DSETNAME_TIMELAGS, 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
+    call H5Dopen_f(outCorrFileid, DSETNAME_TIMELAGS, dset_timeLags, ierr)
 
     if (is_sd) then
-      call H5LTmake_dataset_double_f(outCorrFileid, "rBins", 1, [size(rBins, kind=hsize_t)], rBins, ierr)
-      call H5Dopen_f(outCorrFileid, "rBins", dset_rBins, ierr)
+      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECBINS, 1, [size(rBins, kind=hsize_t)], rBins, ierr)
+      call H5Dopen_f(grp_sd_id, DSETNAME_DECBINS, dset_rBins, ierr)
     end if
 
     if (is_ed) then
-      call H5LTmake_dataset_double_f(outCorrFileid, "eBins", 1, [size(eBins, kind=hsize_t)], eBins, ierr)
-      call H5Dopen_f(outCorrFileid, "eBins", dset_eBins, ierr)
+      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(eBins, kind=hsize_t)], eBins, ierr)
+      call H5Dopen_f(grp_ed_id, DSETNAME_DECBINS, dset_eBins, ierr)
     end if
 
     ! attach scale dimension
