@@ -736,7 +736,7 @@ contains
     call H5Dwrite_f(dset_id, H5T_NATIVE_DOUBLE, product(cell), [0_hsize_t], ierr)
     call H5Dclose_f(dset_id, ierr)
     call H5Sclose_f(space_id, ierr)
-    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_VOLUME, ATTR_UNIT, "nm^3", ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_VOLUME, ATTR_UNIT, "nm$^3$", ierr)
 
     !charge
     call H5LTmake_dataset_int_f(outCorrFileid, DSETNAME_CHARGE, 1, [size(charge, kind=hsize_t)], charge, ierr)
@@ -755,6 +755,7 @@ contains
     call H5LTmake_dataset_double_f(outCorrFileid, DSETNAME_NCORR, 2, &
         [size(nCorr, 1, kind=hsize_t), size(nCorr, 2, kind=hsize_t)], nCorr, ierr)
     call H5Dopen_f(outCorrFileid, DSETNAME_NCORR, dset_nCorr, ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_NCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
     if (is_sd) then
       !create a group for storing spatial-decomposition data
@@ -764,6 +765,7 @@ contains
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECCORR, 3, &
           [size(sdCorr, 1, kind=hsize_t), size(sdCorr, 2, kind=hsize_t), size(sdCorr, 3, kind=hsize_t)], sdCorr, ierr)
       call H5Dopen_f(grp_sd_id, DSETNAME_DECCORR, dset_sdCorr, ierr)
+      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
       !decRho
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECRHO, 2, &
@@ -784,6 +786,7 @@ contains
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECCORR, 3, &
           [size(edCorr, 1, kind=hsize_t), size(edCorr, 2, kind=hsize_t), size(edCorr, 3, kind=hsize_t)], edCorr, ierr)
       call H5Dopen_f(grp_ed_id, DSETNAME_DECCORR, dset_edCorr, ierr)
+      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
       !decRho
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECRHO, 2, &
@@ -793,7 +796,7 @@ contains
       !decBins
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(eBins, kind=hsize_t)], eBins, ierr)
       call H5Dopen_f(grp_ed_id, DSETNAME_DECBINS, dset_eBins, ierr)
-      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECBINS, ATTR_UNIT, "kcal mol^-1", ierr)
+      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECBINS, ATTR_UNIT, "kcal mol$^{-1}$", ierr)
     end if
 
     !attach scale dimension
