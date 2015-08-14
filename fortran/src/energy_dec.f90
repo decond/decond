@@ -8,7 +8,7 @@ module energy_dec
   real(8), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numFrame, uniqueNumMolPair)
   real(8), allocatable :: ed_binIndex(:)  !ed_binIndex(numFrame)
   real(8), allocatable :: edCorr(:, :, :)  !edCorr(maxLag+1, num_eBin, numMolType*numMolType)
-  real(8), allocatable :: edRho(:, :)  !edRho(num_eBin, numMolType*numMolType)
+  real(8), allocatable :: edPairCount(:, :)  !edPairCount(num_eBin, numMolType*numMolType)
   real(8), allocatable :: eBins(:)  !eBins(num_eBin)
   real(8) :: engMin_global, engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
@@ -38,13 +38,6 @@ contains
     allocate(eBinIndexAll(numFrame, locMax), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: eBinIndexAll"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
-    end if
-
-    allocate(ed_binIndex(numFrame), stat=stat)
-    if (stat /=0) then
-      write(*,*) "Allocation failed: ed_binIndex"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -126,8 +119,10 @@ contains
     implicit none
     integer, intent(in) :: maxLag, numMolType, numFrame
     integer :: stat
+    integer :: numMolTypePair
 
-    allocate(edCorr(maxLag+1, num_eBin, numMolType*numMolType), stat=stat)
+    numMolTypePair = numMolType * (numMolType + 1) / 2
+    allocate(edCorr(maxLag+1, num_eBin, numMolTypePair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: edCorr"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -135,13 +130,20 @@ contains
     end if
     edCorr = 0d0
 
-    allocate(edRho(num_eBin, numMolType*numMolType), stat=stat)
+    allocate(edPairCount(num_eBin, numMolTypePair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: edRho"
+      write(*,*) "Allocation failed: edPairCount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    edRho = 0d0
+    edPairCount = 0d0
+
+    allocate(ed_binIndex(numFrame), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: ed_binIndex"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
   end subroutine ed_prepCorrMemory
 
   subroutine openEngtraj(engtrajFileid)
@@ -370,25 +372,35 @@ contains
     implicit none
     if (myrank == root) then
       call mpi_reduce(MPI_IN_PLACE, edCorr, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, edRho, size(edRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, edPairCount, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(edCorr, dummy_null, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(edRho, dummy_null, size(edRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(edPairCount, dummy_null, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
   end subroutine ed_collectCorr
 
-  subroutine ed_normalize(numFrame, numMolType, norm)
+  subroutine ed_average(numFrame, numMolType, frameCount)
+    use utility, only: getMolTypePairIndexFromTypes
     implicit none
-    integer, intent(in) :: numFrame, numMolType, norm(:)
-    integer :: i, n
+    integer, intent(in) :: numFrame, numMolType, frameCount(:)
+    integer :: i, t1, t2, n, molTypePairIndex
 
-    edRho = edRho / numFrame
-    do n = 1, numMolType*numMolType
+    edPairCount = edPairCount / numFrame
+    do n = 1, numMolType * (numMolType + 1) / 2
       do i = 1, num_eBin
-        edCorr(:,i,n) = edCorr(:,i,n) / norm / edRho(i, n)
+        edCorr(:,i,n) = edCorr(:,i,n) / frameCount / edPairCount(i, n)
       end do
     end do
-  end subroutine ed_normalize
+
+    do t2 = 1, numMolType
+      do t1 = t2, numMolType
+        if (t1 /= t2) then
+          molTypePairIndex = getMolTypePairIndexFromTypes(t1, t2, numMolType)
+          edPairCount(:, molTypePairIndex) = edPairCount(:, molTypePairIndex) / 2d0
+        end if
+      end do
+    end do
+  end subroutine ed_average
 
   subroutine ed_finish()
     implicit none

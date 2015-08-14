@@ -5,9 +5,9 @@ module spatial_dec
   integer :: num_rBin
   integer, allocatable :: sd_binIndex(:)
   real(8) :: rBinWidth
-  real(8), allocatable :: sdRho(:, :), sdCorr(:, :, :), pos(:, :, :), rBins(:)
+  real(8), allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :), rBins(:)
   !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
-  !sdRho: (num_rBin, molTypePairIndex)
+  !sdPairCount: (num_rBin, molTypePairIndex)
   integer :: stat
 
   !MPI variables
@@ -132,8 +132,10 @@ contains
   subroutine sd_prepCorrMemory(maxLag, numMolType, numFrame)
     implicit none
     integer, intent(in) :: maxLag, numMolType, numFrame
+    integer :: numMolTypePair
 
-    allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
+    numMolTypePair = numMolType * (numMolType + 1) / 2
+    allocate(sdCorr(maxLag+1, num_rBin, numMolTypePair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdCorr"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -141,13 +143,13 @@ contains
     end if
     sdCorr = 0d0
 
-    allocate(sdRho(num_rBin, numMolType*numMolType), stat=stat)
+    allocate(sdPairCount(num_rBin, numMolTypePair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: sdRho"
+      write(*,*) "Allocation failed: sdPairCount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    sdRho = 0d0
+    sdPairCount = 0d0
 
     allocate(sd_binIndex(numFrame), stat=stat)
     if (stat /= 0) then
@@ -183,29 +185,39 @@ contains
     implicit none
     if (myrank == root) then
       call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, sdRho, size(sdRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(sdRho, dummy_null, size(sdRho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdPairCount, dummy_null, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
   end subroutine sd_collectCorr
 
-  subroutine sd_normalize(numFrame, numMolType, norm)
+  subroutine sd_average(numFrame, numMolType, frameCount)
+    use utility, only: getMolTypePairIndexFromTypes
     implicit none
-    integer, intent(in) :: numFrame, numMolType, norm(:)
-    integer :: i, n
+    integer, intent(in) :: numFrame, numMolType, frameCount(:)
+    integer :: i, t1, t2, n, molTypePairIndex
 
-    sdRho = sdRho / numFrame
-    do n = 1, numMolType*numMolType
+    sdPairCount = sdPairCount / numFrame
+    do n = 1, numMolType * (numMolType + 1) / 2
       do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / sdRho(i, n)
+        sdCorr(:,i,n) = sdCorr(:,i,n) / frameCount / sdPairCount(i, n)
       end do
     end do
-  end subroutine sd_normalize
+
+    do t2 = 1, numMolType
+      do t1 = t2, numMolType
+        if (t1 /= t2) then
+          molTypePairIndex = getMolTypePairIndexFromTypes(t1, t2, numMolType)
+          sdPairCount(:, molTypePairIndex) = sdPairCount(:, molTypePairIndex) / 2d0
+        end if
+      end do
+    end do
+  end subroutine sd_average
 
   subroutine sd_finish()
     implicit none
-    deallocate(pos_r, pos_c, sdCorr, sdRho)
+    deallocate(pos_r, pos_c, sdCorr, sdPairCount)
     ! sd_binIndex has been deallocated in the main program
   end subroutine sd_finish
 end module spatial_dec

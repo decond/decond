@@ -107,5 +107,27 @@ contains
       count_record_in_string = count_record_in_string + 1
     end if
   end function
-end module utility
 
+  integer function getMolTypePairIndexFromTypes(type1, type2, numMolType)
+    implicit none
+    integer, intent(in) :: type1, type2, numMolType
+    integer :: r, c, ii, jj
+    !          c
+    !    | 1  2  3  4
+    !  --+------------
+    !  1 | 1  2  3  4
+    !    |
+    !  2 |    5  6  7
+    !r   |
+    !  3 |       8  9
+    !    |
+    !  4 |         10
+    !
+    !  index(r, c) = (r - 1) * n + c - r * (r - 1) / 2
+    !  where n = size(c) = size(r), r <= c
+
+    r = min(type1, type2)
+    c = max(type1, type2)
+    getMolTypePairIndexFromTypes = (r - 1) * numMolType + c - r * (r - 1) / 2
+  end function getMolTypePairIndexFromTypes
+end module utility

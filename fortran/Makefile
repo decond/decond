@@ -49,10 +49,10 @@ decond.o : decond.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
-spatial_dec.o : spatial_dec.f90 mpiproc.o top.o
+spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
-energy_dec.o : energy_dec.f90 mpiproc.o
+energy_dec.o : energy_dec.f90 mpiproc.o utility.o
 	$(FCMPI) $(FCFLAGS) -I$(HDF5_INCLUDE_DIR) -o $(SRCDIR)$(@F) -c $<
 
 mpiproc.o : mpiproc.f90

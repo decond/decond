@@ -1,17 +1,17 @@
 program decond
   use mpiproc
   use HDF5
-  use utility, only: handle
+  use utility, only: handle, getMolTypePairIndexFromTypes
   use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only: open_top, close_top, read_top, system, print_sys
   use correlation
-  use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdRho, sdCorr, pos, num_rBin, &
+  use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdPairCount, sdCorr, pos, num_rBin, &
                          com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
                          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
-                         sd_collectCorr, sd_normalize, sd_finish
+                         sd_collectCorr, sd_average, sd_finish
   use energy_dec, only: engtrajFilename, ed_readEng, ed_getBinIndex, ed_binIndex, num_eBin, &
                         ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, &
-                        ed_collectCorr, ed_normalize, edRho, edCorr, eBinWidth, &
+                        ed_collectCorr, ed_average, edPairCount, edCorr, eBinWidth, &
                         ed_init, ed_finish
 
 
@@ -23,8 +23,8 @@ program decond
   character(len=128) :: outCorrFilename, dataFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, stat, numMolType, numFrameRead, numFrame_k
-  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
-  integer, allocatable :: charge(:), norm(:), start_index(:)
+  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip, numMolTypePairAll
+  integer, allocatable :: charge(:), frameCount(:), start_index(:)
   real(8) :: cell(3), timestep, tmp_r
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
@@ -257,6 +257,11 @@ program decond
     end if
   end do
 
+  !auto1, auto2, ...autoN, cross11, cross12, ..., cross1N, cross22, ...cross2N, cross33,..., crossNN
+  != [auto part] + [cross part]
+  != [numMolType] + [numMolType * (numMolType + 1) / 2]
+  numMolTypePairAll = numMolType * (numMolType + 3) / 2
+
   if (maxLag == -1) then
     maxLag = numFrame - 1
   end if
@@ -455,7 +460,7 @@ program decond
     call exit(1)
   end if 
 
-  allocate(nCorr(maxLag+1, numMolType*(numMolType+1)), stat=stat)
+  allocate(nCorr(maxLag+1, numMolTypePairAll), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: nCorr"
     call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -486,7 +491,7 @@ program decond
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
-        molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num)
+        molTypePairAllIndex = getMolTypeIndex(i, sys%mol(:)%num, numMolType)
         if (is_sd .or. is_ed) then
           do k = 1, maxLag+1
             numFrame_k = numFrame - k + 1
@@ -503,7 +508,7 @@ program decond
         if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                           ", c =", j-c_start+1, " of ", num_c
         starttime2 = MPI_Wtime()
-        molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num)
+        molTypePairIndex = getMolTypePairIndex(i, j, sys%mol(:)%num, numMolType)
         molTypePairAllIndex = molTypePairIndex + numMolType
         if (is_sd .or. is_ed) then
           if (is_sd) call sd_getBinIndex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
@@ -535,13 +540,13 @@ program decond
             if (is_sd) then
               tmp_i = sd_binIndex(t)
               if (tmp_i <= num_rBin) then
-                sdRho(tmp_i, molTypePairIndex) = sdRho(tmp_i, molTypePairIndex) + 1d0
+                sdPairCount(tmp_i, molTypePairIndex) = sdPairCount(tmp_i, molTypePairIndex) + 1d0
               end if
             end if
             if (is_ed) then
               tmp_i = ed_binIndex(t)
               if (tmp_i <= num_eBin) then
-                edRho(tmp_i, molTypePairIndex) = edRho(tmp_i, molTypePairIndex) + 1d0
+                edPairCount(tmp_i, molTypePairIndex) = edPairCount(tmp_i, molTypePairIndex) + 1d0
               end if
             end if
           end do
@@ -576,24 +581,34 @@ program decond
   endtime = MPI_Wtime()
   if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
 
-  !normalization at root and then output
+  !average at root and then output
   if (myrank == root) then
-    allocate(norm(maxLag+1), stat=stat)
+    allocate(frameCount(maxLag+1), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: norm"
+      write(*,*) "Allocation failed: frameCount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
 
-    norm = [ (numFrame - (i-1), i = 1, maxLag+1) ] * 3d0
-    do n = 1, numMolType*(numMolType+1)
-      nCorr(:,n) = nCorr(:,n) / norm
+    do j = 1, numMolType
+      do i = j, numMolType
+        if (i /= j) then
+          molTypePairIndex = getMolTypePairIndexFromTypes(i, j, numMolType)
+          molTypePairAllIndex = molTypePairIndex + numMolType
+          nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) / 2d0
+        end if
+      end do
     end do
 
-    if (is_sd) call sd_normalize(numFrame, numMolType, norm)
-    if (is_ed) call ed_normalize(numFrame, numMolType, norm)
+    frameCount = [ (numFrame - (i-1), i = 1, maxLag+1) ] * 3d0
+    do n = 1, numMolTypePairAll
+      nCorr(:,n) = nCorr(:,n) / frameCount
+    end do
 
-    deallocate(norm)
+    if (is_sd) call sd_average(numFrame, numMolType, frameCount)
+    if (is_ed) call ed_average(numFrame, numMolType, frameCount)
+
+    deallocate(frameCount)
 
     !output results
     write(*,*) "start writing outputs"
@@ -613,11 +628,10 @@ program decond
   stop
 
 contains
-  integer function getMolTypeIndex(i, numMol)
+  integer function getMolTypeIndex(i, numMol, numMolType)
     implicit none
-    integer, intent(in) :: i, numMol(:)
+    integer, intent(in) :: i, numMol(:), numMolType
     integer :: n, numMol_acc
-!    integer, save :: numMolType = size(numMol)
 
     getMolTypeIndex = -1
     numMol_acc = 0
@@ -629,16 +643,31 @@ contains
       end if
     end do
   end function getMolTypeIndex
-  
-  integer function getMolTypePairIndex(i, j, numMol)
+
+  integer function getMolTypePairIndex(i, j, numMol, numMolType)
     implicit none
-    integer, intent(in) :: i, j, numMol(:)
-    integer :: ii, jj
-!    integer, save :: numMolType = size(numMol)
-  
-    ii = getMolTypeIndex(i, numMol)
-    jj = getMolTypeIndex(j, numMol)
-    getMolTypePairIndex = (ii-1)*numMolType + jj
+    integer, intent(in) :: i, j, numMol(:), numMolType
+    integer :: r, c, ii, jj
+    !          c
+    !    | 1  2  3  4
+    !  --+------------
+    !  1 | 1  2  3  4
+    !    |
+    !  2 |    5  6  7
+    !r   |
+    !  3 |       8  9
+    !    |
+    !  4 |         10
+    !
+    !  index(r, c) = (r - 1) * n + c - r * (r - 1) / 2
+    !  where n = size(c) = size(r), r <= c
+
+
+    ii = getMolTypeIndex(i, numMol, numMolType)
+    jj = getMolTypeIndex(j, numMol, numMolType)
+    r = min(ii, jj)
+    c = max(ii, jj)
+    getMolTypePairIndex = (r - 1) * numMolType + c - r * (r - 1) / 2
   end function getMolTypePairIndex
 
   subroutine com_vel(com_v, vel, start_index, sys)
@@ -674,8 +703,8 @@ contains
     real(8), allocatable :: timeLags(:)
     integer :: ierr
     integer(hid_t) :: dset_nCorr, dset_timeLags, &
-                      dset_sdCorr, dset_sdRho, dset_rBins, &
-                      dset_edCorr, dset_edRho, dset_eBins, &
+                      dset_sdCorr, dset_sdPairCount, dset_rBins, &
+                      dset_edCorr, dset_edPairCount, dset_eBins, &
                       grp_sd_id, grp_ed_id, space_id, dset_id
 
     !HDF5:
@@ -695,7 +724,7 @@ contains
     !/GROUP_SPATIAL or GROUP_ENERGY/Dataset
     character(len=*), parameter :: DSETNAME_DECBINS = "decBins", &
                                    DSETNAME_DECCORR = "decCorr", &
-                                   DSETNAME_DECRHO = "decRho"
+                                   DSETNAME_DECPAIRCOUNT = "decPairCount"
 
 
     allocate(timeLags(maxLag+1), stat=stat)
@@ -767,10 +796,10 @@ contains
       call H5Dopen_f(grp_sd_id, DSETNAME_DECCORR, dset_sdCorr, ierr)
       call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
-      !decRho
-      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECRHO, 2, &
-          [size(sdRho, 1, kind=hsize_t), size(sdRho, 2, kind=hsize_t)], sdRho, ierr)
-      call H5Dopen_f(grp_sd_id, DSETNAME_DECRHO, dset_sdRho, ierr)
+      !decPairCount
+      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECPAIRCOUNT, 2, &
+          [size(sdPairCount, 1, kind=hsize_t), size(sdPairCount, 2, kind=hsize_t)], sdPairCount, ierr)
+      call H5Dopen_f(grp_sd_id, DSETNAME_DECPAIRCOUNT, dset_sdPairCount, ierr)
 
       !decBins
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECBINS, 1, [size(rBins, kind=hsize_t)], rBins, ierr)
@@ -788,10 +817,10 @@ contains
       call H5Dopen_f(grp_ed_id, DSETNAME_DECCORR, dset_edCorr, ierr)
       call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
-      !decRho
-      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECRHO, 2, &
-          [size(edRho, 1, kind=hsize_t), size(edRho, 2, kind=hsize_t)], edRho, ierr)
-      call H5Dopen_f(grp_ed_id, DSETNAME_DECRHO, dset_edRho, ierr)
+      !decPairCount
+      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECPAIRCOUNT, 2, &
+          [size(edPairCount, 1, kind=hsize_t), size(edPairCount, 2, kind=hsize_t)], edPairCount, ierr)
+      call H5Dopen_f(grp_ed_id, DSETNAME_DECPAIRCOUNT, dset_edPairCount, ierr)
 
       !decBins
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(eBins, kind=hsize_t)], eBins, ierr)
@@ -805,12 +834,12 @@ contains
     if (is_sd) then
       call H5DSattach_scale_f(dset_sdCorr, dset_timeLags, 3, ierr)
       call H5DSattach_scale_f(dset_sdCorr, dset_rBins, 2, ierr)
-      call H5DSattach_scale_f(dset_sdRho, dset_rBins, 2, ierr)
+      call H5DSattach_scale_f(dset_sdPairCount, dset_rBins, 2, ierr)
     end if
     if (is_ed) then
       call H5DSattach_scale_f(dset_edCorr, dset_timeLags, 3, ierr)
       call H5DSattach_scale_f(dset_edCorr, dset_eBins, 2, ierr)
-      call H5DSattach_scale_f(dset_edRho, dset_eBins, 2, ierr)
+      call H5DSattach_scale_f(dset_edPairCount, dset_eBins, 2, ierr)
     end if
 
     call H5Dclose_f(dset_timeLags, ierr)
@@ -818,12 +847,12 @@ contains
     if (is_sd) then
       call H5Dclose_f(dset_rBins, ierr)
       call H5Dclose_f(dset_sdCorr, ierr)
-      call H5Dclose_f(dset_sdRho, ierr)
+      call H5Dclose_f(dset_sdPairCount, ierr)
     end if
     if (is_ed) then
       call H5Dclose_f(dset_eBins, ierr)
       call H5Dclose_f(dset_edCorr, ierr)
-      call H5Dclose_f(dset_edRho, ierr)
+      call H5Dclose_f(dset_edPairCount, ierr)
     end if
     call H5Fclose_f(outCorrFileid, ierr)
     call H5close_f(ierr)
