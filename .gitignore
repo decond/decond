@@ -20,6 +20,9 @@
 .nfs*
 *~
 
+# Compiled Python scripts
+*.pyc
+
 tags
 GPATH
 GRTAGS
