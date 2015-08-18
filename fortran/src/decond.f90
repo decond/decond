@@ -778,7 +778,7 @@ contains
     !timeLags
     call H5LTmake_dataset_double_f(outCorrFileid, DSETNAME_TIMELAGS, 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
     call H5Dopen_f(outCorrFileid, DSETNAME_TIMELAGS, dset_timeLags, ierr)
-    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_TIMELAGS, ATTR_UNIT, "ns", ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_TIMELAGS, ATTR_UNIT, "ps", ierr)
 
     !nCorr
     call H5LTmake_dataset_double_f(outCorrFileid, DSETNAME_NCORR, 2, &
