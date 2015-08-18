@@ -131,6 +131,7 @@ contains
     first_entry = .false.
   end function
 
+!TODO: unfinished
   function corr_mat(mat, maxlag)
     implicit none
 !    real(C_DOUBLE), dimension(maxlag+1, size(mat, 2)) :: corr_mat
