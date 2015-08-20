@@ -215,6 +215,18 @@ contains
     end do
   end subroutine sd_average
 
+  subroutine sd_make_rBins()
+    implicit none
+    integer :: i, stat
+    allocate(rBins(num_rBin), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rBins"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+  end subroutine sd_make_rBins
+
   subroutine sd_finish()
     implicit none
     deallocate(pos_r, pos_c, sdCorr, sdPairCount)

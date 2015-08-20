@@ -13,12 +13,12 @@ module energy_dec
   real(8) :: engMin_global, engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
   real(8) :: eBinWidth
-  integer :: nummol
+  integer :: nummol, eBinIndex_absolute_max, eBinIndex_absolute_min
 
 contains
   subroutine ed_init()
     implicit none
-    num_eBin = 500  ! default value
+    eBinWidth = 0.5
   end subroutine ed_init
 
   subroutine ed_readEng(engtrajFilename, numFrame, skip)
@@ -90,9 +90,12 @@ contains
     if (myrank == root) write(*,*) "time for determining min and max (sec):", MPI_Wtime() - begin_time
     call mpi_allreduce(engMin_node, engMin_global, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_WORLD, ierr)
     call mpi_allreduce(engMax_node, engMax_global, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_WORLD, ierr)
-    if (myrank == root) write(*, *) "energy min:", engMin_node, " max:", engMax_node
 
-    eBinWidth = (engMax_global - engMin_global) / num_eBin
+    if (myrank == root) write(*, *) "energy min:", engMin_global, " max:", engMax_global
+
+    eBinIndex_absolute_max = getAbsoluteIndex(engMax_global)
+    eBinIndex_absolute_min = getAbsoluteIndex(engMin_global)
+    num_eBin = eBinIndex_absolute_max - eBinIndex_absolute_min + 1
 
     if (myrank == root) write(*,*) "reading engtraj data"
     lastLoc = 0
@@ -103,7 +106,7 @@ contains
           if (loc > lastLoc) then
             ! new loc, read new data
             call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
-            call eng2BinIndex(eng, eBinIndex_single, engMin_global, engMax_global)
+            call eng2BinIndex(eng, eBinIndex_single)
             eBinIndexAll(:, loc) = eBinIndex_single
             lastLoc = loc
           end if
@@ -349,15 +352,20 @@ contains
     end if
   end function getUnorderedCantorPairHash
 
-  subroutine eng2BinIndex(eng, eBinIndex_single, engMin_global, engMax_global)
+  !Absolute energy indexes are centered at 0
+  !The bin grid is totally determined by eBinWidth
+  integer elemental function getAbsoluteIndex(eng)
     implicit none
-    real(8), intent(in) :: eng(:), engMin_global, engMax_global
+    real(8), intent(in) :: eng
+      getAbsoluteIndex = floor(eng / eBinWidth + 0.5)
+  end function getAbsoluteIndex
+
+  subroutine eng2BinIndex(eng, eBinIndex_single)
+    implicit none
+    real(8), intent(in) :: eng(:)
     integer, intent(out) :: eBinIndex_single(size(eng))
 
-    eBinIndex_single = ceiling((eng - engMin_global) / eBinWidth)
-    where (eBinIndex_single == 0)
-      eBinIndex_single = 1
-    end where
+    eBinIndex_single = getAbsoluteIndex(eng) - eBinIndex_absolute_min + 1
   end subroutine eng2BinIndex
 
   subroutine ed_getBinIndex(r, c, eBin)
@@ -401,6 +409,18 @@ contains
       end do
     end do
   end subroutine ed_average
+
+  subroutine ed_make_eBins()
+    implicit none
+    integer :: i, stat
+    allocate(eBins(num_eBin), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: eBins"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+    eBins = [(i * eBinWidth, i = eBinIndex_absolute_min, eBinIndex_absolute_max)]
+  end subroutine ed_make_eBins
 
   subroutine ed_finish()
     implicit none

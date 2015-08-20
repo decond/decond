@@ -8,11 +8,11 @@ program decond
   use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdPairCount, sdCorr, pos, num_rBin, &
                          com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
                          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
-                         sd_collectCorr, sd_average, sd_finish
+                         sd_collectCorr, sd_average, sd_make_rBins, sd_finish
   use energy_dec, only: engtrajFilename, ed_readEng, ed_getBinIndex, ed_binIndex, num_eBin, &
                         ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, &
                         ed_collectCorr, ed_average, edPairCount, edCorr, eBinWidth, &
-                        ed_init, ed_finish
+                        ed_init, ed_make_eBins, ed_finish
 
 
   implicit none
@@ -234,10 +234,15 @@ program decond
         call get_command_argument(i, engtrajFilename)
         i = i + 1
 
-      case ('-r')
+      case ('-sbwidth')
         call get_command_argument(i, arg)
         i = i + 1
         read(arg, *) rBinWidth
+
+      case ('-ebwidth')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) eBinWidth
 
       case ('-d')
         num_subArg = 2
@@ -274,6 +279,7 @@ program decond
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
     if (is_sd) write(*,*) "rBinWidth = ", rBinWidth
+    if (is_ed) write(*,*) "eBinWidth = ", eBinWidth
     write(*,*) "numMolType = ", numMolType
     write(*,*) "numDomain_r = ", numDomain_r
     write(*,*) "numDomain_c = ", numDomain_c
@@ -736,23 +742,11 @@ contains
     timeLags = [ (dble(i), i = 0, maxLag) ] * timestep
     
     if (is_sd) then
-      allocate(rBins(num_rBin), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: rBins"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
-      end if 
-      rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+      call sd_make_rBins()
     end if
 
     if (is_ed) then
-      allocate(eBins(num_eBin), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: eBins"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
-      end if 
-      eBins = [ (i - 0.5d0, i = 1, num_eBin) ] * eBinWidth + engMin_global
+      call ed_make_eBins()
     end if
 
     !create and write attributes
@@ -912,8 +906,8 @@ contains
     write(*, *) "  -sbwidth <sBinWidth(nm)>: spatial-decomposition bin width. default = 0.01."
     write(*, *) "                            only meaningful when -sd is given."
     write(*, *)
-    write(*, *) "  -ebnum <num_eBin>: number of energy-decomposition bins. default = 500"
-    write(*, *) "                     only meaningful when -ed is given."
+    write(*, *) "  -ebwidth <eBinWidth(kcal/mol)>: energy-decomposition bin width. default = 0.1"
+    write(*, *) "                                  only meaningful when -ed is given."
     write(*, *) 
     write(*, *) "  -d <numDomain_r> <numDomain_c>:" 
     write(*, *) "   manually assign the MPI decomposition pattern"
