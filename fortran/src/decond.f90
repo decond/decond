@@ -809,7 +809,7 @@ contains
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECCORR, 3, &
           [size(edCorr, 1, kind=hsize_t), size(edCorr, 2, kind=hsize_t), size(edCorr, 3, kind=hsize_t)], edCorr, ierr)
       call H5Dopen_f(grp_ed_id, DSETNAME_DECCORR, dset_edCorr, ierr)
-      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
+      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
       !decPairCount
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECPAIRCOUNT, 2, &
