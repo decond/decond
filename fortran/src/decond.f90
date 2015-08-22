@@ -48,7 +48,7 @@ program decond
   is_pm_mode = .false.
 
   !default values
-  outCorrFilename = 'corr.h5'
+  outCorrFilename = 'corr.c5'
   skip = 1
   maxLag = -1
   is_sd = .false.
@@ -719,7 +719,9 @@ contains
                                    GROUP_ENERGY = "energyDec"
     !/Attributes
     character(len=*), parameter :: ATTR_VERSION = "version", &
-                                   ATTR_UNIT = "unit"
+                                   ATTR_TYPE = "type", &
+                                   ATTR_UNIT = "unit", &
+                                   OUT_TYPE = "CorrFile"
     !/Dataset
     character(len=*), parameter :: DSETNAME_VOLUME = "volume", &
                                    DSETNAME_CHARGE = "charge", &
@@ -751,6 +753,7 @@ contains
 
     !create and write attributes
     call H5LTset_attribute_string_f(outCorrFileid, GROUP_ROOT, ATTR_VERSION, DECOND_VERSION, ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, GROUP_ROOT, ATTR_TYPE, OUT_TYPE, ierr)
 
     !create and write datasets
     !volume
