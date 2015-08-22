@@ -166,15 +166,36 @@ class DecondFile(CorrFile):
                 cf._cal_cesaro()
                 self.buffer = cf.buffer
             self.buffer.numSample = 1
-            self.buffer.volume_m2 = np.zeros_like(self.buffer.volume)
-            self.buffer.volume_err = _m2_to_err(self.buffer.volume_m2,
-                                                self.buffer.numSample)
-            self.buffer.nCorr_m2 = np.zeros_like(self.buffer.nCorr)
-            self.buffer.nCorr_err = _m2_to_err(self.buffer.nCorr_m2,
-                                               self.buffer.numSample)
-            self.buffer.nDCesaro_m2 = np.zeros_like(self.buffer.nDCesaro)
-            self.buffer.nDCesaro_err = _m2_to_err(self.buffer.nDCesaro_m2,
-                                                  self.buffer.numSample)
+
+            def init_Err(buf, data_name):
+                data_name_m2 = data_name + '_m2'
+                data_name_err = data_name + '_err'
+                setattr(buf, data_name_m2,
+                        np.zeros_like(getattr(buf, data_name)))
+                setattr(buf, data_name_err,
+                        _m2_to_err(getattr(buf, data_name_m2), buf.numSample))
+
+            init_Err(self.buffer, 'volume')
+            init_Err(self.buffer, 'nCorr')
+            init_Err(self.buffer, 'nDCesaro')
+
+            def init_decErr(buf, num_sample):
+                buf.decCorr_m2 = np.zeros_like(buf.decCorr)
+                buf.decCorr_err = _m2_to_err(buf.decCorr_m2, num_sample)
+
+                buf.decPairCount_m2 = np.zeros_like(buf.decPairCount)
+                buf.decPairCount_err = _m2_to_err(
+                        buf.decPairCount_m2, num_sample)
+
+                buf.decDCesaro_m2 = np.zeros_like(buf.decDCesaro)
+                buf.decDCesaro_err = _m2_to_err(buf.decDCesaro_m2, num_sample)
+
+            if self.buffer.spatialDec is not None:
+                init_decErr(self.buffer.spatialDec, self.buffer.numSample)
+
+            if self.buffer.energyDec is not None:
+                init_decErr(self.buffer.energyDec, self.buffer.numSample)
+
             begin = 1
         else:
             # not new file, buffer should have already been loaded
@@ -182,36 +203,68 @@ class DecondFile(CorrFile):
                                                self.buffer.numSample)
             self.buffer.nCorr_m2 = _err_to_m2(self.buffer.nCorr_err,
                                               self.buffer.numSample)
-            self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nCorr_err,
+            self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nDCesaro_err,
                                                  self.buffer.numSample)
+
+            def init_dec_m2(buf, num_sample):
+                buf.decCorr_m2 = _err_to_m2(buf.decCorr_err, num_sample)
+                buf.decPairCount_m2 = _err_to_m2(buf.decPairCount_err,
+                                                 num_sample)
+                buf.decDCesaro_m2 = _err_to_m2(buf.decDCesaro_err, num_sample)
+
+            if self.buffer.spatialDec is not None:
+                init_dec_m2(self.buffer.spatialDec, self.buffer.numSample)
+
+            if self.buffer.energyDec is not None:
+                init_dec_m2(self.buffer.energyDec, self.buffer.numSample)
+
             begin = 0
 
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
                 f._cal_cesaro()
-                self._add_data('volume', f.buffer.volume)
-                self._add_data('nCorr', f.buffer.nCorr)
-                self._add_data('nDCesaro', f.buffer.nDCesaro)
+                self._add_data(self.buffer, self.buffer.numSample,
+                               'volume', f.buffer.volume)
+                self._add_data(self.buffer, self.buffer.numSample,
+                               'nCorr', f.buffer.nCorr)
+                self._add_data(self.buffer, self.buffer.numSample,
+                               'nDCesaro', f.buffer.nDCesaro)
+
+                def add_dec_data(buf, num_sample, new_buf):
+                    self._add_data(buf, num_sample, 'decCorr', new_buf.decCorr)
+                    self._add_data(buf, num_sample, 'decPairCount',
+                                   new_buf.decPairCount)
+                    self._add_data(buf, num_sample, 'decDCesaro',
+                                   new_buf.decDCesaro)
+
+                if self.buffer.spatialDec is not None:
+                    add_dec_data(self.buffer.spatialDec, self.buffer.numSample,
+                                 f.buffer.spatialDec)
+
+                if self.buffer.energyDec is not None:
+                    add_dec_data(self.buffer.energyDec, self.buffer.numSample,
+                                 f.buffer.energyDec)
 
         self._fit_cesaro()
 
-    def _add_data(self, data_name, new_data):
+    @staticmethod
+    def _add_data(buffer, num_sample, data_name, new_data):
         """
         Update the number, mean, and m2 of buffer.<data_name>,
         and add buffer.<data_name>_err
 
         http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/On-line_algorithm
         """
-        mean = getattr(self.buffer, data_name)
-        m2 = getattr(self.buffer, data_name + '_m2')
+        mean = getattr(buffer, data_name)
+        m2 = getattr(buffer, data_name + '_m2')
 
         delta = new_data - mean
-        mean += delta / self.buffer.numSample
+        mean += delta / num_sample
         m2 += delta * (new_data - mean)
 
-        setattr(self.buffer, data_name + '_err',
-                _m2_to_err(m2, self.buffer.numSample))
+        setattr(buffer, data_name + '_err',
+                _m2_to_err(m2, num_sample))
 
     def _fit_cesaro(self):
         pass
@@ -257,13 +310,12 @@ class DecondFile(CorrFile):
 
         dec_group['decBins'].attrs['unit'] = buf.decBins_unit
         dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
-#        dec_group['decCorr_err'] = buf.decCorr_err
+        dec_group['decCorr_err'] = buf.decCorr_err
+        dec_group['decPairCount_err'] = buf.decPairCount_err
 
-#        dec_group['decPairCount_err'] = buf.decPairCount_err
-
-#        dec_group['decDCesaro'] = buf.decDCesaro
-#        dec_group['decDCesaro_err'] = buf.decDCesaro_err
-#        dec_group['decDCesaro'].attrs['unit'] = buf.decDCesaro_unit
+        dec_group['decDCesaro'] = buf.decDCesaro
+        dec_group['decDCesaro_err'] = buf.decDCesaro_err
+        dec_group['decDCesaro'].attrs['unit'] = buf.decDCesaro_unit
 
 #        dec_group['decD'] = buf.decD
 #        dec_group['decD_err'] = buf.decD_err
@@ -287,7 +339,10 @@ def h5g_to_dict(group):
 
 
 def _err_to_m2(err, n):
-    return np.square(err) * n * (n - 1)
+    if n > 1:
+        return np.square(err) * n * (n - 1)
+    else:
+        return np.zeros_like(err)
 
 
 def _m2_to_err(m2, n):
