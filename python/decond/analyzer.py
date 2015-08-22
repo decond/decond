@@ -1,42 +1,59 @@
 import h5py
-import os.path
 import numpy as np
-import scipy as sp
+import scipy.integrate as integrate
 from ._version import __version__
 
 
 class CorrFile(h5py.File):
     """
     Correlation data file output from decond.f90
+
+    Can only open eithr a new file to write or an old file to read
     """
     def __init__(self, name, mode='r', **kwarg):
-        if isinstance(self, CorrFile) and (mode is not 'r'):
-            raise IOError("CorrFile can only be opened in 'r' mode")
-        file_exist_at_first = os.path.isfile(name)
+        if mode not in ('r', 'w-', 'x'):
+            raise Error(type(self).__name__ +
+                        " can only be opened in 'r', 'w-', 'x' mode")
         super().__init__(name, mode, **kwarg)
-        self.buffer = _Buffer()
-        if file_exist_at_first and mode in ('r', 'r+', 'a'):
-            self._check_version()
+        self.filemode = mode
+        self.buffer = CorrFile._Buffer()
+        if 'spatialDec' in self:
+            self.buffer.spatialDec = CorrFile._Buffer()
+        else:
+            self.buffer.spatialDec = None
+
+        if 'energyDec' in self:
+            self.buffer.energyDec = CorrFile._Buffer()
+        else:
+            self.buffer.energyDec = None
+
+        if mode is 'r':
+            self._check()
             self._read_corr_buffer()
 
-    def _check_version(self):
+    def _check(self):
         if 'version' in self.attrs:
             self.buffer.version = self.attrs['version']
             (fmajor, fminor, fpatch) = (self.buffer.version.decode().
                                         split(sep='.'))
             (major, minor, patch) = (__version__.split(sep='.'))
             if fmajor < major:
-                raise IOError(
+                raise Error(
                         "File " + self.filename +
                         " is of version " + fmajor + ".X.X, " +
                         "while this program requires at least " +
                         major + ".X.X")
         else:
-            raise IOError(
+            raise Error(
                     "File " + self.filename +
                     " has no version number. " +
                     "This program requires files of at least " +
                     "version " + major + ".X.X")
+
+        filetype = self.attrs['type'].decode()
+        if filetype != type(self).__name__:
+            raise Error("Expecting {0} but {1} is encountered".format(
+                type(self).__name__, filetype))
 
     def _read_corr_buffer(self):
         self.buffer.charge = self['charge'][...]
@@ -49,40 +66,60 @@ class CorrFile(h5py.File):
         self.buffer.nCorr = self['nCorr'][...]
         self.buffer.nCorr_unit = self['nCorr'].attrs['unit']
 
-        if 'spatialDec' in self:
-            self.buffer.spatialDec = _Buffer()
-            self._read_corrdec_buffer(self.buffer.spatialDec, 'spatialDec')
+        if self.buffer.spatialDec is not None:
+            self._read_corrdec_buffer('spatialDec')
 
-        if 'energyDec' in self:
-            self.buffer.energyDec = _Buffer()
-            self._read_corrdec_buffer(self.buffer.energyDec, 'spatialDec')
+        if self.buffer.energyDec is not None:
+            self._read_corrdec_buffer('energyDec')
 
-    def _read_corrdec_buffer(self, buf, dec_type):
-        dec_group = self[dec_type]
+    def _read_corrdec_buffer(self, dectype):
+        dec_group = self[dectype]
+        buf = getattr(self.buffer, dectype)
         buf.decBins = dec_group['decBins'][...]
         buf.decBins_unit = dec_group['decBins'].attrs['unit']
         buf.decCorr = dec_group['decCorr'][...]
         buf.decCorr_unit = dec_group['decCorr'].attrs['unit']
         buf.decPairCount = dec_group['decPairCount'][...]
 
-    def read_buffer(self):
-        self._read_corr_buffer()
+    def _cal_cesaro(self):
+        """
+        Calculate Cesaro data
+        """
+        def cesaro_integrate(y, x):
+            cesaro = integrate.cumtrapz(y, x, initial=0)
+            cesaro = integrate.cumtrapz(cesaro, x, initial=0)
+            return cesaro
+
+        self.buffer.nDCesaro = cesaro_integrate(self.buffer.nCorr,
+                                                self.buffer.timeLags)
+        self.buffer.nDCesaro_unit = self.buffer.nCorr_unit
+
+        if self.buffer.spatialDec is not None:
+            self.buffer.spatialDec.decDCesaro = cesaro_integrate(
+                    self.buffer.spatialDec.decCorr, self.buffer.timeLags)
+            self.buffer.spatialDec.decDCesaro_unit = (
+                    self.buffer.spatialDec.decCorr_unit)
+
+        if self.buffer.energyDec is not None:
+            self.buffer.energyDec.decDCesaro = cesaro_integrate(
+                    self.buffer.energyDec.decCorr, self.buffer.timeLags)
+            self.buffer.energyDec.decDCesaro_unit = (
+                    self.buffer.energyDec.decCorr_unit)
+
+    class _Buffer():
+        pass
 
 
 class DecondFile(CorrFile):
     """
-    A container file of all the analyzed data
+    Analyzed data
     """
-    def __init__(self, name, mode='a', **kwarg):
-        file_exist_at_first = os.path.isfile(name)
+    def __init__(self, name, mode='r', **kwarg):
         super().__init__(name, mode, **kwarg)
-        if file_exist_at_first and mode in ('r', 'r+', 'a'):
+        if mode in ('r'):
             self._read_decond_buffer()
         else:
-            self._init_emptydata()
-
-    def _init_emptydata(self):
-        self.buffer.numSample = 0
+            self.buffer.numSample = 0  # initialize empty data
 
     def _read_decond_buffer(self):
         self.buffer.numSample = self['numSample'][...]
@@ -103,13 +140,14 @@ class DecondFile(CorrFile):
         self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
 
         if 'spatialDec' in self:
-            self._read_deconddec_buffer(self.buffer.spatialDec, 'spatialDec')
+            self._read_deconddec_buffer('spatialDec')
 
         if 'energyDec' in self:
-            self._read_deconddec_buffer(self.buffer.energyDec, 'energyDec')
+            self._read_deconddec_buffer('energyDec')
 
-    def _read_deconddec_buffer(self, buf, dec_type):
-        dec_group = self[dec_type]
+    def _read_deconddec_buffer(self, dectype):
+        dec_group = self[dectype]
+        buf = getattr(self.buffer, dectype)
         buf.decCorr_err = dec_group['decCorr_err'][...]
         buf.decPairCount_err = dec_group['decPairCount_err'][...]
         buf.decDCesaro = h5g_to_dict(dec_group['decDCesaro'])
@@ -119,33 +157,72 @@ class DecondFile(CorrFile):
         buf.decD_err = h5g_to_dict(dec_group['decD_err'])
         buf.decD_unit = self['decD'].attrs['unit']
 
-    def read_buffer(self):
-        self._read_corr_buffer()
-        self._read_decond_buffer()
-
-    def add_sample(self, samples):
+    def _add_sample(self, samples):
         if not isinstance(samples, list):
             samples = [samples]
 
         if self.buffer.numSample == 0:
-            # new file, initialize according to the first sample
             with CorrFile(samples[0]) as cf:
-                self.buffer = _corr_to_cesaro_buffer(cf.buffer)
+                cf._cal_cesaro()
+                self.buffer = cf.buffer
             self.buffer.numSample = 1
+            self.buffer.volume_m2 = np.zeros_like(self.buffer.volume)
+            self.buffer.volume_err = _m2_to_err(self.buffer.volume_m2,
+                                                self.buffer.numSample)
+            self.buffer.nCorr_m2 = np.zeros_like(self.buffer.nCorr)
+            self.buffer.nCorr_err = _m2_to_err(self.buffer.nCorr_m2,
+                                               self.buffer.numSample)
+            self.buffer.nDCesaro_m2 = np.zeros_like(self.buffer.nDCesaro)
+            self.buffer.nDCesaro_err = _m2_to_err(self.buffer.nDCesaro_m2,
+                                                  self.buffer.numSample)
             begin = 1
         else:
-            # read data from the existing decond file
-            self.read_buffer()
+            # not new file, buffer should have already been loaded
+            self.buffer.volume_m2 = _err_to_m2(self.buffer.volume_err,
+                                               self.buffer.numSample)
+            self.buffer.nCorr_m2 = _err_to_m2(self.buffer.nCorr_err,
+                                              self.buffer.numSample)
+            self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nCorr_err,
+                                                 self.buffer.numSample)
             begin = 0
 
         for sample in samples[begin:]:
-            with CorrFile(sample) as cf:
-                pass
+            with CorrFile(sample) as f:
+                self.buffer.numSample += 1
+                self._add_data('volume', f.buffer.volume)
+                self._add_data('nCorr', f.buffer.nCorr)
+                self._add_data('nDCesaro', f.buffer.nDCesaro)
 
-        self.write_buffer()
+        self._fit_cesaro()
 
-    def write_buffer(self):
-        self.attrs['version'] = self.buffer.version
+    def _add_data(self, data_name, new_data):
+        """
+        Update the number, mean, and m2 of buffer.<data_name>,
+        and add buffer.<data_name>_err
+
+        http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/On-line_algorithm
+        """
+        mean = getattr(self.buffer, data_name)
+        m2 = getattr(self.buffer, data_name + '_m2')
+
+        delta = new_data - mean
+        mean += delta / self.buffer.numSample
+        m2 += delta * (new_data - mean)
+
+        setattr(self.buffer, data_name + '_err',
+                _m2_to_err(m2, self.buffer.numSample))
+
+    def _fit_cesaro(self):
+        pass
+
+    def close(self):
+        if self.filemode in ('w-', 'x'):
+            self._write_buffer()
+        super().close()
+
+    def _write_buffer(self):
+        self.attrs['version'] = __version__
+        self.attrs['type'] = np.string_(type(self).__name__)
         self['numSample'] = self.buffer.numSample
         self['charge'] = self.buffer.charge
         self['numMol'] = self.buffer.numMol
@@ -157,82 +234,42 @@ class DecondFile(CorrFile):
         self['nCorr_err'] = self.buffer.nCorr_err
         self['nDCesaro'] = self.buffer.nDCesaro
         self['nDCesaro_err'] = self.buffer.nDCesaro_err
-        self['nD'] = self.buffer.nD
-        self['nD_err'] = self.buffer.nD_err
-        self['nDCesaroTotal'] = self.buffer.nDCesaroTotal
-        self['nDCesaroTotal_err'] = self.buffer.nDCesaroTotal_err
-        self['nDTotal'] = self.buffer.nDTotal
-        self['nDTotal_err'] = self.buffer.nDTotal_err
+#        self['nD'] = self.buffer.nD
+#        self['nD_err'] = self.buffer.nD_err
+#        self['nDCesaroTotal'] = self.buffer.nDCesaroTotal
+#        self['nDCesaroTotal_err'] = self.buffer.nDCesaroTotal_err
+#        self['nDTotal'] = self.buffer.nDTotal
+#        self['nDTotal_err'] = self.buffer.nDTotal_err
 
         if self.buffer.spatialDec is not None:
-            self.buffer.spatialDec.write(self, 'spatialDec')
+            self._write_dec_buffer('spatialDec')
 
         if self.buffer.energyDec is not None:
-            self.buffer.energyDec.write(self, 'energyDec')
+            self._write_dec_buffer('energyDec')
 
-    class DecData:
-        def __init__(self, base, group):
-            if group in base:
-                dec_group = base['group']
-            else:
-                return None
+    def _write_dec_buffer(self, dectype):
+        dec_group = self.require_group(dectype)
+        buf = getattr(self.buffer, dectype)
+        dec_group['decBins'] = buf.decBins
+        dec_group['decCorr'] = buf.decCorr
+        dec_group['decPairCount'] = buf.decPairCount
 
-            self.decBins = dec_group['decBins'][:]
-            self.decCorr = dec_group['decCorr'][:, :, :]
-            self.decPairCount = dec_group['decPairCount'][:, :]
+        dec_group['decBins'].attrs['unit'] = buf.decBins_unit
+        dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
+#        dec_group['decCorr_err'] = buf.decCorr_err
 
-            self.decBins_unit = DecondFile._readAttrStr(
-                    dec_group['decBins'], 'unit')
+#        dec_group['decPairCount_err'] = buf.decPairCount_err
 
-            self.decCorr_unit = DecondFile._readAttrStr(
-                    dec_group['decCorr'], 'unit')
+#        dec_group['decDCesaro'] = buf.decDCesaro
+#        dec_group['decDCesaro_err'] = buf.decDCesaro_err
+#        dec_group['decDCesaro'].attrs['unit'] = buf.decDCesaro_unit
 
-            self.decCorr_err = DecondFile._readDset(dec_group, 'decCorr_err')
-
-            self.decPairCount_err = DecondFile._readDset(
-                    dec_group, 'decPairCount_err')
-
-            self.decDCesaro = DecondFile._readGroupToDict(
-                    dec_group, 'decDCesaro')
-            self.decDCesaro_err = DecondFile._readGroupToDict(
-                    dec_group, 'decDCesaro_rr')
-            if self.decDCesaro is not None:
-                self.decDCesaro_unit = DecondFile._readAttrStr(
-                        dec_group['decDCesaro'], 'unit')
-
-            self.decD = DecondFile._readGroupToDict(dec_group, 'decD')
-            self.decD_err = DecondFile._readGroupToDict(dec_group, 'decD_err')
-
-            if self.decD is not None:
-                self.decD_unit = DecondFile._readAttrStr(
-                        dec_group['decD'], 'unit')
-
-        def write(self, base, group):
-            dec_group = base.require_group(group)
-            dec_group['decBins'] = self.decBins
-            dec_group['decCorr'] = self.decCorr
-            dec_group['decPairCount'] = self.decPairCount
-
-            dec_group['decBins'].attrs['unit'] = self.decBins_unit
-            dec_group['decCorr'].attrs['unit'] = self.decCorr_unit
-            dec_group['decCorr_err'] = self.decCorr_err
-
-            dec_group['decPairCount_err'] = self.decPairCount_err
-
-            dec_group['decDCesaro'] = self.decDCesaro
-            dec_group['decDCesaro_err'] = self.decDCesaro_err
-            dec_group['decDCesaro'].attrs['unit'] = self.decDCesaro_unit
-
-            dec_group['decD'] = self.decD
-            dec_group['decD_err'] = self.decD_err
-            dec_group['decD'].attrs['unit'] = self.decD_unit
+#        dec_group['decD'] = buf.decD
+#        dec_group['decD_err'] = buf.decD_err
+#        dec_group['decD'].attrs['unit'] = buf.decD_unit
 
 
-class _Buffer():
-    pass
-
-
-class IOError(Exception):
+class Error(Exception):
     pass
 
 
@@ -243,39 +280,23 @@ def h5g_to_dict(group):
     return D
 
 
-def _corr_to_cesaro_buffer(buf):
-    """
-    Return a buffer with Cesaro data added
-
-    Input: a buffer with attributes
-    buffer.timeLags (_unit)
-    buffer.nCorr (_unit)
-    [buffer.spatialDec.decCorr]
-    [buffer.energyDec.decCorr]
-
-    Output: a buffer with more attributes
-    buffer.nDCesaro
-    [buffer.spatialDec.decDCesaro]
-    [buffer.energyDec.decDCesaro]
-    """
-    def cesaro_integrate(y, x):
-        cesaro = sp.integrate.cumtrapz(y, x, initial=0)
-        cesaro = sp.integrate.cumtrapz(cesaro, x, initial=0)
-        return cesaro
-
-    buf.nDCesaro = cesaro_integrate(buf.nCorr, buf.timeLags)
-    buf.nDCesaro_unit = buf.nCorr_unit
-
-    if hasattr(buf, 'spatialDec'):
-        buf.spatialDec.decDCesaro = cesaro_integrate(
-                buf.spatialDec.decCorr, buf.timeLags)
-        buf.spatialDec.decDCesaro_unit = buf.spatialDec.decCorr_unit
-
-    if hasattr(buf, 'energyDec'):
-        buf.energyDec.decDCesaro = cesaro_integrate(
-                buf.energyDec.decCorr, buf.timeLags)
-        buf.energyDec.decDCesaro_unit = buf.energyDec.decCorr_unit
+# def _get_filetype(file):
+#     with h5py.File(file, 'r') as f:
+#         return f.attrs['type'].decode()
 
 
-def err_to_m2(err, n):
+def _err_to_m2(err, n):
     return np.square(err) * n * (n - 1)
+
+
+def _m2_to_err(m2, n):
+    if n > 1:
+        return np.sqrt(m2 / ((n - 1) * n))
+    else:
+        return np.full(m2.shape, np.nan)
+
+
+def cal_decond(outname, samples):
+    with DecondFile(outname, 'x') as outfile:
+        outfile._add_sample(samples)
+        return outfile.buffer
