@@ -189,6 +189,7 @@ class DecondFile(CorrFile):
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
+                f._cal_cesaro()
                 self._add_data('volume', f.buffer.volume)
                 self._add_data('nCorr', f.buffer.nCorr)
                 self._add_data('nDCesaro', f.buffer.nDCesaro)
