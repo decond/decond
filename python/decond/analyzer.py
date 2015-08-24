@@ -4,6 +4,11 @@ import scipy.integrate as integrate
 from ._version import __version__
 
 
+class DecType:
+    spatial = 'spatialDec'
+    energy = 'energyDec'
+
+
 class CorrFile(h5py.File):
     """
     Correlation data file output from decond.f90
@@ -17,12 +22,12 @@ class CorrFile(h5py.File):
         super().__init__(name, mode, **kwarg)
         self.filemode = mode
         self.buffer = CorrFile._Buffer()
-        if 'spatialDec' in self:
+        if DecType.spatial in self:
             self.buffer.spatialDec = CorrFile._Buffer()
         else:
             self.buffer.spatialDec = None
 
-        if 'energyDec' in self:
+        if DecType.energy in self:
             self.buffer.energyDec = CorrFile._Buffer()
         else:
             self.buffer.energyDec = None
@@ -79,10 +84,10 @@ class CorrFile(h5py.File):
             buf.decPairCount = dec_group['decPairCount'][...]
 
         if self.buffer.spatialDec is not None:
-            do_dec('spatialDec')
+            do_dec(DecType.spatial)
 
         if self.buffer.energyDec is not None:
-            do_dec('energyDec')
+            do_dec(DecType.energy)
 
     def _cal_cesaro(self):
         """
@@ -104,10 +109,10 @@ class CorrFile(h5py.File):
             buf.decDCesaro_unit = (buf.decCorr_unit)
 
         if self.buffer.spatialDec is not None:
-            do_dec('spatialDec')
+            do_dec(DecType.spatial)
 
         if self.buffer.energyDec is not None:
-            do_dec('energyDec')
+            do_dec(DecType.energy)
 
     class _Buffer():
         pass
@@ -154,11 +159,11 @@ class DecondFile(CorrFile):
             buf.decD_err = h5g_to_dict(dec_group['decD_err'])
             buf.decD_unit = self['decD'].attrs['unit']
 
-        if 'spatialDec' in self:
-            do_dec('spatialDec')
+        if DecType.spatial in self:
+            do_dec(DecType.spatial)
 
-        if 'energyDec' in self:
-            do_dec('energyDec')
+        if DecType.energy in self:
+            do_dec(DecType.energy)
 
     def _add_sample(self, samples):
         if not isinstance(samples, list):
@@ -198,10 +203,10 @@ class DecondFile(CorrFile):
                 buf.decDCesaro_err = _m2_to_err(buf.decDCesaro_m2, num_sample)
 
             if self.buffer.spatialDec is not None:
-                init_decErr('spatialDec')
+                init_decErr(DecType.spatial)
 
             if self.buffer.energyDec is not None:
-                init_decErr('energyDec')
+                init_decErr(DecType.energy)
 
             begin = 1
         else:
@@ -222,10 +227,10 @@ class DecondFile(CorrFile):
                 buf.decDCesaro_m2 = _err_to_m2(buf.decDCesaro_err, num_sample)
 
             if self.buffer.spatialDec is not None:
-                init_dec_m2('spatialDec')
+                init_dec_m2(DecType.spatial)
 
             if self.buffer.energyDec is not None:
-                init_dec_m2('energyDec')
+                init_dec_m2(DecType.energy)
 
             begin = 0
 
@@ -247,10 +252,10 @@ class DecondFile(CorrFile):
                                    dectype=dectype)
 
                 if self.buffer.spatialDec is not None:
-                    add_dec_data('spatialDec', f.buffer)
+                    add_dec_data(DecType.spatial, f.buffer)
 
                 if self.buffer.energyDec is not None:
-                    add_dec_data('energyDec', f.buffer)
+                    add_dec_data(DecType.energy, f.buffer)
 
         self._fit_cesaro()
 
@@ -310,31 +315,31 @@ class DecondFile(CorrFile):
 #        self['nDTotal'] = self.buffer.nDTotal
 #        self['nDTotal_err'] = self.buffer.nDTotal_err
 
+        def do_dec(dectype):
+            dec_group = self.require_group(dectype)
+            buf = getattr(self.buffer, dectype)
+            dec_group['decBins'] = buf.decBins
+            dec_group['decCorr'] = buf.decCorr
+            dec_group['decPairCount'] = buf.decPairCount
+
+            dec_group['decBins'].attrs['unit'] = buf.decBins_unit
+            dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
+            dec_group['decCorr_err'] = buf.decCorr_err
+            dec_group['decPairCount_err'] = buf.decPairCount_err
+
+            dec_group['decDCesaro'] = buf.decDCesaro
+            dec_group['decDCesaro_err'] = buf.decDCesaro_err
+            dec_group['decDCesaro'].attrs['unit'] = buf.decDCesaro_unit
+
+#            dec_group['decD'] = buf.decD
+#            dec_group['decD_err'] = buf.decD_err
+#            dec_group['decD'].attrs['unit'] = buf.decD_unit
+
         if self.buffer.spatialDec is not None:
-            self._write_dec_buffer('spatialDec')
+            do_dec(DecType.spatial)
 
         if self.buffer.energyDec is not None:
-            self._write_dec_buffer('energyDec')
-
-    def _write_dec_buffer(self, dectype):
-        dec_group = self.require_group(dectype)
-        buf = getattr(self.buffer, dectype)
-        dec_group['decBins'] = buf.decBins
-        dec_group['decCorr'] = buf.decCorr
-        dec_group['decPairCount'] = buf.decPairCount
-
-        dec_group['decBins'].attrs['unit'] = buf.decBins_unit
-        dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
-        dec_group['decCorr_err'] = buf.decCorr_err
-        dec_group['decPairCount_err'] = buf.decPairCount_err
-
-        dec_group['decDCesaro'] = buf.decDCesaro
-        dec_group['decDCesaro_err'] = buf.decDCesaro_err
-        dec_group['decDCesaro'].attrs['unit'] = buf.decDCesaro_unit
-
-#        dec_group['decD'] = buf.decD
-#        dec_group['decD_err'] = buf.decD_err
-#        dec_group['decD'].attrs['unit'] = buf.decD_unit
+            do_dec(DecType.energy)
 
 
 class Error(Exception):
