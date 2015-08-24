@@ -235,21 +235,48 @@ class DecondFile(CorrFile):
             begin = 0
 
         # add more samples one by one
+        def add_data(data_name, new_data, dectype=None):
+            """
+            Update the number, mean, and m2 of buffer.<data_name>,
+            and add buffer.<data_name>_err
+
+            http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/On-line_algorithm
+            """
+            if dectype is None:
+                buf = self.buffer
+            else:
+                buf = getattr(self.buffer, dectype)
+
+            num_sample = self.buffer.numSample
+            mean = getattr(buf, data_name)
+            m2 = getattr(buf, data_name + '_m2')
+
+            delta = new_data - mean
+            mean += delta / num_sample
+            m2 += delta * (new_data - mean)
+
+            if np.isscalar(mean):
+                setattr(buf, data_name, mean)
+                setattr(buf, data_name + '_m2', m2)
+
+            setattr(buf, data_name + '_err',
+                    _m2_to_err(m2, num_sample))
+
+        def add_dec_data(dectype, new_buf):
+            buf = getattr(new_buf, dectype)
+            add_data('decCorr', buf.decCorr, dectype=dectype)
+            add_data('decPairCount', buf.decPairCount,
+                     dectype=dectype)
+            add_data('decDCesaro', buf.decDCesaro,
+                     dectype=dectype)
+
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
                 f._cal_cesaro()
-                self._add_data('volume', f.buffer.volume)
-                self._add_data('nCorr', f.buffer.nCorr)
-                self._add_data('nDCesaro', f.buffer.nDCesaro)
-
-                def add_dec_data(dectype, new_buf):
-                    buf = getattr(new_buf, dectype)
-                    self._add_data('decCorr', buf.decCorr, dectype=dectype)
-                    self._add_data('decPairCount', buf.decPairCount,
-                                   dectype=dectype)
-                    self._add_data('decDCesaro', buf.decDCesaro,
-                                   dectype=dectype)
+                add_data('volume', f.buffer.volume)
+                add_data('nCorr', f.buffer.nCorr)
+                add_data('nDCesaro', f.buffer.nDCesaro)
 
                 if self.buffer.spatialDec is not None:
                     add_dec_data(DecType.spatial, f.buffer)
@@ -258,33 +285,6 @@ class DecondFile(CorrFile):
                     add_dec_data(DecType.energy, f.buffer)
 
         self._fit_cesaro()
-
-    def _add_data(self, data_name, new_data, dectype=None):
-        """
-        Update the number, mean, and m2 of buffer.<data_name>,
-        and add buffer.<data_name>_err
-
-        http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/On-line_algorithm
-        """
-        if dectype is None:
-            buf = self.buffer
-        else:
-            buf = getattr(self.buffer, dectype)
-
-        num_sample = self.buffer.numSample
-        mean = getattr(buf, data_name)
-        m2 = getattr(buf, data_name + '_m2')
-
-        delta = new_data - mean
-        mean += delta / num_sample
-        m2 += delta * (new_data - mean)
-
-        if np.isscalar(mean):
-            setattr(buf, data_name, mean)
-            setattr(buf, data_name + '_m2', m2)
-
-        setattr(buf, data_name + '_err',
-                _m2_to_err(m2, num_sample))
 
     def _fit_cesaro(self):
         pass
