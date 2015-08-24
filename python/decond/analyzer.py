@@ -63,23 +63,26 @@ class CorrFile(h5py.File):
         self.buffer.volume_unit = self['volume'].attrs['unit']
         self.buffer.timeLags = self['timeLags'][...]
         self.buffer.timeLags_unit = self['timeLags'].attrs['unit']
+        self.buffer.timeLags_width = (self.buffer.timeLags[1] -
+                                      self.buffer.timeLags[0])
         self.buffer.nCorr = self['nCorr'][...]
         self.buffer.nCorr_unit = self['nCorr'].attrs['unit']
 
+        def do_dec(dectype):
+            dec_group = self[dectype]
+            buf = getattr(self.buffer, dectype)
+            buf.decBins = dec_group['decBins'][...]
+            buf.decBins_unit = dec_group['decBins'].attrs['unit']
+            buf.decBins_width = buf.decBins[1] - buf.decBins[0]
+            buf.decCorr = dec_group['decCorr'][...]
+            buf.decCorr_unit = dec_group['decCorr'].attrs['unit']
+            buf.decPairCount = dec_group['decPairCount'][...]
+
         if self.buffer.spatialDec is not None:
-            self._read_corrdec_buffer('spatialDec')
+            do_dec('spatialDec')
 
         if self.buffer.energyDec is not None:
-            self._read_corrdec_buffer('energyDec')
-
-    def _read_corrdec_buffer(self, dectype):
-        dec_group = self[dectype]
-        buf = getattr(self.buffer, dectype)
-        buf.decBins = dec_group['decBins'][...]
-        buf.decBins_unit = dec_group['decBins'].attrs['unit']
-        buf.decCorr = dec_group['decCorr'][...]
-        buf.decCorr_unit = dec_group['decCorr'].attrs['unit']
-        buf.decPairCount = dec_group['decPairCount'][...]
+            do_dec('energyDec')
 
     def _cal_cesaro(self):
         """
@@ -94,17 +97,17 @@ class CorrFile(h5py.File):
                                                 self.buffer.timeLags)
         self.buffer.nDCesaro_unit = self.buffer.nCorr_unit
 
+        def do_dec(dectype):
+            buf = getattr(self.buffer, dectype)
+            buf.decDCesaro = cesaro_integrate(
+                    buf.decCorr, self.buffer.timeLags)
+            buf.decDCesaro_unit = (buf.decCorr_unit)
+
         if self.buffer.spatialDec is not None:
-            self.buffer.spatialDec.decDCesaro = cesaro_integrate(
-                    self.buffer.spatialDec.decCorr, self.buffer.timeLags)
-            self.buffer.spatialDec.decDCesaro_unit = (
-                    self.buffer.spatialDec.decCorr_unit)
+            do_dec('spatialDec')
 
         if self.buffer.energyDec is not None:
-            self.buffer.energyDec.decDCesaro = cesaro_integrate(
-                    self.buffer.energyDec.decCorr, self.buffer.timeLags)
-            self.buffer.energyDec.decDCesaro_unit = (
-                    self.buffer.energyDec.decCorr_unit)
+            do_dec('energyDec')
 
     class _Buffer():
         pass
@@ -139,23 +142,23 @@ class DecondFile(CorrFile):
         self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
         self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
 
+        def do_dec(dectype):
+            dec_group = self[dectype]
+            buf = getattr(self.buffer, dectype)
+            buf.decCorr_err = dec_group['decCorr_err'][...]
+            buf.decPairCount_err = dec_group['decPairCount_err'][...]
+            buf.decDCesaro = h5g_to_dict(dec_group['decDCesaro'])
+            buf.decDCesaro_err = h5g_to_dict(dec_group['decDCesaro_err'])
+            buf.decDCesaro_unit = self['decDCesaro'].attrs['unit']
+            buf.decD = h5g_to_dict(dec_group['decD'])
+            buf.decD_err = h5g_to_dict(dec_group['decD_err'])
+            buf.decD_unit = self['decD'].attrs['unit']
+
         if 'spatialDec' in self:
-            self._read_deconddec_buffer('spatialDec')
+            do_dec('spatialDec')
 
         if 'energyDec' in self:
-            self._read_deconddec_buffer('energyDec')
-
-    def _read_deconddec_buffer(self, dectype):
-        dec_group = self[dectype]
-        buf = getattr(self.buffer, dectype)
-        buf.decCorr_err = dec_group['decCorr_err'][...]
-        buf.decPairCount_err = dec_group['decPairCount_err'][...]
-        buf.decDCesaro = h5g_to_dict(dec_group['decDCesaro'])
-        buf.decDCesaro_err = h5g_to_dict(dec_group['decDCesaro_err'])
-        buf.decDCesaro_unit = self['decDCesaro'].attrs['unit']
-        buf.decD = h5g_to_dict(dec_group['decD'])
-        buf.decD_err = h5g_to_dict(dec_group['decD_err'])
-        buf.decD_unit = self['decD'].attrs['unit']
+            do_dec('energyDec')
 
     def _add_sample(self, samples):
         if not isinstance(samples, list):
@@ -167,19 +170,23 @@ class DecondFile(CorrFile):
                 self.buffer = cf.buffer
             self.buffer.numSample = 1
 
-            def init_Err(buf, data_name):
+            def init_Err(data_name):
                 data_name_m2 = data_name + '_m2'
                 data_name_err = data_name + '_err'
-                setattr(buf, data_name_m2,
-                        np.zeros_like(getattr(buf, data_name)))
-                setattr(buf, data_name_err,
-                        _m2_to_err(getattr(buf, data_name_m2), buf.numSample))
+                setattr(self.buffer, data_name_m2,
+                        np.zeros_like(getattr(self.buffer, data_name)))
+                setattr(self.buffer, data_name_err,
+                        _m2_to_err(getattr(self.buffer, data_name_m2),
+                                   self.buffer.numSample))
 
-            init_Err(self.buffer, 'volume')
-            init_Err(self.buffer, 'nCorr')
-            init_Err(self.buffer, 'nDCesaro')
+            init_Err('volume')
+            init_Err('nCorr')
+            init_Err('nDCesaro')
 
-            def init_decErr(buf, num_sample):
+            def init_decErr(dectype):
+                buf = getattr(self.buffer, dectype)
+                num_sample = self.buffer.numSample
+
                 buf.decCorr_m2 = np.zeros_like(buf.decCorr)
                 buf.decCorr_err = _m2_to_err(buf.decCorr_m2, num_sample)
 
@@ -191,10 +198,10 @@ class DecondFile(CorrFile):
                 buf.decDCesaro_err = _m2_to_err(buf.decDCesaro_m2, num_sample)
 
             if self.buffer.spatialDec is not None:
-                init_decErr(self.buffer.spatialDec, self.buffer.numSample)
+                init_decErr('spatialDec')
 
             if self.buffer.energyDec is not None:
-                init_decErr(self.buffer.energyDec, self.buffer.numSample)
+                init_decErr('energyDec')
 
             begin = 1
         else:
@@ -206,64 +213,72 @@ class DecondFile(CorrFile):
             self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nDCesaro_err,
                                                  self.buffer.numSample)
 
-            def init_dec_m2(buf, num_sample):
+            def init_dec_m2(dectype):
+                buf = getattr(self.buffer, dectype)
+                num_sample = self.buffer.numSample
                 buf.decCorr_m2 = _err_to_m2(buf.decCorr_err, num_sample)
                 buf.decPairCount_m2 = _err_to_m2(buf.decPairCount_err,
                                                  num_sample)
                 buf.decDCesaro_m2 = _err_to_m2(buf.decDCesaro_err, num_sample)
 
             if self.buffer.spatialDec is not None:
-                init_dec_m2(self.buffer.spatialDec, self.buffer.numSample)
+                init_dec_m2('spatialDec')
 
             if self.buffer.energyDec is not None:
-                init_dec_m2(self.buffer.energyDec, self.buffer.numSample)
+                init_dec_m2('energyDec')
 
             begin = 0
 
+        # add more samples one by one
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
                 f._cal_cesaro()
-                self._add_data(self.buffer, self.buffer.numSample,
-                               'volume', f.buffer.volume)
-                self._add_data(self.buffer, self.buffer.numSample,
-                               'nCorr', f.buffer.nCorr)
-                self._add_data(self.buffer, self.buffer.numSample,
-                               'nDCesaro', f.buffer.nDCesaro)
+                self._add_data('volume', f.buffer.volume)
+                self._add_data('nCorr', f.buffer.nCorr)
+                self._add_data('nDCesaro', f.buffer.nDCesaro)
 
-                def add_dec_data(buf, num_sample, new_buf):
-                    self._add_data(buf, num_sample, 'decCorr', new_buf.decCorr)
-                    self._add_data(buf, num_sample, 'decPairCount',
-                                   new_buf.decPairCount)
-                    self._add_data(buf, num_sample, 'decDCesaro',
-                                   new_buf.decDCesaro)
+                def add_dec_data(dectype, new_buf):
+                    buf = getattr(new_buf, dectype)
+                    self._add_data('decCorr', buf.decCorr, dectype=dectype)
+                    self._add_data('decPairCount', buf.decPairCount,
+                                   dectype=dectype)
+                    self._add_data('decDCesaro', buf.decDCesaro,
+                                   dectype=dectype)
 
                 if self.buffer.spatialDec is not None:
-                    add_dec_data(self.buffer.spatialDec, self.buffer.numSample,
-                                 f.buffer.spatialDec)
+                    add_dec_data('spatialDec', f.buffer)
 
                 if self.buffer.energyDec is not None:
-                    add_dec_data(self.buffer.energyDec, self.buffer.numSample,
-                                 f.buffer.energyDec)
+                    add_dec_data('energyDec', f.buffer)
 
         self._fit_cesaro()
 
-    @staticmethod
-    def _add_data(buffer, num_sample, data_name, new_data):
+    def _add_data(self, data_name, new_data, dectype=None):
         """
         Update the number, mean, and m2 of buffer.<data_name>,
         and add buffer.<data_name>_err
 
         http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/On-line_algorithm
         """
-        mean = getattr(buffer, data_name)
-        m2 = getattr(buffer, data_name + '_m2')
+        if dectype is None:
+            buf = self.buffer
+        else:
+            buf = getattr(self.buffer, dectype)
+
+        num_sample = self.buffer.numSample
+        mean = getattr(buf, data_name)
+        m2 = getattr(buf, data_name + '_m2')
 
         delta = new_data - mean
         mean += delta / num_sample
         m2 += delta * (new_data - mean)
 
-        setattr(buffer, data_name + '_err',
+        if np.isscalar(mean):
+            setattr(buf, data_name, mean)
+            setattr(buf, data_name + '_m2', m2)
+
+        setattr(buf, data_name + '_err',
                 _m2_to_err(m2, num_sample))
 
     def _fit_cesaro(self):
@@ -350,6 +365,30 @@ def _m2_to_err(m2, n):
         return np.sqrt(m2 / ((n - 1) * n))
     else:
         return np.full(m2.shape, np.nan)
+
+
+def _get_inner_index(a, b):
+    awidth = a[1] - a[0]
+    bwidth = b[1] - b[0]
+    if not np.isclose(awidth, bwidth):
+        raise Error("Bin widths should be the same (within tolerance)")
+
+    if not np.isclose(np.mod(a[0] - b[0], awidth), 0.0):
+        raise Error("Both bins should have a common grid")
+
+    (a_begin, a_end, b_begin, b_end) = (0, len(a) - 1, 0, len(b) - 1)
+
+    if b[0] > a[0]:
+        a_begin = np.round((b[0] - a[0]) / awidth)
+    elif b[0] < a[0]:
+        b_begin = np.round((a[0] - b[0]) / bwidth)
+
+    if b[-1] < a[-1]:
+        a_end = np.round((b[-1] - a[0]) / awidth)
+    elif b[-1] > a[-1]:
+        b_end = np.round((a[-1] - b[0]) / bwidth)
+
+    return (a_begin, a_end), (b_begin, b_end)
 
 
 def cal_decond(outname, samples):
