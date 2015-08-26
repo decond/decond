@@ -110,6 +110,38 @@ class CorrFile(h5py.File):
             if buf is not None:
                 do_dec(buf)
 
+    def _write_buffer(self):
+        self.attrs['version'] = np.string_(__version__)
+        self.attrs['type'] = np.string_(type(self).__name__)
+        self['charge'] = self.buffer.charge
+        self['charge'].attrs['unit'] = self.buffer.charge_unit
+        self['numMol'] = self.buffer.numMol
+        self['volume'] = self.buffer.volume
+        self['volume'].attrs['unit'] = self.buffer.volume_unit
+        self['timeLags'] = self.buffer.timeLags
+        self['timeLags'].attrs['unit'] = self.buffer.timeLags_unit
+        self['nCorr'] = self.buffer.nCorr
+        self['nCorr'].attrs['unit'] = self.buffer.nCorr_unit
+
+        def do_dec(dectype):
+            dec_group = self.require_group(dectype.value)
+            buf = getattr(self.buffer, dectype.value)
+            dec_group['decBins'] = buf.decBins
+            dec_group['decCorr'] = buf.decCorr
+            dec_group['decPairCount'] = buf.decPairCount
+
+            dec_group['decBins'].attrs['unit'] = buf.decBins_unit
+            dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
+
+        for type_ in DecType:
+            if getattr(self.buffer, type_.value) is not None:
+                do_dec(type_)
+
+    def close(self):
+        if self.filemode in ('w-', 'x'):
+            self._write_buffer()
+        super().close()
+
     class _Buffer():
         pass
 
@@ -262,8 +294,8 @@ class DecondFile(CorrFile):
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
-                f._cal_cesaro()
                 self._intersect_data(f)
+                f._cal_cesaro()
 
                 add_data('volume', f.buffer.volume)
                 add_data('nCorr', f.buffer.nCorr)
@@ -303,13 +335,16 @@ class DecondFile(CorrFile):
             sb_dec.decCorr = sb_dec.decCorr[:, s_sel_dec, s_sel]
             sb_dec.decCorr_m2 = sb_dec.decCorr_m2[:, s_sel_dec, s_sel]
             sb_dec.decCorr_err = sb_dec.decCorr_err[:, s_sel_dec, s_sel]
-            sb_dec.decPairCount = sb_dec.decPairCount[s_sel_dec]
-            sb_dec.decPairCount_m2 = sb_dec.decPairCount_m2[s_sel_dec]
-            sb_dec.decPairCount_err = sb_dec.decPairCount_err[s_sel_dec]
+            sb_dec.decPairCount = sb_dec.decPairCount[:, s_sel_dec]
+            sb_dec.decPairCount_m2 = sb_dec.decPairCount_m2[:, s_sel_dec]
+            sb_dec.decPairCount_err = sb_dec.decPairCount_err[:, s_sel_dec]
+            sb_dec.decDCesaro = sb_dec.decDCesaro[:, s_sel_dec, s_sel]
+            sb_dec.decDCesaro_m2 = sb_dec.decDCesaro_m2[:, s_sel_dec, s_sel]
+            sb_dec.decDCesaro_err = sb_dec.decDCesaro_err[:, s_sel_dec, s_sel]
 
             nb_dec.decBins = nb_dec.decBins[n_sel_dec]
             nb_dec.decCorr = nb_dec.decCorr[:, n_sel_dec, n_sel]
-            nb_dec.decPairCount = nb_dec.decPairCount[n_sel_dec]
+            nb_dec.decPairCount = nb_dec.decPairCount[:, n_sel_dec]
 
         for type_ in DecType:
             if getattr(self.buffer, type_.value) is not None:
@@ -318,26 +353,11 @@ class DecondFile(CorrFile):
     def _fit_cesaro(self):
         pass
 
-    def close(self):
-        if self.filemode in ('w-', 'x'):
-            self._write_buffer()
-        super().close()
-
     def _write_buffer(self):
-        self.attrs['version'] = __version__
-        self.attrs['type'] = np.string_(type(self).__name__)
+        super()._write_buffer()
         self['numSample'] = self.buffer.numSample
-        self['charge'] = self.buffer.charge
-        self['charge'].attrs['unit'] = self.buffer.charge_unit
-        self['numMol'] = self.buffer.numMol
-        self['volume'] = self.buffer.volume
-        self['volume'].attrs['unit'] = self.buffer.volume_unit
         self['volume_err'] = self.buffer.volume_err
-        self['timeLags'] = self.buffer.timeLags
-        self['timeLags'].attrs['unit'] = self.buffer.timeLags_unit
-        self['nCorr'] = self.buffer.nCorr
         self['nCorr_err'] = self.buffer.nCorr_err
-        self['nCorr'].attrs['unit'] = self.buffer.nCorr_unit
         self['nDCesaro'] = self.buffer.nDCesaro
         self['nDCesaro_err'] = self.buffer.nDCesaro_err
         self['nDCesaro'].attrs['unit'] = self.buffer.nDCesaro_unit
@@ -351,12 +371,6 @@ class DecondFile(CorrFile):
         def do_dec(dectype):
             dec_group = self.require_group(dectype.value)
             buf = getattr(self.buffer, dectype.value)
-            dec_group['decBins'] = buf.decBins
-            dec_group['decCorr'] = buf.decCorr
-            dec_group['decPairCount'] = buf.decPairCount
-
-            dec_group['decBins'].attrs['unit'] = buf.decBins_unit
-            dec_group['decCorr'].attrs['unit'] = buf.decCorr_unit
             dec_group['decCorr_err'] = buf.decCorr_err
             dec_group['decPairCount_err'] = buf.decPairCount_err
 
@@ -404,20 +418,23 @@ def _get_inner_index(a, b):
     if not np.isclose(awidth, bwidth):
         raise Error("Bin widths should be the same (within tolerance)")
 
-    if not np.isclose(np.mod(a[0] - b[0], awidth), 0.0):
-        raise Error("Both bins should have a common grid")
+    if (not np.isclose(np.mod(a[0] - b[0], awidth), 0.0) and
+            not np.isclose(np.mod(a[0] - b[0], awidth), awidth)):
+        raise Error("Bins should share a common grid.\n" +
+                    "a[0]={0}, b[0]={1}, awidth={2}, (a-b)%w={3}".format(
+                        a[0], b[0], awidth, np.mod(a[0] - b[0], awidth)))
 
     (a_begin, a_end, b_begin, b_end) = (0, len(a) - 1, 0, len(b) - 1)
 
     if b[0] > a[0]:
-        a_begin = np.round((b[0] - a[0]) / awidth)
+        a_begin = round((b[0] - a[0]) / awidth)
     elif b[0] < a[0]:
-        b_begin = np.round((a[0] - b[0]) / bwidth)
+        b_begin = round((a[0] - b[0]) / bwidth)
 
     if b[-1] < a[-1]:
-        a_end = np.round((b[-1] - a[0]) / awidth)
+        a_end = round((b[-1] - a[0]) / awidth)
     elif b[-1] > a[-1]:
-        b_end = np.round((a[-1] - b[0]) / bwidth)
+        b_end = round((a[-1] - b[0]) / bwidth)
 
     return np.s_[a_begin:a_end+1], np.s_[b_begin:b_end+1]
 
