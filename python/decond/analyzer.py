@@ -98,12 +98,14 @@ class CorrFile(h5py.File):
                                                 self.buffer.timeLags)
 
         # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
-        self.buffer.nDCesaro_unit = self.buffer.nCorr_unit.decode().split()[0]
+        self.buffer.nDCesaro_unit = np.string_(
+                self.buffer.nCorr_unit.decode().split()[0])
 
         def do_dec(buf):
             buf.decDCesaro = cesaro_integrate(
                     buf.decCorr, self.buffer.timeLags)
-            buf.decDCesaro_unit = buf.decCorr_unit.decode().split()[0]
+            buf.decDCesaro_unit = np.string_(
+                    buf.decCorr_unit.decode().split()[0])
 
         for type_ in DecType:
             buf = getattr(self.buffer, type_.value)
@@ -137,6 +139,36 @@ class CorrFile(h5py.File):
             if getattr(self.buffer, type_.value) is not None:
                 do_dec(type_)
 
+    def _shrink_corr_buffer(self, sel):
+        self.buffer.timeLags = self.buffer.timeLags[sel]
+        self.buffer.nCorr = self.buffer.nCorr[..., sel]
+
+    def _shrink_dec_buffer(self, dectype, sel, sel_dec):
+        buf = getattr(self.buffer, dectype.value)
+        buf.decBins = buf.decBins[sel_dec]
+        buf.decCorr = buf.decCorr[:, sel_dec, sel]
+        buf.decPairCount = buf.decPairCount[:, sel_dec]
+
+    def _intersect_buffer(self, new_file):
+        s_sel, n_sel = _get_inner_index(
+                self.buffer.timeLags, new_file.buffer.timeLags)
+
+        self._shrink_corr_buffer(s_sel)
+        new_file._shrink_corr_buffer(n_sel)
+
+        def do_dec(dectype):
+            sb_dec = getattr(self.buffer, dectype.value)
+            nb_dec = getattr(new_file.buffer, dectype.value)
+            s_sel_dec, n_sel_dec = _get_inner_index(
+                sb_dec.decBins, nb_dec.decBins)
+
+            self._shrink_dec_buffer(dectype, s_sel, s_sel_dec)
+            new_file._shrink_dec_buffer(dectype, n_sel, n_sel_dec)
+
+        for type_ in DecType:
+            if getattr(self.buffer, type_.value) is not None:
+                do_dec(type_)
+
     def close(self):
         if self.filemode in ('w-', 'x'):
             self._write_buffer()
@@ -164,15 +196,15 @@ class DecondFile(CorrFile):
         self.buffer.nDCesaro = self['nDCesaro']
         self.buffer.nDCesaro_err = self['nDCesaro_err']
         self.buffer.nDCesaro_unit = self['nDCesaro'].attrs['unit']
-        self.buffer.nD = h5g_to_dict(self['nD'])
-        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
-        self.buffer.nD_unit = self['nD'].attrs['unit']
-        self.buffer.nDCesaroTotal = self['nDCesaroTotal']
-        self.buffer.nDCesaroTotal_err = self['nDCesaroTotal_err']
-        self.buffer.nDCesaroTotal_unit = self['nDCesaroTotal'].attrs['unit']
-        self.buffer.nDTotal = h5g_to_dict(self['nDTotal'])
-        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
-        self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
+#        self.buffer.nD = h5g_to_dict(self['nD'])
+#        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
+#        self.buffer.nD_unit = self['nD'].attrs['unit']
+#        self.buffer.nDCesaroTotal = self['nDCesaroTotal']
+#        self.buffer.nDCesaroTotal_err = self['nDCesaroTotal_err']
+#        self.buffer.nDCesaroTotal_unit = self['nDCesaroTotal'].attrs['unit']
+#        self.buffer.nDTotal = h5g_to_dict(self['nDTotal'])
+#        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
+#        self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
 
         def do_dec(dectype):
             dec_group = self[dectype.value]
@@ -181,10 +213,10 @@ class DecondFile(CorrFile):
             buf.decPairCount_err = dec_group['decPairCount_err'][...]
             buf.decDCesaro = dec_group['decDCesaro']
             buf.decDCesaro_err = dec_group['decDCesaro_err']
-            buf.decDCesaro_unit = self['decDCesaro'].attrs['unit']
-            buf.decD = h5g_to_dict(dec_group['decD'])
-            buf.decD_err = h5g_to_dict(dec_group['decD_err'])
-            buf.decD_unit = self['decD'].attrs['unit']
+            buf.decDCesaro_unit = dec_group['decDCesaro'].attrs['unit']
+#            buf.decD = h5g_to_dict(dec_group['decD'])
+#            buf.decD_err = h5g_to_dict(dec_group['decD_err'])
+#            buf.decD_unit = self['decD'].attrs['unit']
 
         for type_ in DecType:
             if type_.value in self:
@@ -294,7 +326,7 @@ class DecondFile(CorrFile):
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
-                self._intersect_data(f)
+                self._intersect_buffer(f)
                 f._cal_cesaro()
 
                 add_data('volume', f.buffer.volume)
@@ -307,48 +339,29 @@ class DecondFile(CorrFile):
 
         self._fit_cesaro()
 
-    def _intersect_data(self, new_file):
-        sb = self.buffer
-        nb = new_file.buffer
+    def _shrink_corr_buffer(self, sel):
+        super()._shrink_corr_buffer(sel)
 
-        s_sel, n_sel = _get_inner_index(
-                sb.timeLags, nb.timeLags)
+        self.buffer.nCorr_m2 = self.buffer.nCorr_m2[..., sel]
+        self.buffer.nCorr_err = self.buffer.nCorr_err[..., sel]
+        self.buffer.nDCesaro = self.buffer.nDCesaro[..., sel]
+        self.buffer.nDCesaro_m2 = self.buffer.nDCesaro_m2[..., sel]
+        self.buffer.nDCesaro_err = self.buffer.nDCesaro_err[..., sel]
 
-        sb.timeLags = sb.timeLags[s_sel]
-        sb.nCorr = sb.nCorr[..., s_sel]
-        sb.nCorr_m2 = sb.nCorr_m2[..., s_sel]
-        sb.nCorr_err = sb.nCorr_err[..., s_sel]
-        sb.nDCesaro = sb.nDCesaro[..., s_sel]
-        sb.nDCesaro_m2 = sb.nDCesaro_m2[..., s_sel]
-        sb.nDCesaro_err = sb.nDCesaro_err[..., s_sel]
+    def _shrink_dec_buffer(self, dectype, sel, sel_dec):
+        super()._shrink_dec_buffer(dectype, sel, sel_dec)
 
-        nb.timeLags = nb.timeLags[n_sel]
-        nb.nCorr = nb.nCorr[..., n_sel]
+        buf = getattr(self.buffer, dectype.value)
+        buf.decCorr_m2 = buf.decCorr_m2[:, sel_dec, sel]
+        buf.decCorr_err = buf.decCorr_err[:, sel_dec, sel]
+        buf.decPairCount_m2 = buf.decPairCount_m2[:, sel_dec]
+        buf.decPairCount_err = buf.decPairCount_err[:, sel_dec]
+        buf.decDCesaro = buf.decDCesaro[:, sel_dec, sel]
+        buf.decDCesaro_m2 = buf.decDCesaro_m2[:, sel_dec, sel]
+        buf.decDCesaro_err = buf.decDCesaro_err[:, sel_dec, sel]
 
-        def do_dec(dectype):
-            sb_dec = getattr(sb, dectype.value)
-            nb_dec = getattr(nb, dectype.value)
-            s_sel_dec, n_sel_dec = _get_inner_index(
-                sb_dec.decBins, nb_dec.decBins)
-
-            sb_dec.decBins = sb_dec.decBins[s_sel_dec]
-            sb_dec.decCorr = sb_dec.decCorr[:, s_sel_dec, s_sel]
-            sb_dec.decCorr_m2 = sb_dec.decCorr_m2[:, s_sel_dec, s_sel]
-            sb_dec.decCorr_err = sb_dec.decCorr_err[:, s_sel_dec, s_sel]
-            sb_dec.decPairCount = sb_dec.decPairCount[:, s_sel_dec]
-            sb_dec.decPairCount_m2 = sb_dec.decPairCount_m2[:, s_sel_dec]
-            sb_dec.decPairCount_err = sb_dec.decPairCount_err[:, s_sel_dec]
-            sb_dec.decDCesaro = sb_dec.decDCesaro[:, s_sel_dec, s_sel]
-            sb_dec.decDCesaro_m2 = sb_dec.decDCesaro_m2[:, s_sel_dec, s_sel]
-            sb_dec.decDCesaro_err = sb_dec.decDCesaro_err[:, s_sel_dec, s_sel]
-
-            nb_dec.decBins = nb_dec.decBins[n_sel_dec]
-            nb_dec.decCorr = nb_dec.decCorr[:, n_sel_dec, n_sel]
-            nb_dec.decPairCount = nb_dec.decPairCount[:, n_sel_dec]
-
-        for type_ in DecType:
-            if getattr(self.buffer, type_.value) is not None:
-                do_dec(type_)
+    def _intersect_buffer(self, new_file):
+        super()._intersect_buffer(new_file)
 
     def _fit_cesaro(self):
         pass

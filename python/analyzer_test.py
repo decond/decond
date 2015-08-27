@@ -1,5 +1,6 @@
 import numpy as np
 import decond.analyzer as da
+from scipy import stats
 import os
 import os.path
 
@@ -163,28 +164,90 @@ def gen_rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
         f.buffer.energyDec = ed_buf
 
 
-testfile = ['rand1.c5', 'rand2.c5', 'rand3.c5']
-for file in testfile:
-    gen_rand_c5(file, 3)
+def cal_mean_sem(files):
+    cfs = [da.CorrFile(file) for file in files]
+
+    # match all the axes
+    for i, cf1 in enumerate(cfs):
+        for cf2 in cfs[i+1:]:
+            cf1._intersect_buffer(cf2)
+
+    for cf in cfs:
+        for dectype in da.DecType:
+            buf = getattr(cf.buffer, dectype.value)
+
+    # initialize results buffer
+    results = da.CorrFile._Buffer()
+    for dectype in da.DecType:
+        setattr(results, dectype.value, da.CorrFile._Buffer())
+
+    # initialize results arrays
+    results.volume_N = []
+    results.nCorr_N = []
+    for dectype in da.DecType:
+        buf = getattr(results, dectype.value)
+        buf.decCorr_N = []
+        buf.decPairCount_N = []
+
+    for cf in cfs:
+        results.volume_N.append(cf.buffer.volume)
+        results.nCorr_N.append(cf.buffer.nCorr)
+        for dectype in da.DecType:
+            res_buf = getattr(results, dectype.value)
+            data_buf = getattr(cf.buffer, dectype.value)
+            res_buf.decCorr_N.append(data_buf.decCorr)
+            res_buf.decPairCount_N.append(data_buf.decPairCount)
+
+    # calculate mean and sem
+    results.volume = np.mean(results.volume_N, axis=0)
+    results.volume_err = stats.sem(results.volume_N)
+    results.nCorr = np.mean(results.nCorr_N, axis=0)
+    results.nCorr_err = stats.sem(results.nCorr_N)
+    for dectype in da.DecType:
+        res_buf = getattr(results, dectype.value)
+        res_buf.decCorr = np.mean(res_buf.decCorr_N, axis=0)
+        res_buf.decCorr_err = stats.sem(res_buf.decCorr_N)
+        res_buf.decPairCount = np.mean(res_buf.decPairCount_N, axis=0)
+        res_buf.decPairCount_err = stats.sem(res_buf.decPairCount_N)
+
+    for cf in cfs:
+        cf.close()
+
+    return results
 
 
 def test_cal_decond():
-    da.cal_decond('decond_test.d5', testfile)
+    testfile = ['rand1_test.c5', 'rand2_test.c5', 'rand3_test.c5']
+    for file in testfile:
+        gen_rand_c5(file, 3)
+
+    decondtest = 'decond_test.d5'
+    if os.path.exists(decondtest):
+        os.remove(decondtest)
+
+    da.cal_decond(decondtest, testfile)
+
+    results = cal_mean_sem(testfile)
+
+    with da.DecondFile(decondtest) as f:
+        buf = f.buffer
+        assert(np.allclose(results.volume, buf.volume))
+        assert(np.allclose(results.volume_err, buf.volume_err))
+        assert(np.allclose(results.nCorr, buf.nCorr))
+        assert(np.allclose(results.nCorr_err, buf.nCorr_err))
+        for dectype in da.DecType:
+            res_buf = getattr(results, dectype.value)
+            dec_buf = getattr(buf, dectype.value)
+            assert(np.allclose(np.nan_to_num(res_buf.decCorr),
+                               np.nan_to_num(dec_buf.decCorr)))
+            assert(np.allclose(np.nan_to_num(res_buf.decCorr_err),
+                               np.nan_to_num(dec_buf.decCorr_err)))
+            res_buf.decPairCount = np.mean(res_buf.decPairCount_N, axis=0)
+            assert(np.allclose(np.nan_to_num(res_buf.decPairCount),
+                               np.nan_to_num(dec_buf.decPairCount)))
+            assert(np.allclose(np.nan_to_num(res_buf.decPairCount_err),
+                               np.nan_to_num(dec_buf.decPairCount_err)))
+
     print("cal_decond: pass")
 
 test_cal_decond()
-
-
-# /charge                  Dataset {2}
-# /energyDec               Group
-# /energyDec/decBins       Dataset {185}
-# /energyDec/decCorr       Dataset {3, 185, 11}
-# /energyDec/decPairCount  Dataset {3, 185}
-# /nCorr                   Dataset {5, 11}
-# /numMol                  Dataset {2}
-# /spatialDec              Group
-# /spatialDec/decBins      Dataset {411}
-# /spatialDec/decCorr      Dataset {3, 411, 11}
-# /spatialDec/decPairCount Dataset {3, 411}
-# /timeLags                Dataset {11}
-# /volume                  Dataset {SCALAR}
