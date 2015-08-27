@@ -1,5 +1,5 @@
 import numpy as np
-import decond.analyzer as da
+from .. import analyzer as da
 from scipy import stats
 import os
 import os.path
@@ -21,8 +21,6 @@ def test_get_inner_index():
     assert(a[a_sel][-1] == b[b_sel][-1])
 
     print("_get_inner_index: pass")
-
-test_get_inner_index()
 
 
 def gen_rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
@@ -249,5 +247,3 @@ def test_cal_decond():
                                np.nan_to_num(dec_buf.decPairCount_err)))
 
     print("cal_decond: pass")
-
-test_cal_decond()
