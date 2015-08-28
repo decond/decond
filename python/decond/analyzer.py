@@ -193,14 +193,16 @@ class DecondFile(CorrFile):
         self.buffer.numSample = self['numSample'][...]
         self.buffer.volume_err = self['volume_err'][...]
         self.buffer.nCorr_err = self['nCorr_err'][...]
-        self.buffer.nDCesaro = self['nDCesaro']
-        self.buffer.nDCesaro_err = self['nDCesaro_err']
+        self.buffer.nDCesaro = self['nDCesaro'][...]
+        self.buffer.nDCesaro_err = self['nDCesaro_err'][...]
         self.buffer.nDCesaro_unit = self['nDCesaro'].attrs['unit']
+        self.buffer.fit = self['fit'][...]
+        self.buffer.fit_unit = self['fit'].attrs['unit']
 #        self.buffer.nD = h5g_to_dict(self['nD'])
 #        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
 #        self.buffer.nD_unit = self['nD'].attrs['unit']
-#        self.buffer.nDCesaroTotal = self['nDCesaroTotal']
-#        self.buffer.nDCesaroTotal_err = self['nDCesaroTotal_err']
+#        self.buffer.nDCesaroTotal = self['nDCesaroTotal'][...]
+#        self.buffer.nDCesaroTotal_err = self['nDCesaroTotal_err'][...]
 #        self.buffer.nDCesaroTotal_unit = self['nDCesaroTotal'].attrs['unit']
 #        self.buffer.nDTotal = h5g_to_dict(self['nDTotal'])
 #        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
@@ -211,8 +213,8 @@ class DecondFile(CorrFile):
             buf = getattr(self.buffer, dectype.value)
             buf.decCorr_err = dec_group['decCorr_err'][...]
             buf.decPairCount_err = dec_group['decPairCount_err'][...]
-            buf.decDCesaro = dec_group['decDCesaro']
-            buf.decDCesaro_err = dec_group['decDCesaro_err']
+            buf.decDCesaro = dec_group['decDCesaro'][...]
+            buf.decDCesaro_err = dec_group['decDCesaro_err'][...]
             buf.decDCesaro_unit = dec_group['decDCesaro'].attrs['unit']
 #            buf.decD = h5g_to_dict(dec_group['decD'])
 #            buf.decD_err = h5g_to_dict(dec_group['decD_err'])
@@ -222,7 +224,7 @@ class DecondFile(CorrFile):
             if type_.value in self:
                 do_dec(type_)
 
-    def _add_sample(self, samples):
+    def _add_sample(self, samples, fit):
         if not isinstance(samples, list):
             samples = [samples]
 
@@ -337,7 +339,7 @@ class DecondFile(CorrFile):
                     if getattr(self.buffer, type_.value) is not None:
                         add_dec_data(type_, f.buffer)
 
-        self._fit_cesaro()
+        self._fit_cesaro(fit)
 
     def _shrink_corr_buffer(self, sel):
         super()._shrink_corr_buffer(sel)
@@ -363,8 +365,12 @@ class DecondFile(CorrFile):
     def _intersect_buffer(self, new_file):
         super()._intersect_buffer(new_file)
 
-    def _fit_cesaro(self):
-        pass
+    def _fit_cesaro(self, fit=None):
+        if fit is None:
+            if not hasattr(self.buffer, 'fit'):
+                raise Error("No fit ranges have been provided")
+        else:
+            self.buffer.fit = fit
 
     def _write_buffer(self):
         super()._write_buffer()
@@ -374,6 +380,8 @@ class DecondFile(CorrFile):
         self['nDCesaro'] = self.buffer.nDCesaro
         self['nDCesaro_err'] = self.buffer.nDCesaro_err
         self['nDCesaro'].attrs['unit'] = self.buffer.nDCesaro_unit
+        self['fit'] = self.buffer.fit
+        self['fit'].attrs['unit'] = self.buffer.timeLags_unit
 #        self['nD'] = self.buffer.nD
 #        self['nD_err'] = self.buffer.nD_err
 #        self['nDCesaroTotal'] = self.buffer.nDCesaroTotal
@@ -452,7 +460,23 @@ def _get_inner_index(a, b):
     return np.s_[a_begin:a_end+1], np.s_[b_begin:b_end+1]
 
 
-def cal_decond(outname, samples):
+def new_decond(outname, samples, fit):
     with DecondFile(outname, 'x') as outfile:
-        outfile._add_sample(samples)
+        outfile._add_sample(samples, fit)
+        return outfile.buffer
+
+
+def extend_decond(outname, decname, samples, fit=None):
+    with DecondFile(outname, 'x') as outfile:
+        with DecondFile(decname) as infile:
+            outfile.buffer = infile.buffer
+        outfile._add_sample(samples, fit)
+        return outfile.buffer
+
+
+def fit_decond(outname, decname, fit):
+    with DecondFile(outname, 'x') as outfile:
+        with DecondFile(decname) as infile:
+            outfile.buffer = infile.buffer
+        outfile._fit_cesaro(fit)
         return outfile.buffer

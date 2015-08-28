@@ -23,10 +23,10 @@ def test_get_inner_index():
     print("_get_inner_index: pass")
 
 
-def gen_rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
-                r_decbins=None, base_r_decbins=None,
-                e_decbins=None, base_e_decbins=None,
-                charge=None, numMol=None, volume=None, base_volume=None):
+def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
+            r_decbins=None, base_r_decbins=None,
+            e_decbins=None, base_e_decbins=None,
+            charge=None, numMol=None, volume=None, base_volume=None):
 
     def rand_axis(begin, end, scale, begin_fixed=False, rand_range=None):
         if rand_range is None:
@@ -214,16 +214,39 @@ def cal_mean_sem(files):
     return results
 
 
-def test_cal_decond():
-    testfile = ['rand1_test.c5', 'rand2_test.c5', 'rand3_test.c5']
-    for file in testfile:
-        gen_rand_c5(file, 3)
+def rand_fit(timeLags):
+    dt = timeLags[1] - timeLags[0]
+    begin_idx = np.random.randint(np.round(timeLags.size * 0.8))
+    end_idx = np.random.randint(timeLags.size - begin_idx) + begin_idx
+    return (begin_idx * dt, end_idx * dt)
 
-    decondtest = 'decond_test.d5'
+
+testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
+decondtest = 'decond_test.d5'
+nummoltype = np.random.random_integers(2, 5)
+
+
+def test_new_decond():
+    for file in testfile:
+        rand_c5(file, nummoltype)
+
     if os.path.exists(decondtest):
         os.remove(decondtest)
 
-    da.cal_decond(decondtest, testfile)
+    # get common timeLags
+    cfs = [da.CorrFile(file) for file in testfile]
+    for i, cf1 in enumerate(cfs):
+        for cf2 in cfs[i+1:]:
+            cf1._intersect_buffer(cf2)
+    timeLags = cfs[0].buffer.timeLags
+    for cf in cfs:
+        cf.close()
+
+    max_numfit = 5
+    fit = [rand_fit(timeLags) for i in
+           range(np.random.random_integers(max_numfit))]
+
+    da.new_decond(decondtest, testfile, fit)
 
     results = cal_mean_sem(testfile)
 
@@ -246,4 +269,58 @@ def test_cal_decond():
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount_err),
                                np.nan_to_num(dec_buf.decPairCount_err)))
 
-    print("cal_decond: pass")
+    print("new_decond: pass")
+
+
+extend_file = ['corr_extend1_test.c5', 'corr_extend2_test.c5']
+decond_extend = ['decond_extend1_test.d5', 'decond_extend2_test.d5']
+
+
+def test_extend_decond():
+    for file in decond_extend:
+        if os.path.exists(file):
+            os.remove(file)
+
+    for file in extend_file:
+        rand_c5(file, nummoltype)
+
+    da.extend_decond(decond_extend[0], decondtest, extend_file)
+
+    # get common timeLags
+    fs = ([da.CorrFile(file) for file in extend_file] +
+          [da.DecondFile(decondtest)])
+    for i, f1 in enumerate(fs):
+        for f2 in fs[i+1:]:
+            try:
+                # When _intersect_buffer is called directly for debugging,
+                # *_m2 attributes may not exist.
+                # They are only intialized in the _add_sample function
+                f1._intersect_buffer(f2)
+            except AttributeError:
+                pass
+    timeLags = fs[0].buffer.timeLags
+    for f in fs:
+        f.close()
+
+    max_numfit = 5
+    fit = [rand_fit(timeLags) for i in
+           range(np.random.random_integers(max_numfit))]
+
+    da.extend_decond(decond_extend[1], decondtest, extend_file, fit)
+    print("test_extend_decond: pass")
+
+
+decond_fit = 'decond_test_change_fit.dt'
+
+
+def test_fit_decond():
+    if os.path.exists(decond_fit):
+        os.remove(decond_fit)
+
+    with da.DecondFile(decondtest) as f:
+        max_numfit = 5
+        fit = [rand_fit(f.buffer.timeLags) for i in
+               range(np.random.random_integers(max_numfit))]
+
+    da.fit_decond(decond_fit, decondtest, fit)
+    print("test_fit_decond: pass")
