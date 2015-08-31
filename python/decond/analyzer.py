@@ -347,8 +347,12 @@ class DecondFile(CorrFile):
                 setattr(buf, data_name, mean)
                 setattr(buf, data_name + '_m2', m2)
 
+            # it is important to explicitly extend the sum_weight dimension
+            # by [..., np.newaxis], otherwis, numpy will broadcast it
+            # wrongly when the dimension of sum_weight is [N, N] (square)
             setattr(buf, data_name + '_err', _m2_to_err(
-                m2, self.buffer.numSample, sum_weight / self.buffer.numSample))
+                m2, self.buffer.numSample,
+                sum_weight[..., np.newaxis] / self.buffer.numSample))
 
         def add_dec_data(dectype, new_buf):
             buf = getattr(new_buf, dectype.value)

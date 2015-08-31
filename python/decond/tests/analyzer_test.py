@@ -21,7 +21,7 @@ def test_get_inner_index():
     assert(a[a_sel][0] == b[b_sel][0])
     assert(a[a_sel][-1] == b[b_sel][-1])
 
-#    print("test_get_inner_index: pass")
+    print("test_get_inner_index: pass")
 
 
 def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
@@ -262,8 +262,7 @@ def rand_fit(timeLags):
     return (begin_idx * dt, end_idx * dt)
 
 
-#testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
-testfile = ['corr1_test.c5', 'corr2_test.c5']
+testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
 decondtest = 'decond_test.d5'
 #nummoltype = np.random.random_integers(2, 5)
 nummoltype = 4
@@ -271,13 +270,7 @@ nummoltype = 4
 
 def test_new_decond():
     for file in testfile:
-#        rand_c5(file, nummoltype)
-        rand_c5(file, nummoltype, timeLags=np.arange(0, 10, 1),
-                r_decbins=np.arange(0.05, 1.0, 0.1),
-                e_decbins=np.arange(0, 1.1, 0.1))
-
-#    rand_c5(testfile[0], nummoltype, e_decbins=np.arange(0, 0.8, 0.1))
-#    rand_c5(testfile[1], nummoltype, e_decbins=np.arange(0, 1.2, 0.1))
+        rand_c5(file, nummoltype)
 
     if os.path.exists(decondtest):
         os.remove(decondtest)
@@ -331,7 +324,7 @@ def test_new_decond():
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount_err),
                                np.nan_to_num(dec_buf.decPairCount_err)))
 
-#    print("test_new_decond: pass")
+    print("test_new_decond: pass")
 
 
 extend_file = ['corr_extend1_test.c5', 'corr_extend2_test.c5']
