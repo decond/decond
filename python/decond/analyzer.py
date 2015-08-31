@@ -155,6 +155,7 @@ class CorrFile(h5py.File):
 
         self._shrink_corr_buffer(s_sel)
         new_file._shrink_corr_buffer(n_sel)
+#        assert(np.allclose(self.buffer.timeLags, new_file.buffer.timeLags))
 
         def do_dec(dectype):
             sb_dec = getattr(self.buffer, dectype.value)
@@ -164,6 +165,7 @@ class CorrFile(h5py.File):
 
             self._shrink_dec_buffer(dectype, s_sel, s_sel_dec)
             new_file._shrink_dec_buffer(dectype, n_sel, n_sel_dec)
+#            assert(np.allclose(sb_dec.decBins, nb_dec.decBins))
 
         for type_ in DecType:
             if getattr(self.buffer, type_.value) is not None:
@@ -251,11 +253,11 @@ class DecondFile(CorrFile):
                 num_sample = self.buffer.numSample
 
                 buf.decCorr_m2 = np.zeros_like(buf.decCorr)
-                buf.decCorr_err = _m2_to_err(buf.decCorr_m2, num_sample)
+                buf.decCorr_err = _m2_to_err(buf.decCorr_m2, num_sample)  # nan
 
                 buf.decPairCount_m2 = np.zeros_like(buf.decPairCount)
                 buf.decPairCount_err = _m2_to_err(
-                        buf.decPairCount_m2, num_sample)
+                        buf.decPairCount_m2, num_sample)  # nan
 
                 buf.decDCesaro_m2 = np.zeros_like(buf.decDCesaro)
                 buf.decDCesaro_err = _m2_to_err(buf.decDCesaro_m2, num_sample)
@@ -277,10 +279,12 @@ class DecondFile(CorrFile):
 
             def init_dec_m2(buf):
                 num_sample = self.buffer.numSample
-                buf.decCorr_m2 = _err_to_m2(buf.decCorr_err, num_sample)
-                buf.decPairCount_m2 = _err_to_m2(buf.decPairCount_err,
-                                                 num_sample)
-                buf.decDCesaro_m2 = _err_to_m2(buf.decDCesaro_err, num_sample)
+                buf.decCorr_m2 = _err_to_m2(
+                        buf.decCorr_err, num_sample, buf.decPairCount)
+                buf.decDCesaro_m2 = _err_to_m2(
+                        buf.decDCesaro_err, num_sample, buf.decPairCount)
+                buf.decPairCount_m2 = _err_to_m2(
+                        buf.decPairCount_err, num_sample)
 
             for type_ in DecType:
                 buf = getattr(self.buffer, type_.value)
@@ -317,13 +321,44 @@ class DecondFile(CorrFile):
             setattr(buf, data_name + '_err',
                     _m2_to_err(m2, num_sample))
 
+        def add_weighted_data(data_name, weight_name, new_data, new_weight,
+                              dectype=None):
+            """
+            http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Weighted_incremental_algorithm
+            """
+            if dectype is None:
+                buf = self.buffer
+            else:
+                buf = getattr(self.buffer, dectype.value)
+
+            old_weight = getattr(buf, weight_name)
+            sum_weight = (self.buffer.numSample - 1) * old_weight
+            mean = getattr(buf, data_name)
+            m2 = getattr(buf, data_name + '_m2')
+
+            temp = new_weight + sum_weight
+            delta = new_data - mean
+            r = delta * new_weight[..., np.newaxis] / temp[..., np.newaxis]
+            mean += r
+            m2 += sum_weight[..., np.newaxis] * delta * r
+            sum_weight = temp
+
+            if np.isscalar(mean):
+                setattr(buf, data_name, mean)
+                setattr(buf, data_name + '_m2', m2)
+
+            setattr(buf, data_name + '_err', _m2_to_err(
+                m2, self.buffer.numSample, sum_weight / self.buffer.numSample))
+
         def add_dec_data(dectype, new_buf):
             buf = getattr(new_buf, dectype.value)
-            add_data('decCorr', buf.decCorr, dectype=dectype)
-            add_data('decPairCount', buf.decPairCount,
-                     dectype=dectype)
-            add_data('decDCesaro', buf.decDCesaro,
-                     dectype=dectype)
+            add_weighted_data('decCorr', 'decPairCount',
+                              buf.decCorr, buf.decPairCount, dectype)
+            add_weighted_data('decDCesaro', 'decPairCount',
+                              buf.decDCesaro, buf.decPairCount, dectype)
+
+            # Note that decPairCount must be updated last
+            add_data('decPairCount', buf.decPairCount, dectype)
 
         for sample in samples[begin:]:
             with CorrFile(sample) as f:
@@ -362,14 +397,12 @@ class DecondFile(CorrFile):
         buf.decDCesaro_m2 = buf.decDCesaro_m2[:, sel_dec, sel]
         buf.decDCesaro_err = buf.decDCesaro_err[:, sel_dec, sel]
 
-    def _intersect_buffer(self, new_file):
-        super()._intersect_buffer(new_file)
-
     def _fit_cesaro(self, fit=None):
         if fit is None:
             if not hasattr(self.buffer, 'fit'):
                 raise Error("No fit ranges have been provided")
         else:
+            fit.sort()
             self.buffer.fit = fit
 
     def _write_buffer(self):
@@ -419,16 +452,38 @@ def h5g_to_dict(group):
     return D
 
 
-def _err_to_m2(err, n):
+def _err_to_m2(err, n, w=None):
+    """
+    err: standard error of the mean
+    n: number of samples
+    w: average weight
+    """
     if n > 1:
-        return np.square(err) * n * (n - 1)
+        if w is None:
+            return np.square(err) * n * (n - 1)
+        else:
+            try:
+                return np.square(err) * w * n * (n - 1)
+            except ValueError:
+                return np.square(err) * w[..., np.newaxis] * n * (n - 1)
     else:
         return np.zeros_like(err)
 
 
-def _m2_to_err(m2, n):
+def _m2_to_err(m2, n, w=None):
+    """
+    m2: sum of squares of differences from the (current) mean
+    n: number of samples
+    w: average weight
+    """
     if n > 1:
-        return np.sqrt(m2 / ((n - 1) * n))
+        if w is None:
+            return np.sqrt(m2 / ((n - 1) * n))
+        else:
+            try:
+                return np.sqrt(m2 / ((n - 1) * n * w))
+            except ValueError:
+                return np.sqrt(m2 / ((n - 1) * n * w[..., np.newaxis]))
     else:
         return np.full(m2.shape, np.nan)
 
@@ -480,3 +535,31 @@ def fit_decond(outname, decname, fit):
             outfile.buffer = infile.buffer
         outfile._fit_cesaro(fit)
         return outfile.buffer
+
+
+def weighted_incremental_variance(dataweightpairs, mean=0, variance=0,
+                                  numsample=0, sumweight=0):
+    """
+    http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Weighted_incremental_algorithm
+    """
+    if numsample > 1:
+        m2 = variance * (numsample - 1) / numsample * sumweight
+    else:
+        m2 = 0
+
+    for x, weight in dataweightpairs:
+        numsample += 1
+        temp = weight + sumweight
+        delta = x - mean
+        r = delta * weight / temp
+        mean = mean + r
+        m2 = m2 + sumweight * delta * r
+        sumweight = temp
+
+    variance_n = m2 / sumweight
+
+    if numsample > 1:
+        variance = variance_n * numsample / (numsample - 1)
+    else:
+        variance = np.full(m2.shape, np.nan)
+    return mean, variance, numsample, sumweight

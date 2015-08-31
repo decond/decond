@@ -3,6 +3,7 @@ from .. import analyzer as da
 from scipy import stats
 import os
 import os.path
+import h5py
 
 
 def test_get_inner_index():
@@ -20,7 +21,7 @@ def test_get_inner_index():
     assert(a[a_sel][0] == b[b_sel][0])
     assert(a[a_sel][-1] == b[b_sel][-1])
 
-    print("_get_inner_index: pass")
+#    print("test_get_inner_index: pass")
 
 
 def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
@@ -48,15 +49,15 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
             scale = base_timeLags[1] - base_timeLags[0]
 
         timeLags = rand_axis(0, end, scale, begin_fixed=True)
-        timeLags_unit = np.string_('ps')
+    timeLags_unit = np.string_('ps')
 
     if r_decbins is None:
         if base_r_decbins is None:
             end = 8
             scale = 0.01
         else:
-            end = base_timeLags.size
-            scale = base_timeLags[1] - base_timeLags[0]
+            end = base_r_decbins.size
+            scale = base_r_decbins[1] - base_r_decbins[0]
 
         r_decbins = rand_axis(0, end, scale, begin_fixed=True)
 
@@ -66,8 +67,9 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
             end = 7
             scale = 0.1
         else:
-            end = base_timeLags.size
-            scale = base_timeLags[1] - base_timeLags[0]
+            scale = base_e_decbins[1] - base_e_decbins[0]
+            begin = int(base_e_decbins[0] / scale + 0.5)
+            end = begin + base_timeLags.size - 1
 
         e_decbins = rand_axis(begin, end, scale)
 
@@ -122,7 +124,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
 
     nCorr = (corr_amp *
              np.random.sample((numalltype, numtbin)) -
-             corr_amp / 2 + corr_offset) / numrbin
+             corr_amp / 2 + corr_offset) / numtbin
 
     nCorr_unit = np.string_('nm$^2$ ps$^{-2}$')
 
@@ -131,7 +133,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
     sd_buf.decBins_unit = np.string_('nm')
     sd_buf.decCorr = (corr_amp *
                       np.random.sample((numpairtype, numrbin, numtbin)) -
-                      corr_amp / 2 + corr_offset) / numrbin
+                      corr_amp / 2 + corr_offset) / (numtbin * numrbin)
     sd_buf.decCorr_unit = np.string_('nm$^2$ ps$^{-2}$')
     sd_buf.decPairCount = (paircount_amp *
                            np.random.sample((numpairtype, numrbin)) -
@@ -142,7 +144,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
     ed_buf.decBins_unit = np.string_('kcal mol$^{-1}$')
     ed_buf.decCorr = (corr_amp *
                       np.random.sample((numpairtype, numebin, numtbin)) -
-                      corr_amp / 2 + corr_offset) / numebin
+                      corr_amp / 2 + corr_offset) / (numtbin * numebin)
     ed_buf.decCorr_unit = np.string_('nm$^2$ ps$^{-2}$')
     ed_buf.decPairCount = (paircount_amp *
                            np.random.sample((numpairtype, numebin)) -
@@ -170,10 +172,6 @@ def cal_mean_sem(files):
         for cf2 in cfs[i+1:]:
             cf1._intersect_buffer(cf2)
 
-    for cf in cfs:
-        for dectype in da.DecType:
-            buf = getattr(cf.buffer, dectype.value)
-
     # initialize results buffer
     results = da.CorrFile._Buffer()
     for dectype in da.DecType:
@@ -197,16 +195,58 @@ def cal_mean_sem(files):
             res_buf.decPairCount_N.append(data_buf.decPairCount)
 
     # calculate mean and sem
+    results.timeLags = cfs[0].buffer.timeLags
     results.volume = np.mean(results.volume_N, axis=0)
     results.volume_err = stats.sem(results.volume_N)
     results.nCorr = np.mean(results.nCorr_N, axis=0)
     results.nCorr_err = stats.sem(results.nCorr_N)
     for dectype in da.DecType:
         res_buf = getattr(results, dectype.value)
-        res_buf.decCorr = np.mean(res_buf.decCorr_N, axis=0)
-        res_buf.decCorr_err = stats.sem(res_buf.decCorr_N)
+
+        res_buf.decBins = getattr(cfs[0].buffer, dectype.value).decBins
+        res_buf.decCorr_N = np.array(res_buf.decCorr_N)
+        res_buf.decPairCount_N = np.array(res_buf.decPairCount_N)
+        weights = res_buf.decPairCount_N[..., np.newaxis].repeat(
+                res_buf.decCorr_N.shape[-1], axis=-1)
+        res_buf.decCorr = np.average(
+                res_buf.decCorr_N, axis=0, weights=weights)
+        variance = np.average(
+                (res_buf.decCorr_N - res_buf.decCorr[np.newaxis, ...])**2,
+                weights=weights, axis=0)
+        variance *= len(cfs) / (len(cfs) - 1)
+        res_buf.decCorr_err = np.sqrt(variance / len(cfs))
         res_buf.decPairCount = np.mean(res_buf.decPairCount_N, axis=0)
         res_buf.decPairCount_err = stats.sem(res_buf.decPairCount_N)
+
+        # test weighted_incremental_variance - all at once
+        a = res_buf.decCorr_N
+        b = res_buf.decPairCount_N[..., np.newaxis]
+        res_buf.decCorr2, variance, num_sample, _ = (
+                da.weighted_incremental_variance(zip(a, b)))
+        res_buf.decCorr2_err = np.sqrt(variance / num_sample)
+        assert(np.allclose(np.nan_to_num(res_buf.decCorr),
+               np.nan_to_num(res_buf.decCorr2)))
+        assert(np.allclose(np.nan_to_num(res_buf.decCorr_err),
+               np.nan_to_num(res_buf.decCorr2_err)))
+        # ------------------------------------------------
+
+        # test weighted_incremental_variance - one by one
+        a = res_buf.decCorr_N
+        b = res_buf.decPairCount_N[..., np.newaxis]
+        res_buf.decCorr2, variance, num_sample, sumweight = (
+                da.weighted_incremental_variance([(a[0], b[0])]))
+        for data in zip(a[1:], b[1:]):
+            res_buf.decCorr2, variance, num_sample, sumweight = (
+                    da.weighted_incremental_variance(
+                        [data], res_buf.decCorr2, variance, num_sample,
+                        sumweight))
+
+        res_buf.decCorr2_err = np.sqrt(variance / num_sample)
+        assert(np.allclose(np.nan_to_num(res_buf.decCorr),
+               np.nan_to_num(res_buf.decCorr2)))
+        assert(np.allclose(np.nan_to_num(res_buf.decCorr_err),
+               np.nan_to_num(res_buf.decCorr2_err)))
+        # ------------------------------------------------
 
     for cf in cfs:
         cf.close()
@@ -217,18 +257,27 @@ def cal_mean_sem(files):
 def rand_fit(timeLags):
     dt = timeLags[1] - timeLags[0]
     begin_idx = np.random.randint(np.round(timeLags.size * 0.8))
-    end_idx = np.random.randint(timeLags.size - begin_idx) + begin_idx
+    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 1
+    assert(end_idx > begin_idx)
     return (begin_idx * dt, end_idx * dt)
 
 
-testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
+#testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
+testfile = ['corr1_test.c5', 'corr2_test.c5']
 decondtest = 'decond_test.d5'
-nummoltype = np.random.random_integers(2, 5)
+#nummoltype = np.random.random_integers(2, 5)
+nummoltype = 4
 
 
 def test_new_decond():
     for file in testfile:
-        rand_c5(file, nummoltype)
+#        rand_c5(file, nummoltype)
+        rand_c5(file, nummoltype, timeLags=np.arange(0, 10, 1),
+                r_decbins=np.arange(0.05, 1.0, 0.1),
+                e_decbins=np.arange(0, 1.1, 0.1))
+
+#    rand_c5(testfile[0], nummoltype, e_decbins=np.arange(0, 0.8, 0.1))
+#    rand_c5(testfile[1], nummoltype, e_decbins=np.arange(0, 1.2, 0.1))
 
     if os.path.exists(decondtest):
         os.remove(decondtest)
@@ -248,7 +297,14 @@ def test_new_decond():
 
     da.new_decond(decondtest, testfile, fit)
 
+    results_file = 'results.h5'
     results = cal_mean_sem(testfile)
+    with h5py.File(results_file, 'w') as f:
+        for dectype in da.DecType:
+            buf = getattr(results, dectype.value)
+            f[dectype.value + '/decBins'] = getattr(buf, 'decBins')
+            f[dectype.value + '/decCorr'] = getattr(buf, 'decCorr')
+            f[dectype.value + '/decCorr_err'] = getattr(buf, 'decCorr_err')
 
     with da.DecondFile(decondtest) as f:
         buf = f.buffer
@@ -261,15 +317,21 @@ def test_new_decond():
             dec_buf = getattr(buf, dectype.value)
             assert(np.allclose(np.nan_to_num(res_buf.decCorr),
                                np.nan_to_num(dec_buf.decCorr)))
-            assert(np.allclose(np.nan_to_num(res_buf.decCorr_err),
-                               np.nan_to_num(dec_buf.decCorr_err)))
-            res_buf.decPairCount = np.mean(res_buf.decPairCount_N, axis=0)
+            try:
+                assert(np.allclose(np.nan_to_num(res_buf.decCorr_err),
+                                   np.nan_to_num(dec_buf.decCorr_err)))
+            except AssertionError:
+                print(dectype.value)
+                print(buf.timeLags)
+                print(res_buf.decBins)
+                print(dec_buf.decBins)
+                
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount),
                                np.nan_to_num(dec_buf.decPairCount)))
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount_err),
                                np.nan_to_num(dec_buf.decPairCount_err)))
 
-    print("new_decond: pass")
+#    print("test_new_decond: pass")
 
 
 extend_file = ['corr_extend1_test.c5', 'corr_extend2_test.c5']
@@ -285,6 +347,9 @@ def test_extend_decond():
         rand_c5(file, nummoltype)
 
     da.extend_decond(decond_extend[0], decondtest, extend_file)
+
+    with da.DecondFile(decond_extend[0]) as f:
+        assert(f.buffer.numSample == len(testfile) + len(extend_file))
 
     # get common timeLags
     fs = ([da.CorrFile(file) for file in extend_file] +
