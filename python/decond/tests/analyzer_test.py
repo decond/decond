@@ -164,6 +164,34 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
         f.buffer.energyDec = ed_buf
 
 
+def weighted_incremental_variance(dataweightpairs, mean=0, variance=0,
+                                  numsample=0, sumweight=0):
+    """
+    http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Weighted_incremental_algorithm
+    """
+    if numsample > 1:
+        m2 = variance * (numsample - 1) / numsample * sumweight
+    else:
+        m2 = 0
+
+    for x, weight in dataweightpairs:
+        numsample += 1
+        temp = weight + sumweight
+        delta = x - mean
+        r = delta * weight / temp
+        mean = mean + r
+        m2 = m2 + sumweight * delta * r
+        sumweight = temp
+
+    variance_n = m2 / sumweight
+
+    if numsample > 1:
+        variance = variance_n * numsample / (numsample - 1)
+    else:
+        variance = np.full(m2.shape, np.nan)
+    return mean, variance, numsample, sumweight
+
+
 def cal_mean_sem(files):
     cfs = [da.CorrFile(file) for file in files]
 
@@ -222,7 +250,7 @@ def cal_mean_sem(files):
         a = res_buf.decCorr_N
         b = res_buf.decPairCount_N[..., np.newaxis]
         res_buf.decCorr2, variance, num_sample, _ = (
-                da.weighted_incremental_variance(zip(a, b)))
+                weighted_incremental_variance(zip(a, b)))
         res_buf.decCorr2_err = np.sqrt(variance / num_sample)
         assert(np.allclose(np.nan_to_num(res_buf.decCorr),
                np.nan_to_num(res_buf.decCorr2)))
@@ -234,10 +262,10 @@ def cal_mean_sem(files):
         a = res_buf.decCorr_N
         b = res_buf.decPairCount_N[..., np.newaxis]
         res_buf.decCorr2, variance, num_sample, sumweight = (
-                da.weighted_incremental_variance([(a[0], b[0])]))
+                weighted_incremental_variance([(a[0], b[0])]))
         for data in zip(a[1:], b[1:]):
             res_buf.decCorr2, variance, num_sample, sumweight = (
-                    da.weighted_incremental_variance(
+                    weighted_incremental_variance(
                         [data], res_buf.decCorr2, variance, num_sample,
                         sumweight))
 
@@ -264,8 +292,7 @@ def rand_fit(timeLags):
 
 testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
 decondtest = 'decond_test.d5'
-#nummoltype = np.random.random_integers(2, 5)
-nummoltype = 4
+nummoltype = np.random.random_integers(2, 5)
 
 
 def test_new_decond():
@@ -318,7 +345,7 @@ def test_new_decond():
                 print(buf.timeLags)
                 print(res_buf.decBins)
                 print(dec_buf.decBins)
-                
+
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount),
                                np.nan_to_num(dec_buf.decPairCount)))
             assert(np.allclose(np.nan_to_num(res_buf.decPairCount_err),

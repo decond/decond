@@ -253,7 +253,8 @@ class DecondFile(CorrFile):
                 num_sample = self.buffer.numSample
 
                 buf.decCorr_m2 = np.zeros_like(buf.decCorr)
-                buf.decCorr_err = _m2_to_err(buf.decCorr_m2, num_sample)  # nan
+                buf.decCorr_err = _m2_to_err(
+                        buf.decCorr_m2, num_sample)  # nan
 
                 buf.decPairCount_m2 = np.zeros_like(buf.decPairCount)
                 buf.decPairCount_err = _m2_to_err(
@@ -352,7 +353,7 @@ class DecondFile(CorrFile):
             # wrongly when the dimension of sum_weight is [N, N] (square)
             setattr(buf, data_name + '_err', _m2_to_err(
                 m2, self.buffer.numSample,
-                sum_weight[..., np.newaxis] / self.buffer.numSample))
+                sum_weight / self.buffer.numSample))
 
         def add_dec_data(dectype, new_buf):
             buf = getattr(new_buf, dectype.value)
@@ -449,13 +450,6 @@ class Error(Exception):
     pass
 
 
-def h5g_to_dict(group):
-    D = {}
-    for k, v in group.items():
-        D[k] = v[...]
-    return D
-
-
 def _err_to_m2(err, n, w=None):
     """
     err: standard error of the mean
@@ -484,10 +478,7 @@ def _m2_to_err(m2, n, w=None):
         if w is None:
             return np.sqrt(m2 / ((n - 1) * n))
         else:
-            try:
-                return np.sqrt(m2 / ((n - 1) * n * w))
-            except ValueError:
-                return np.sqrt(m2 / ((n - 1) * n * w[..., np.newaxis]))
+            return np.sqrt(m2 / ((n - 1) * n * w[..., np.newaxis]))
     else:
         return np.full(m2.shape, np.nan)
 
@@ -539,31 +530,3 @@ def fit_decond(outname, decname, fit):
             outfile.buffer = infile.buffer
         outfile._fit_cesaro(fit)
         return outfile.buffer
-
-
-def weighted_incremental_variance(dataweightpairs, mean=0, variance=0,
-                                  numsample=0, sumweight=0):
-    """
-    http://www.wikiwand.com/en/Algorithms_for_calculating_variance#/Weighted_incremental_algorithm
-    """
-    if numsample > 1:
-        m2 = variance * (numsample - 1) / numsample * sumweight
-    else:
-        m2 = 0
-
-    for x, weight in dataweightpairs:
-        numsample += 1
-        temp = weight + sumweight
-        delta = x - mean
-        r = delta * weight / temp
-        mean = mean + r
-        m2 = m2 + sumweight * delta * r
-        sumweight = temp
-
-    variance_n = m2 / sumweight
-
-    if numsample > 1:
-        variance = variance_n * numsample / (numsample - 1)
-    else:
-        variance = np.full(m2.shape, np.nan)
-    return mean, variance, numsample, sumweight
