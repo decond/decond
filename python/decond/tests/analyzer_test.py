@@ -368,7 +368,7 @@ def test_extend_decond():
     print("test_extend_decond: pass")
 
 
-decond_fit = 'decond_test_change_fit.dt'
+decond_fit = 'decond_test_change_fit.d5'
 
 
 def test_fit_decond():
