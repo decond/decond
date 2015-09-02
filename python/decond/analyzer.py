@@ -262,12 +262,12 @@ class DecondFile(CorrFile):
         self.buffer.nDTotalCesaro_unit = self['nDTotalCesaro'].attrs['unit']
         self.buffer.fit = self['fit'][...]
         self.buffer.fit_unit = self['fit'].attrs['unit']
-#        self.buffer.nD = h5g_to_dict(self['nD'])
+        self.buffer.nD = self['nD'][...]
 #        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
-#        self.buffer.nD_unit = self['nD'].attrs['unit']
-#        self.buffer.nDTotal = h5g_to_dict(self['nDTotal'])
+        self.buffer.nD_unit = self['nD'].attrs['unit']
+        self.buffer.nDTotal = self['nDTotal'][...]
 #        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
-#        self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
+        self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
 
         def do_dec(dectype):
             dec_group = self[dectype.value]
@@ -482,16 +482,18 @@ class DecondFile(CorrFile):
         def fit_data(data_name):
             fit_sel = self.fit_sel
             data_cesaro = getattr(buf, data_name + 'Cesaro')
-            data_fit = np.empty((len(fit_sel), self.num_alltype))
-            for i, sel in enumerate(fit_sel):
-                if data_cesaro.ndim == 1:
-                    data_fit[i] = np.polyfit(buf.timeLags[sel],
-                                             data_cesaro[sel], 1)[0]
-                elif data_cesaro.ndim == 2:
+            if data_cesaro.ndim == 1:  # nDTotal
+                data_fit = np.empty(len(fit_sel))
+                for i, sel in enumerate(fit_sel):
+                        data_fit[i] = np.polyfit(buf.timeLags[sel],
+                                                 data_cesaro[sel], 1)[0]
+            elif data_cesaro.ndim == 2:  # nD
+                data_fit = np.empty((len(fit_sel), self.num_alltype))
+                for i, sel in enumerate(fit_sel):
                     data_fit[i] = np.polyfit(buf.timeLags[sel],
                                              data_cesaro[:, sel].T, 1)[0, :]
-                else:
-                    raise Error("Rank over 2 not implemented for fit_data")
+            else:
+                raise Error("Rank over 2 not implemented for fit_data")
 
             setattr(buf, data_name, data_fit)
 #            setattr(buf, data_name + '_err', data_err)
@@ -527,10 +529,12 @@ class DecondFile(CorrFile):
         self['nDTotalCesaro'].attrs['unit'] = self.buffer.nDTotalCesaro_unit
         self['fit'] = self.buffer.fit
         self['fit'].attrs['unit'] = self.buffer.timeLags_unit
-#        self['nD'] = self.buffer.nD
+        self['nD'] = self.buffer.nD
 #        self['nD_err'] = self.buffer.nD_err
-#        self['nDTotal'] = self.buffer.nDTotal
+        self['nD'].attrs['unit'] = self.buffer.nD_unit
+        self['nDTotal'] = self.buffer.nDTotal
 #        self['nDTotal_err'] = self.buffer.nDTotal_err
+        self['nDTotal'].attrs['unit'] = self.buffer.nDTotal_unit
 
         def do_dec(dectype):
             dec_group = self.require_group(dectype.value)
