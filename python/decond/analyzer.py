@@ -85,6 +85,54 @@ class CorrFile(h5py.File):
             if type_.value in self:
                 do_dec(type_)
 
+    @property
+    def num_moltype(self):
+        return self.buffer.numMol.size
+
+    @property
+    def num_pairtype(self):
+        ntype = self.num_moltype
+        return ntype * (ntype + 1) // 2
+
+    @property
+    def num_alltype(self):
+        return self.num_moltype + self.num_pairtype
+
+    @property
+    def zz(self):
+        """
+        Charge product for each component
+
+        Eg. for NaCl, zz = [Na+^2, Cl-^2, Na+Na+, Na+Cl-, Cl-Cl-]
+                         = [1, 1, 1, -1, 1]
+        """
+        zz = np.empty(self.num_alltype, dtype=np.int)
+        for i in range(self.num_moltype):
+            zz[i] = self.buffer.charge[i] ** 2
+            for j in range(i, self.num_moltype):
+                zz[self.num_moltype +
+                   _get_pairtype_index(i, j, self.num_moltype)] = (
+                           self.buffer.charge[i] * self.buffer.charge[j])
+        return zz
+
+    @property
+    def ww(self):
+        """
+        Weight for each component considering the double cross terms
+
+        Eg. for NaCl, ww = [1, 1, 1, 2, 1]
+        """
+        ww = np.ones(self.num_alltype, dtype=np.int)
+        for i in range(self.num_moltype):
+            for j in range(i, self.num_moltype):
+                if i == j:
+                    ww[self.num_moltype +
+                       _get_pairtype_index(i, j, self.num_moltype)] = 1
+                else:
+                    ww[self.num_moltype +
+                       _get_pairtype_index(i, j, self.num_moltype)] = 2
+        return ww
+
     def _cal_cesaro(self):
         """
         Calculate Cesaro data
@@ -99,6 +147,13 @@ class CorrFile(h5py.File):
 
         # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
         self.buffer.nDCesaro_unit = np.string_(
+                self.buffer.nCorr_unit.decode().split()[0])
+
+        self.buffer.nDTotalCesaro = np.sum(
+                self.buffer.nDCesaro *
+                (self.zz * self.ww)[:, np.newaxis], axis=0)
+
+        self.buffer.nDTotalCesaro_unit = np.string_(
                 self.buffer.nCorr_unit.decode().split()[0])
 
         def do_dec(buf):
@@ -150,7 +205,7 @@ class CorrFile(h5py.File):
         buf.decPairCount = buf.decPairCount[:, sel_dec]
 
     def _intersect_buffer(self, new_file):
-        s_sel, n_sel = _get_inner_index(
+        s_sel, n_sel = _get_inner_sel(
                 self.buffer.timeLags, new_file.buffer.timeLags)
 
         self._shrink_corr_buffer(s_sel)
@@ -160,7 +215,7 @@ class CorrFile(h5py.File):
         def do_dec(dectype):
             sb_dec = getattr(self.buffer, dectype.value)
             nb_dec = getattr(new_file.buffer, dectype.value)
-            s_sel_dec, n_sel_dec = _get_inner_index(
+            s_sel_dec, n_sel_dec = _get_inner_sel(
                 sb_dec.decBins, nb_dec.decBins)
 
             self._shrink_dec_buffer(dectype, s_sel, s_sel_dec)
@@ -191,6 +246,10 @@ class DecondFile(CorrFile):
         else:
             self.buffer.numSample = 0  # initialize empty data
 
+    @property
+    def fit_sel(self):
+        return _fit_to_sel(self.buffer.fit, self.buffer.timeLags)
+
     def _read_decond_buffer(self):
         self.buffer.numSample = self['numSample'][...]
         self.buffer.volume_err = self['volume_err'][...]
@@ -198,14 +257,14 @@ class DecondFile(CorrFile):
         self.buffer.nDCesaro = self['nDCesaro'][...]
         self.buffer.nDCesaro_err = self['nDCesaro_err'][...]
         self.buffer.nDCesaro_unit = self['nDCesaro'].attrs['unit']
+        self.buffer.nDTotalCesaro = self['nDTotalCesaro'][...]
+        self.buffer.nDTotalCesaro_err = self['nDTotalCesaro_err'][...]
+        self.buffer.nDTotalCesaro_unit = self['nDTotalCesaro'].attrs['unit']
         self.buffer.fit = self['fit'][...]
         self.buffer.fit_unit = self['fit'].attrs['unit']
 #        self.buffer.nD = h5g_to_dict(self['nD'])
 #        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
 #        self.buffer.nD_unit = self['nD'].attrs['unit']
-#        self.buffer.nDCesaroTotal = self['nDCesaroTotal'][...]
-#        self.buffer.nDCesaroTotal_err = self['nDCesaroTotal_err'][...]
-#        self.buffer.nDCesaroTotal_unit = self['nDCesaroTotal'].attrs['unit']
 #        self.buffer.nDTotal = h5g_to_dict(self['nDTotal'])
 #        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
 #        self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
@@ -248,6 +307,7 @@ class DecondFile(CorrFile):
             init_Err('volume')
             init_Err('nCorr')
             init_Err('nDCesaro')
+            init_Err('nDTotalCesaro')
 
             def init_decErr(buf):
                 num_sample = self.buffer.numSample
@@ -277,6 +337,8 @@ class DecondFile(CorrFile):
                                               self.buffer.numSample)
             self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nDCesaro_err,
                                                  self.buffer.numSample)
+            self.buffer.nDTotalCesaro_m2 = _err_to_m2(
+                    self.buffer.nDTotalCesaro_err, self.buffer.numSample)
 
             def init_dec_m2(buf):
                 num_sample = self.buffer.numSample
@@ -348,9 +410,6 @@ class DecondFile(CorrFile):
                 setattr(buf, data_name, mean)
                 setattr(buf, data_name + '_m2', m2)
 
-            # it is important to explicitly extend the sum_weight dimension
-            # by [..., np.newaxis], otherwis, numpy will broadcast it
-            # wrongly when the dimension of sum_weight is [N, N] (square)
             setattr(buf, data_name + '_err', _m2_to_err(
                 m2, self.buffer.numSample,
                 sum_weight / self.buffer.numSample))
@@ -374,6 +433,7 @@ class DecondFile(CorrFile):
                 add_data('volume', f.buffer.volume)
                 add_data('nCorr', f.buffer.nCorr)
                 add_data('nDCesaro', f.buffer.nDCesaro)
+                add_data('nDTotalCesaro', f.buffer.nDTotalCesaro)
 
                 for type_ in DecType:
                     if getattr(self.buffer, type_.value) is not None:
@@ -389,6 +449,10 @@ class DecondFile(CorrFile):
         self.buffer.nDCesaro = self.buffer.nDCesaro[..., sel]
         self.buffer.nDCesaro_m2 = self.buffer.nDCesaro_m2[..., sel]
         self.buffer.nDCesaro_err = self.buffer.nDCesaro_err[..., sel]
+        self.buffer.nDTotalCesaro = self.buffer.nDTotalCesaro[..., sel]
+        self.buffer.nDTotalCesaro_m2 = self.buffer.nDTotalCesaro_m2[..., sel]
+        self.buffer.nDTotalCesaro_err = self.buffer.nDTotalCesaro_err[...,
+                                                                      sel]
 
     def _shrink_dec_buffer(self, dectype, sel, sel_dec):
         super()._shrink_dec_buffer(dectype, sel, sel_dec)
@@ -403,12 +467,52 @@ class DecondFile(CorrFile):
         buf.decDCesaro_err = buf.decDCesaro_err[:, sel_dec, sel]
 
     def _fit_cesaro(self, fit=None):
+        buf = self.buffer
         if fit is None:
-            if not hasattr(self.buffer, 'fit'):
+            try:
+                buf.fit = np.asarray(buf.fit)
+            except AttributeError:
                 raise Error("No fit ranges have been provided")
+            fit = buf.fit
         else:
-            fit.sort()
-            self.buffer.fit = fit
+            fit = sorted(fit, key=lambda x: x[0])
+            fit = np.asarray(fit)
+            buf.fit = fit
+
+        def fit_data(data_name):
+            fit_sel = self.fit_sel
+            data_cesaro = getattr(buf, data_name + 'Cesaro')
+            data_fit = np.empty((len(fit_sel), self.num_alltype))
+            for i, sel in enumerate(fit_sel):
+                if data_cesaro.ndim == 1:
+                    data_fit[i] = np.polyfit(buf.timeLags[sel],
+                                             data_cesaro[sel], 1)[0]
+                elif data_cesaro.ndim == 2:
+                    data_fit[i] = np.polyfit(buf.timeLags[sel],
+                                             data_cesaro[:, sel].T, 1)[0, :]
+                else:
+                    raise Error("Rank over 2 not implemented for fit_data")
+
+            setattr(buf, data_name, data_fit)
+#            setattr(buf, data_name + '_err', data_err)
+
+            unit_list = buf.nCorr_unit.decode().split()
+            unit_L2 = unit_list[0]
+            unit_T = unit_list[1].split(sep='$')[0]
+            unit_T_1 = "${0}^{{-1}}$".format(unit_T)
+            unit = unit_L2 + ' ' + unit_T_1
+            setattr(buf, data_name + '_unit', np.string_(unit))
+
+        fit_data('nD')
+        fit_data('nDTotal')
+
+#         def fit_dec_data(dec_buf, data_name):
+#             pass
+
+#         for dectype in DecType:
+#             dec_buf = getattr(buf, dectype.value)
+#             if dec_buf is not None:
+#                 fit_dec_data(dec_buf, 'decD')
 
     def _write_buffer(self):
         super()._write_buffer()
@@ -418,12 +522,13 @@ class DecondFile(CorrFile):
         self['nDCesaro'] = self.buffer.nDCesaro
         self['nDCesaro_err'] = self.buffer.nDCesaro_err
         self['nDCesaro'].attrs['unit'] = self.buffer.nDCesaro_unit
+        self['nDTotalCesaro'] = self.buffer.nDTotalCesaro
+        self['nDTotalCesaro_err'] = self.buffer.nDTotalCesaro_err
+        self['nDTotalCesaro'].attrs['unit'] = self.buffer.nDTotalCesaro_unit
         self['fit'] = self.buffer.fit
         self['fit'].attrs['unit'] = self.buffer.timeLags_unit
 #        self['nD'] = self.buffer.nD
 #        self['nD_err'] = self.buffer.nD_err
-#        self['nDCesaroTotal'] = self.buffer.nDCesaroTotal
-#        self['nDCesaroTotal_err'] = self.buffer.nDCesaroTotal_err
 #        self['nDTotal'] = self.buffer.nDTotal
 #        self['nDTotal_err'] = self.buffer.nDTotal_err
 
@@ -460,10 +565,11 @@ def _err_to_m2(err, n, w=None):
         if w is None:
             return np.square(err) * n * (n - 1)
         else:
-            try:
-                return np.square(err) * w * n * (n - 1)
-            except ValueError:
-                return np.square(err) * w[..., np.newaxis] * n * (n - 1)
+            # it is important to explicitly extend the dimension of weight, w,
+            # by [..., np.newaxis], otherwise, numpy will broadcast it
+            # wrongly when the dimension of m2 and w are [N, N, N] and [N, N],
+            # respectivly.
+            return np.square(err) * w[..., np.newaxis] * n * (n - 1)
     else:
         return np.zeros_like(err)
 
@@ -478,12 +584,20 @@ def _m2_to_err(m2, n, w=None):
         if w is None:
             return np.sqrt(m2 / ((n - 1) * n))
         else:
+            # it is important to explicitly extend the dimension of weight, w,
+            # by [..., np.newaxis], otherwise, numpy will broadcast it
+            # wrongly when the dimension of m2 and w are [N, N, N] and [N, N],
+            # respectivly.
             return np.sqrt(m2 / ((n - 1) * n * w[..., np.newaxis]))
     else:
         return np.full(m2.shape, np.nan)
 
 
-def _get_inner_index(a, b):
+def _get_inner_sel(a, b):
+    """
+    Return the intersection of a and b in terms of np.s_ with respect to
+    a and b, respectively.
+    """
     awidth = a[1] - a[0]
     bwidth = b[1] - b[0]
     if not np.isclose(awidth, bwidth):
@@ -508,6 +622,41 @@ def _get_inner_index(a, b):
         b_end = round((a[-1] - b[0]) / bwidth)
 
     return np.s_[a_begin:a_end+1], np.s_[b_begin:b_end+1]
+
+
+def _get_pairtype_index(moltype1, moltype2, num_moltype):
+    """
+    Return pairtype from two moltypes
+              c
+        | 1  2  3  4
+      --+------------
+      1 | 1  2  3  4
+        |
+      2 |    5  6  7
+    r   |
+      3 |       8  9
+        |
+      4 |         10
+
+      index(r, c) = r * n + c - r * (r + 1) / 2
+      where n = size(c) = size(r), r <= c
+    """
+    r = min(moltype1, moltype2)
+    c = max(moltype1, moltype2)
+    return r * num_moltype + c - r * (r + 1) / 2
+
+
+def _fit_to_sel(fit, timelags):
+    """
+    Return the selection of type np.s_ corresponding to the fit range
+    """
+    sel = []
+    fit = np.asarray(fit)
+    dt = timelags[1] - timelags[0]
+    for fit_ in fit:
+        begin, end = (fit_ / dt).astype(int)
+        sel.append(np.s_[begin:end])
+    return sel
 
 
 def new_decond(outname, samples, fit):

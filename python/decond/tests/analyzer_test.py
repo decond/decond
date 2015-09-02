@@ -6,22 +6,22 @@ import os.path
 import h5py
 
 
-def test_get_inner_index():
+def test_get_inner_sel():
     a = np.arange(-1.5, 1, 0.5)    # ----------- [-1.5, -1. , -0.5,  0. , 0.5]
     b = np.arange(-2.5, 0.5, 0.5)  # [-2.5, -2. , -1.5, -1. , -0.5,  0.]
-    a_sel, b_sel = da._get_inner_index(a, b)
+    a_sel, b_sel = da._get_inner_sel(a, b)
     assert((a_sel, b_sel) == (np.s_[0:4], np.s_[2:6]))
     assert(a[a_sel][0] == b[b_sel][0])
     assert(a[a_sel][-1] == b[b_sel][-1])
 
     a = np.arange(-2.0, 0.5, 0.5)  # ----- [-2. , -1.5, -1. , -0.5,  0.]
     b = np.arange(-2.5, 1.0, 0.5)  # [-2.5, -2. , -1.5, -1. , -0.5,  0. , 0.5]
-    a_sel, b_sel = da._get_inner_index(a, b)
+    a_sel, b_sel = da._get_inner_sel(a, b)
     assert((a_sel, b_sel) == (np.s_[0:5], np.s_[1:6]))
     assert(a[a_sel][0] == b[b_sel][0])
     assert(a[a_sel][-1] == b[b_sel][-1])
 
-    print("test_get_inner_index: pass")
+    print("test_get_inner_sel: pass")
 
 
 def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
@@ -285,7 +285,7 @@ def cal_mean_sem(files):
 def rand_fit(timeLags):
     dt = timeLags[1] - timeLags[0]
     begin_idx = np.random.randint(np.round(timeLags.size * 0.8))
-    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 1
+    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 2
     assert(end_idx > begin_idx)
     return (begin_idx * dt, end_idx * dt)
 
