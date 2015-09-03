@@ -64,6 +64,8 @@ class CorrFile(h5py.File):
         self.buffer.numMol = self['numMol'][...]
         self.buffer.volume = self['volume'][...]
         self.buffer.volume_unit = self['volume'].attrs['unit']
+        self.buffer.temperature = self['temperature'][...]
+        self.buffer.temperature_unit = self['temperature'].attrs['unit']
         self.buffer.timeLags = self['timeLags'][...]
         self.buffer.timeLags_unit = self['timeLags'].attrs['unit']
         self.buffer.timeLags_width = (self.buffer.timeLags[1] -
@@ -175,6 +177,8 @@ class CorrFile(h5py.File):
         self['numMol'] = self.buffer.numMol
         self['volume'] = self.buffer.volume
         self['volume'].attrs['unit'] = self.buffer.volume_unit
+        self['temperature'] = self.buffer.temperature
+        self['temperature'].attrs['unit'] = self.buffer.temperature_unit
         self['timeLags'] = self.buffer.timeLags
         self['timeLags'].attrs['unit'] = self.buffer.timeLags_unit
         self['nCorr'] = self.buffer.nCorr
@@ -253,6 +257,7 @@ class DecondFile(CorrFile):
     def _read_decond_buffer(self):
         self.buffer.numSample = self['numSample'][...]
         self.buffer.volume_err = self['volume_err'][...]
+        self.buffer.temperature_err = self['temperature_err'][...]
         self.buffer.nCorr_err = self['nCorr_err'][...]
         self.buffer.nDCesaro = self['nDCesaro'][...]
         self.buffer.nDCesaro_err = self['nDCesaro_err'][...]
@@ -305,6 +310,7 @@ class DecondFile(CorrFile):
                                    self.buffer.numSample))
 
             init_Err('volume')
+            init_Err('temperature')
             init_Err('nCorr')
             init_Err('nDCesaro')
             init_Err('nDTotalCesaro')
@@ -333,6 +339,8 @@ class DecondFile(CorrFile):
             # not new file, buffer should have already been loaded
             self.buffer.volume_m2 = _err_to_m2(self.buffer.volume_err,
                                                self.buffer.numSample)
+            self.buffer.temperature_m2 = _err_to_m2(
+                    self.buffer.temperature_err, self.buffer.numSample)
             self.buffer.nCorr_m2 = _err_to_m2(self.buffer.nCorr_err,
                                               self.buffer.numSample)
             self.buffer.nDCesaro_m2 = _err_to_m2(self.buffer.nDCesaro_err,
@@ -431,6 +439,7 @@ class DecondFile(CorrFile):
                 f._cal_cesaro()
 
                 add_data('volume', f.buffer.volume)
+                add_data('temperature', f.buffer.temperature)
                 add_data('nCorr', f.buffer.nCorr)
                 add_data('nDCesaro', f.buffer.nDCesaro)
                 add_data('nDTotalCesaro', f.buffer.nDTotalCesaro)
@@ -576,6 +585,7 @@ class DecondFile(CorrFile):
         super()._write_buffer()
         self['numSample'] = self.buffer.numSample
         self['volume_err'] = self.buffer.volume_err
+        self['temperature_err'] = self.buffer.temperature_err
         self['nCorr_err'] = self.buffer.nCorr_err
         self['nDCesaro'] = self.buffer.nDCesaro
         self['nDCesaro_err'] = self.buffer.nDCesaro_err

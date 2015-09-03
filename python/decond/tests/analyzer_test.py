@@ -27,7 +27,8 @@ def test_get_inner_sel():
 def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
             r_decbins=None, base_r_decbins=None,
             e_decbins=None, base_e_decbins=None,
-            charge=None, numMol=None, volume=None, base_volume=None):
+            charge=None, numMol=None, volume=None, base_volume=None,
+            temperature=None, base_temperature=None):
 
     def rand_axis(begin, end, scale, begin_fixed=False, rand_range=None):
         if rand_range is None:
@@ -114,6 +115,14 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
                    base_volume * 0.05)
     volume_unit = np.string_('nm$^3$')
 
+    if temperature is None:
+        if base_temperature is None:
+            base_temperature = 300.0
+        temperature = base_temperature
+        temperature += ((base_temperature * 0.02) * np.random.rand() * 2 + 1 -
+                   base_temperature * 0.02)
+    temperature_unit = np.string_('K')
+
     if os.path.exists(filename):
         os.remove(filename)
 
@@ -156,6 +165,8 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
         f.buffer.numMol = numMol
         f.buffer.volume = volume
         f.buffer.volume_unit = volume_unit
+        f.buffer.temperature = temperature
+        f.buffer.temperature_unit = temperature_unit
         f.buffer.timeLags = timeLags
         f.buffer.timeLags_unit = timeLags_unit
         f.buffer.nCorr = nCorr
