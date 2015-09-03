@@ -263,10 +263,10 @@ class DecondFile(CorrFile):
         self.buffer.fit = self['fit'][...]
         self.buffer.fit_unit = self['fit'].attrs['unit']
         self.buffer.nD = self['nD'][...]
-#        self.buffer.nD_err = h5g_to_dict(self['nD_err'])
+        self.buffer.nD_err = self['nD_err'][...]
         self.buffer.nD_unit = self['nD'].attrs['unit']
         self.buffer.nDTotal = self['nDTotal'][...]
-#        self.buffer.nDTotal_err = h5g_to_dict(self['nDTotal_err'])
+        self.buffer.nDTotal_err = self['nDTotal_err'][...]
         self.buffer.nDTotal_unit = self['nDTotal'].attrs['unit']
 
         def do_dec(dectype):
@@ -482,21 +482,40 @@ class DecondFile(CorrFile):
         def fit_data(data_name):
             fit_sel = self.fit_sel
             data_cesaro = getattr(buf, data_name + 'Cesaro')
+            data_cesaro_err = getattr(buf, data_name + 'Cesaro_err')
+            weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
             if data_cesaro.ndim == 1:  # nDTotal
                 data_fit = np.empty(len(fit_sel))
+#                 err = np.empty(len(fit_sel))
                 for i, sel in enumerate(fit_sel):
-                        data_fit[i] = np.polyfit(buf.timeLags[sel],
-                                                 data_cesaro[sel], 1)[0]
+                    fit_coef, fit_cov = np.polyfit(buf.timeLags[sel],
+                                             data_cesaro[sel], 1, w=weight[sel], cov=True)
+                    data_fit[i] = fit_coef[0]
+#                     print('fit_cov=', fit_cov[0,0])
+#                     err[i] = np.sqrt(fit_cov[0, 0] / buf.numSample)
             elif data_cesaro.ndim == 2:  # nD
                 data_fit = np.empty((len(fit_sel), self.num_alltype))
+                err = np.empty_like(data_fit)
                 for i, sel in enumerate(fit_sel):
-                    data_fit[i] = np.polyfit(buf.timeLags[sel],
-                                             data_cesaro[:, sel].T, 1)[0, :]
+                    for t in range(self.num_alltype):
+                        fit_coef, fit_cov = np.polyfit(buf.timeLags[sel],
+                                 data_cesaro[t, sel], 1, w=weight[t, sel], cov=True)
+                        data_fit[i, t] = fit_coef[0]
+#                         print('fit_cov=', fit_cov[0,0])
+#                         err[i, t] = np.sqrt(fit_cov[0, 0] / buf.numSample)
             else:
                 raise Error("Rank over 2 not implemented for fit_data")
 
             setattr(buf, data_name, data_fit)
-#            setattr(buf, data_name + '_err', data_err)
+
+            fit_err, fit_slope = _cesaro_to_fit_err(
+                    buf.timeLags, data_cesaro, data_cesaro_err, buf.numSample,
+                    fit_sel)
+
+            #  TODO: Understand the cause of this difference
+            print("diff = ", np.mean(np.abs(fit_slope - data_fit)))
+
+            setattr(buf, data_name + '_err', fit_err)
 
             unit_list = buf.nCorr_unit.decode().split()
             unit_L2 = unit_list[0]
@@ -530,10 +549,10 @@ class DecondFile(CorrFile):
         self['fit'] = self.buffer.fit
         self['fit'].attrs['unit'] = self.buffer.timeLags_unit
         self['nD'] = self.buffer.nD
-#        self['nD_err'] = self.buffer.nD_err
+        self['nD_err'] = self.buffer.nD_err
         self['nD'].attrs['unit'] = self.buffer.nD_unit
         self['nDTotal'] = self.buffer.nDTotal
-#        self['nDTotal_err'] = self.buffer.nDTotal_err
+        self['nDTotal_err'] = self.buffer.nDTotal_err
         self['nDTotal'].attrs['unit'] = self.buffer.nDTotal_unit
 
         def do_dec(dectype):
@@ -595,6 +614,19 @@ def _m2_to_err(m2, n, w=None):
             return np.sqrt(m2 / ((n - 1) * n * w[..., np.newaxis]))
     else:
         return np.full(m2.shape, np.nan)
+
+
+def _err_to_var(err, n):
+    """
+    err: standard error of the mean
+    n: number of samples
+    """
+    if n > 1:
+        err = np.square(err) * n
+        err[err == 0] = np.nan
+        return err
+    else:
+        return np.full(err.shape, np.nan)
 
 
 def _get_inner_sel(a, b):
@@ -661,6 +693,39 @@ def _fit_to_sel(fit, timelags):
         begin, end = (fit_ / dt).astype(int)
         sel.append(np.s_[begin:end])
     return sel
+
+
+def _cesaro_to_fit_err(timelags, cesaro, cesaro_err, num_sample, fit):
+    if cesaro.ndim == 1:  # nDTotal
+        fit_err = np.empty(len(fit))
+    elif cesaro.ndim == 2:  # nD
+        fit_err = np.empty((len(fit), cesaro.shape[0]))
+
+    fit_slope = np.empty_like(fit_err)
+    cesaro_var = _err_to_var(cesaro_err, num_sample)
+    for i, fit_ in enumerate(fit):
+        # [type, rBins, timeLags] or [type, timeLags]
+        rec_sig2 = 1 / cesaro_var[..., fit_]
+        # [type, rBins] or [type]
+        S = np.sum(rec_sig2, -1)
+        # [type, rBins] or [type]
+        Sx = np.sum(timelags[fit_] * rec_sig2, -1)
+        # [type, rBins] or [type]
+        Sxx = np.sum(timelags[fit_]**2 * rec_sig2, -1)
+        # [type, rBins] or [type]
+        Sy = np.sum(cesaro[..., fit_] * rec_sig2, -1)
+        # [type, rBins] or [type]
+        Sxy = np.sum(timelags[fit_] * cesaro[..., fit_] * rec_sig2, -1)
+
+        delta = S * Sxx - Sx * Sx
+
+        # TODO: verifify
+        #fit_err[i] = np.sqrt(S / delta)  # previous decond version
+        fit_err[i] = np.sqrt(S / delta / num_sample)
+        # can be used for double check
+        fit_slope[i] = (S * Sxy - Sx * Sy) / delta
+
+    return fit_err, fit_slope
 
 
 def new_decond(outname, samples, fit):

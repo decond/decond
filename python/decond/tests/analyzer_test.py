@@ -42,7 +42,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
 
     if timeLags is None:
         if base_timeLags is None:
-            end = 10
+            end = 100
             scale = 0.1
         else:
             end = base_timeLags.size
@@ -284,9 +284,10 @@ def cal_mean_sem(files):
 
 def rand_fit(timeLags):
     dt = timeLags[1] - timeLags[0]
-    begin_idx = np.random.randint(np.round(timeLags.size * 0.8))
-    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 2
-    assert(end_idx > begin_idx)
+    begin_idx = np.random.random_integers(np.round(timeLags.size * 0.7))
+    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 10
+    assert(begin_idx > 0)
+    assert(end_idx - begin_idx > 1)
     return (begin_idx * dt, end_idx * dt)
 
 
@@ -355,7 +356,7 @@ def test_new_decond():
 
 
 extend_file = ['corr_extend1_test.c5', 'corr_extend2_test.c5']
-decond_extend = ['decond_extend1_test.d5', 'decond_extend2_test.d5']
+decond_extend = ['decond_extend_test.d5', 'decond_extend_changefit_test.d5']
 
 
 def test_extend_decond():
@@ -395,7 +396,7 @@ def test_extend_decond():
     print("test_extend_decond: pass")
 
 
-decond_fit = 'decond_test_change_fit.d5'
+decond_fit = 'decond_changefit_test.d5'
 
 
 def test_fit_decond():
