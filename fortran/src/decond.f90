@@ -1,7 +1,7 @@
 program decond
   use mpiproc
   use HDF5
-  use utility, only: handle, getMolTypePairIndexFromTypes
+  use utility, only: handle, getMolTypePairIndexFromTypes, newunit
   use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only: open_top, close_top, read_top, system, print_sys
   use correlation
@@ -17,15 +17,15 @@ program decond
 
   implicit none
   character(len=*), parameter :: DECOND_VERSION = "0.4.0"
-  integer, parameter :: NUM_POSITIONAL_ARG = 2, LEAST_REQUIRED_NUM_ARG = 6
+  integer, parameter :: NUM_POSITIONAL_ARG = 3, LEAST_REQUIRED_NUM_ARG = 7
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
-  character(len=128) :: outCorrFilename, dataFilename, topFilename, arg
+  character(len=128) :: outCorrFilename, dataFilename, logFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, stat, numMolType, numFrameRead, numFrame_k
   integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip, numMolTypePairAll
   integer, allocatable :: charge(:), frameCount(:), start_index(:)
-  real(8) :: cell(3), timestep, tmp_r
+  real(8) :: cell(3), timestep, tmp_r, temperature
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom) 
   real(8), allocatable :: vel(:, :, :)
@@ -76,6 +76,10 @@ program decond
         dataFilename = arg
         i = i + 1
       case (2)
+        logFilename = arg
+        i = i + 1
+        temperature = getTfromLog(logFilename)
+      case (3)
         read(arg, *) numFrame ! in the unit of frame number
         i = i + 1
       case default
@@ -275,6 +279,8 @@ program decond
   if (myrank == root) then
     write(*,*) "outFile = ", outCorrFilename
     write(*,*) "inFile.trr = ", dataFilename
+    write(*,*) "logFile = ", logFilename
+    write(*,*) "temperature = ", temperature
     if (is_pa_mode) write(*,*) "topFile.top = ", topFilename
     write(*,*) "numFrame= ", numFrame
     write(*,*) "maxLag = ", maxLag 
@@ -724,6 +730,7 @@ contains
                                    OUT_TYPE = "CorrFile"
     !/Dataset
     character(len=*), parameter :: DSETNAME_VOLUME = "volume", &
+                                   DSETNAME_TEMP = "temperature", &
                                    DSETNAME_CHARGE = "charge", &
                                    DSETNAME_NUMMOL = "numMol", &
                                    DSETNAME_TIMELAGS = "timeLags", &
@@ -763,6 +770,14 @@ contains
     call H5Dclose_f(dset_id, ierr)
     call H5Sclose_f(space_id, ierr)
     call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_VOLUME, ATTR_UNIT, "nm$^3$", ierr)
+
+    !temperature
+    call H5Screate_f(H5S_SCALAR_F, space_id, ierr)
+    call H5Dcreate_f(outCorrFileid, DSETNAME_TEMP, H5T_NATIVE_DOUBLE, space_id, dset_id, ierr)
+    call H5Dwrite_f(dset_id, H5T_NATIVE_DOUBLE, temperature, [0_hsize_t], ierr)
+    call H5Dclose_f(dset_id, ierr)
+    call H5Sclose_f(space_id, ierr)
+    call H5LTset_attribute_string_f(outCorrFileid, DSETNAME_TEMP, ATTR_UNIT, "K", ierr)
 
     !charge
     call H5LTmake_dataset_int_f(outCorrFileid, DSETNAME_CHARGE, 1, [size(charge, kind=hsize_t)], charge, ierr)
@@ -885,9 +900,51 @@ contains
     end do
   end function count_arg
 
+  real(8) function getTfromLog(logFilename)
+    implicit none
+    character(len=*), intent(in) :: logFilename
+    integer :: logio, idx, temp_idx, stat
+    character(len=*), parameter :: LINE_LEN_STR = '128'
+    integer, parameter :: RECORD_LEN = 15
+    character(len=128) :: line
+    logical :: found_average
+
+    found_average = .false.
+    open(unit=newunit(logio), file=logFilename, status='old', action="READ", form="FORMATTED")
+    do while(.true.)
+      read(logio, "(A"//LINE_LEN_STR//")", iostat=stat) line
+      if (stat > 0) then
+        write(*,*) "Error reading line"
+        call exit(1)
+      else if (stat < 0) then
+        write(*,*) "Unable to find 'A V E R A G E S' in logfile ", trim(adjustl(logFilename))
+        call exit(1)
+      end if
+
+      if (found_average) then
+        idx = index(line, "Temperature")
+        if (idx > 0) then
+          temp_idx = ceiling(real(idx, 8) / RECORD_LEN)
+          read(logio, "(A"//LINE_LEN_STR//")", iostat=stat) line
+          if (stat > 0) then
+            write(*,*) "Error reading temperature record"
+            call exit(1)
+          end if
+          read(line(RECORD_LEN * (temp_idx - 1) + 1: RECORD_LEN * temp_idx), *) getTfromLog
+          return
+        end if
+      else
+        idx = index(line, "A V E R A G E S")
+        if (idx > 0) then
+          found_average = .true.
+        end if
+      end if
+    end do
+  end function getTfromLog
+
   subroutine print_usage()
     implicit none
-    write(*, *) "usage: $ decompose_mpi <infile.trr> <numFrameToRead> <-pa | -pm ...> [options]"
+    write(*, *) "usage: $ decond <trrfile> <logfile> <numFrameToRead> <-pa | -pm ...> [options]"
     write(*, *) "options: "
     write(*, *) "  -pa <topfile.top> <molecule1> <start_index1> [<molecule2> <start_index2>...]:"
     write(*, *) "   read parameters from topology file. ignored when -pm is given"
@@ -900,7 +957,7 @@ contains
     write(*, *) "  -s <skip>: skip=1 means no frames are skipped, which is default."
     write(*, *) "             skip=2 means reading every 2nd frame."
     write(*, *) 
-    write(*, *) "  -l <maxlag>: maximum time lag. default = <numFrameToRead - 1>"
+    write(*, *) "  -l <maxlag>: maximum time lag in frames. default = <numFrameToRead - 1>"
     write(*, *) 
     write(*, *) "  -sd: do spatial decomposition. default no sd."
     write(*, *)
