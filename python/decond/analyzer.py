@@ -494,7 +494,10 @@ class DecondFile(CorrFile):
         def fit_data(data_name):
             data_cesaro = getattr(buf, data_name + 'Cesaro')
             data_cesaro_err = getattr(buf, data_name + 'Cesaro_err')
-            weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
+            if buf.numSample > 1:
+                weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
+            else:
+                weight = np.ones_like(data_cesaro_err)
             if data_cesaro.ndim == 1:  # nDTotal
                 data_fit = np.empty(len(fit_sel))
 #                 err = np.empty(len(fit_sel))
@@ -543,8 +546,10 @@ class DecondFile(CorrFile):
         def fit_dec_data(dec_buf, data_name):
             data_cesaro = getattr(dec_buf, data_name + 'Cesaro')
             data_cesaro_err = getattr(dec_buf, data_name + 'Cesaro_err')
-
-            weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
+            if buf.numSample > 1:
+                weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
+            else:
+                weight = np.ones_like(data_cesaro_err)
             data_fit = np.empty((len(fit_sel), self.num_pairtype,
                                  dec_buf.decBins.size))
 #            err = np.empty_like(data_fit)
@@ -735,8 +740,16 @@ def _fit_to_sel(fit, timelags):
     """
     sel = []
     fit = np.asarray(fit)
+    if fit.ndim != 2 or fit.shape[1] != 2:
+        raise Error("fit should be of shape (N, 2)")
+
+    if np.any(fit < timelags[0]) or np.any(fit > timelags[-1]):
+        raise Error("Unreasonable fit, out of timelags range: ".format(fit))
+
     dt = timelags[1] - timelags[0]
     for fit_ in fit:
+        if fit_[1] <= fit_[0]:
+            raise Error("Unreasonable fit, end <= begin: {0}".format(fit_))
         begin, end = (fit_ / dt).astype(int)
         sel.append(np.s_[begin:end])
     return sel
