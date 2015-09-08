@@ -1,7 +1,7 @@
 module energy_dec
   use mpiproc
   implicit none
-  integer :: num_eBin
+  integer :: num_eBin, skipEng
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
   character(len=*), parameter :: ENGDSET_NAME = "energy"
   character(len=128) :: engtrajFilename
@@ -19,13 +19,14 @@ contains
   subroutine ed_init()
     implicit none
     eBinWidth = 0.5
+    skipEng = 1
   end subroutine ed_init
 
-  subroutine ed_readEng(engtrajFilename, numFrame, skip)
+  subroutine ed_readEng(engtrajFilename, numFrame)
     use HDF5
     implicit none
     character(len=*), intent(in) :: engtrajFilename
-    integer, intent(in) :: numFrame, skip
+    integer, intent(in) :: numFrame
     integer(hid_t) :: engtrajFileid
     integer :: r, c, loc, lastLoc, locMax, stat, begin_time
     integer, allocatable :: eBinIndex_single(:)
@@ -71,7 +72,7 @@ contains
           loc = engLocLookupTable(r, c)
           if (loc > lastLoc) then
             ! new location, read new data
-            call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
+            call readPairEng(eng, r, c, engtrajFileid, numFrame)
             engMin = minval(eng)
             engMax = maxval(eng)
             if (isFirstRun) then
@@ -105,7 +106,7 @@ contains
           loc = engLocLookupTable(r, c)
           if (loc > lastLoc) then
             ! new loc, read new data
-            call readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
+            call readPairEng(eng, r, c, engtrajFileid, numFrame)
             call eng2BinIndex(eng, eBinIndex_single)
             eBinIndexAll(:, loc) = eBinIndex_single
             lastLoc = loc
@@ -217,12 +218,12 @@ contains
     if (present(patch)) read(ver(p2+1:), *) patch
   end subroutine parseVersion
 
-  subroutine readPairEng(eng, r, c, engtrajFileid, numFrame, skip)
+  subroutine readPairEng(eng, r, c, engtrajFileid, numFrame)
     use HDF5
     use H5LT
     implicit none
     real(8), intent(out) :: eng(numFrame)
-    integer, intent(in) :: r, c, numFrame, skip
+    integer, intent(in) :: r, c, numFrame
     integer(hid_t), intent(in) :: engtrajFileid
     integer(hid_t) :: dset_id
     integer(hid_t) :: filespace     ! Dataspace identifier in file
@@ -250,9 +251,9 @@ contains
     !  pairIndex(r, c) = (r - 1) * n + c - (r + 1) * r / 2
     !  n = 4 in this example
     pairIndex = getPairIndex(min(r, c), max(r, c), nummol)
-    offset = [skip - 1, pairIndex - 1]
+    offset = [skipEng - 1, pairIndex - 1]
     count = [numFrame, 1]
-    stride = [skip, 1]
+    stride = [skipEng, 1]
     call H5Sselect_hyperslab_f(filespace, H5S_SELECT_SET_F, offset, count, ierr, stride)
 
     ! create memory space

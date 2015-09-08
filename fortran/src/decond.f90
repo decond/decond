@@ -10,7 +10,7 @@ program decond
                          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
                          sd_collectCorr, sd_average, sd_make_rBins, sd_finish
   use energy_dec, only: engtrajFilename, ed_readEng, ed_getBinIndex, ed_binIndex, num_eBin, &
-                        ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, &
+                        ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, skipEng, &
                         ed_collectCorr, ed_average, edPairCount, edCorr, eBinWidth, &
                         ed_init, ed_make_eBins, ed_finish
 
@@ -23,7 +23,7 @@ program decond
   character(len=128) :: outCorrFilename, dataFilename, logFilename, topFilename, arg
   type(handle) :: dataFileHandle, topFileHandle
   integer :: numFrame, maxLag, stat, numMolType, numFrameRead, numFrame_k
-  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip, numMolTypePairAll
+  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skipTrr, numMolTypePairAll
   integer, allocatable :: charge(:), frameCount(:), start_index(:)
   real(8) :: cell(3), timestep, tmp_r, temperature
   real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
@@ -49,7 +49,7 @@ program decond
 
   !default values
   outCorrFilename = 'corr.c5'
-  skip = 1
+  skipTrr = 1
   maxLag = -1
   is_sd = .false.
   is_ed = .false.
@@ -220,10 +220,16 @@ program decond
         call get_command_argument(i, outCorrFilename)
         i = i + 1
 
-      case ('-s')
+      case ('-skiptrr')
         call get_command_argument(i, arg) 
         i = i + 1
-        read(arg, *) skip
+        read(arg, *) skipTrr
+
+      case ('-skipeng')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) skipEng
+
 
       case ('-l')
         call get_command_argument(i, arg) ! in the unit of frame number
@@ -311,7 +317,7 @@ program decond
       write(*,*) "start preparing eBinIndex..."
       starttime = MPI_Wtime()
     end if
-    call ed_readEng(engtrajFilename, numFrame, skip)
+    call ed_readEng(engtrajFilename, numFrame)
     if (myrank == root) then
       endtime = MPI_Wtime()
       write(*,*) "finished preparing eBinIndex. It took ", endtime - starttime, "seconds"
@@ -377,7 +383,7 @@ program decond
     numFrameRead = 0
     call open_trajectory(dataFileHandle, dataFilename)
     do i = 1, numFrame
-      do j = 1, skip-1
+      do j = 1, skipTrr-1
         call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
         if (stat > 0) then
           write(*,*) "Reading trajectory error"
@@ -954,7 +960,10 @@ contains
     write(*, *) 
     write(*, *) "  -o <outfile>: output filename. default = corr.h5"
     write(*, *) 
-    write(*, *) "  -s <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "  -skiptrr <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "             skip=2 means reading every 2nd frame."
+    write(*, *)
+    write(*, *) "  -skipeng <skip>: skip=1 means no frames are skipped, which is default."
     write(*, *) "             skip=2 means reading every 2nd frame."
     write(*, *) 
     write(*, *) "  -l <maxlag>: maximum time lag in frames. default = <numFrameToRead - 1>"
