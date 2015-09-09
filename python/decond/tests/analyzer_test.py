@@ -7,6 +7,7 @@ import h5py
 
 
 def test_get_inner_sel():
+    print("test_get_inner_sel: starting...")
     a = np.arange(-1.5, 1, 0.5)    # ----------- [-1.5, -1. , -0.5,  0. , 0.5]
     b = np.arange(-2.5, 0.5, 0.5)  # [-2.5, -2. , -1.5, -1. , -0.5,  0.]
     a_sel, b_sel = da._get_inner_sel(a, b)
@@ -22,6 +23,35 @@ def test_get_inner_sel():
     assert(a[a_sel][-1] == b[b_sel][-1])
 
     print("test_get_inner_sel: pass")
+
+
+def test_fitlinear():
+    print("test_fitlinear: starting...")
+    x = np.arange(10)
+    y = x
+    ret = da.fitlinear(x, y)  # ret = a, b, siga, sigb, chi2, q
+    assert(ret == (0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+
+    x = np.arange(10)
+    y = 3 + 2 * x
+    ret = da.fitlinear(x, y)  # ret = a, b, siga, sigb, chi2, q
+    assert(ret == (3.0, 2.0, 0.0, 0.0, 0.0, 1.0))
+
+    x = np.arange(10)
+    y = []
+    y.append(3 + 2 * x)
+    y.append(4 + 3 * x)
+    y.append(5 + 4 * x)
+    y = np.array(y)
+    ret = da.fitlinear(x, y)  # ret = a, b, siga, sigb, chi2, q
+    assert(np.all(ret == np.array(((3., 4., 5.),
+                                   (2., 3., 4.),
+                                   (0., 0., 0.),
+                                   (0., 0., 0.),
+                                   (0., 0., 0.),
+                                   (1., 1., 1.)))))
+
+    print("test_fitlinear: pass")
 
 
 def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
@@ -295,11 +325,14 @@ def cal_mean_sem(files):
 
 def rand_fit(timeLags):
     dt = timeLags[1] - timeLags[0]
-    begin_idx = np.random.random_integers(np.round(timeLags.size * 0.7))
-    end_idx = np.random.randint(timeLags.size - begin_idx - 1) + begin_idx + 10
-    assert(begin_idx > 0)
-    assert(end_idx - begin_idx > 1)
-    return (begin_idx * dt, end_idx * dt)
+    while True:
+        begin = np.random.rand() * (timeLags[-1] / 2 - dt) + timeLags[0]
+        end = np.random.rand() * timeLags[-1] / 2 + timeLags[-1] / 2 - dt
+        assert(begin >= timeLags[0])
+        assert(end <= timeLags[-1])
+        if end - begin > dt:
+            break
+    return (begin, end)
 
 
 testfile = ['corr1_test.c5', 'corr2_test.c5', 'corr3_test.c5']
@@ -308,6 +341,7 @@ nummoltype = np.random.random_integers(2, 5)
 
 
 def test_new_decond():
+    print("test_new_decond: starting...")
     for file in testfile:
         rand_c5(file, nummoltype)
 
@@ -371,6 +405,7 @@ decond_extend = ['decond_extend_test.d5', 'decond_extend_changefit_test.d5']
 
 
 def test_extend_decond():
+    print("test_extend_decond: starting...")
     for file in decond_extend:
         if os.path.exists(file):
             os.remove(file)
@@ -378,10 +413,14 @@ def test_extend_decond():
     for file in extend_file:
         rand_c5(file, nummoltype)
 
-    da.extend_decond(decond_extend[0], decondtest, extend_file)
-
-    with da.DecondFile(decond_extend[0]) as f:
-        assert(f.buffer.numSample == len(testfile) + len(extend_file))
+    try:
+        da.extend_decond(decond_extend[0], decondtest, extend_file)
+    except da.FitRangeError:
+        print("  Extension failed: FitRangeError occurred\n"
+              "  Ignore the first part of this test")
+    else:
+        with da.DecondFile(decond_extend[0]) as f:
+            assert(f.buffer.numSample == len(testfile) + len(extend_file))
 
     # get common timeLags
     fs = ([da.CorrFile(file) for file in extend_file] +
@@ -411,6 +450,7 @@ decond_fit = 'decond_changefit_test.d5'
 
 
 def test_fit_decond():
+    print("test_fit_decond: starting...")
     if os.path.exists(decond_fit):
         os.remove(decond_fit)
 

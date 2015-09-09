@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 import scipy.integrate as integrate
+from scipy.special import gammainc
 from enum import Enum
 from ._version import __version__
 
@@ -491,100 +492,46 @@ class DecondFile(CorrFile):
 
         fit_sel = self.fit_sel
 
-        def fit_data(data_name):
+        def fit_data(data_name, unit_ref_name, dectype=None):
+            if dectype is not None:
+                buf = getattr(self.buffer, dectype.value)
+            else:
+                buf = self.buffer
+            num_sample = self.buffer.numSample
+            timeLags = self.buffer.timeLags
+
             data_cesaro = getattr(buf, data_name + 'Cesaro')
             data_cesaro_err = getattr(buf, data_name + 'Cesaro_err')
-            if buf.numSample > 1:
-                weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
+            data_cesaro_std = _err_to_std(data_cesaro_err, num_sample)
+            if num_sample > 1:
+                for sel in fit_sel:
+                    _, data_fit, _, data_std, _, q = fitlinear(
+                            timeLags[sel], data_cesaro[..., sel],
+                            data_cesaro_std[..., sel])
             else:
-                weight = np.ones_like(data_cesaro_err)
-            if data_cesaro.ndim == 1:  # nDTotal
-                data_fit = np.empty(len(fit_sel))
-#                 err = np.empty(len(fit_sel))
-                for i, sel in enumerate(fit_sel):
-                    fit_coef, fit_cov = np.polyfit(
-                            buf.timeLags[sel], data_cesaro[sel], 1,
-                            w=weight[sel], cov=True)
-                    data_fit[i] = fit_coef[0]
-#                     print('fit_cov=', fit_cov[0,0])
-#                     err[i] = np.sqrt(fit_cov[0, 0] / buf.numSample)
-            elif data_cesaro.ndim == 2:  # nD
-                data_fit = np.empty((len(fit_sel), self.num_alltype))
-#                err = np.empty_like(data_fit)
-                for i, sel in enumerate(fit_sel):
-                    for t in range(self.num_alltype):
-                        fit_coef, fit_cov = np.polyfit(
-                                buf.timeLags[sel], data_cesaro[t, sel], 1,
-                                w=weight[t, sel], cov=True)
-                        data_fit[i, t] = fit_coef[0]
-#                         print('fit_cov=', fit_cov[0,0])
-#                         err[i, t] = np.sqrt(fit_cov[0, 0] / buf.numSample)
-            else:
-                raise Error("Rank over 2 not implemented for fit_data")
+                for sel in fit_sel:
+                    _, data_fit, _, data_std, _, _ = fitlinear(
+                            timeLags[sel], data_cesaro[..., sel])
+            data_err = _std_to_err(data_std, num_sample)
 
             setattr(buf, data_name, data_fit)
+            setattr(buf, data_name + '_err', data_err)
 
-            fit_err, fit_slope = _cesaro_to_fit_err(
-                    buf.timeLags, data_cesaro, data_cesaro_err, buf.numSample,
-                    fit_sel)
-
-            #  TODO: Understand the cause of this difference
-            print("diff = ", np.mean(np.abs(fit_slope - data_fit)))
-
-            setattr(buf, data_name + '_err', fit_err)
-
-            unit_list = buf.nCorr_unit.decode().split()
+            unit_ref = getattr(buf, unit_ref_name)
+            unit_list = unit_ref.decode().split()
             unit_L2 = unit_list[0]
             unit_T = unit_list[1].split(sep='$')[0]
             unit_T_1 = "${0}^{{-1}}$".format(unit_T)
             unit = unit_L2 + ' ' + unit_T_1
             setattr(buf, data_name + '_unit', np.string_(unit))
 
-        fit_data('nD')
-        fit_data('nDTotal')
-
-        def fit_dec_data(dec_buf, data_name):
-            data_cesaro = getattr(dec_buf, data_name + 'Cesaro')
-            data_cesaro_err = getattr(dec_buf, data_name + 'Cesaro_err')
-            if buf.numSample > 1:
-                weight = 1 / _err_to_var(data_cesaro_err, buf.numSample)
-            else:
-                weight = np.ones_like(data_cesaro_err)
-            data_fit = np.empty((len(fit_sel), self.num_pairtype,
-                                 dec_buf.decBins.size))
-#            err = np.empty_like(data_fit)
-            for i, sel in enumerate(fit_sel):
-                for t in range(self.num_pairtype):
-                    for r in range(dec_buf.decBins.size):
-                        fit_coef, fit_cov = np.polyfit(
-                                buf.timeLags[sel], data_cesaro[t, r, sel], 1,
-                                w=weight[t, r, sel], cov=True)
-                        data_fit[i, t, r] = fit_coef[0]
-#                         print('fit_cov=', fit_cov[0,0])
-#                         err[i, t] = np.sqrt(fit_cov[0, 0] / buf.numSample)
-
-            setattr(dec_buf, data_name, data_fit)
-
-            fit_err, fit_slope = _cesaro_to_fit_err(
-                    buf.timeLags, data_cesaro, data_cesaro_err, buf.numSample,
-                    fit_sel)
-
-            #  TODO: Understand the cause of this difference
-            print("dec diff = ", np.mean(np.abs(fit_slope - data_fit)))
-
-            setattr(dec_buf, data_name + '_err', fit_err)
-
-            unit_list = dec_buf.decCorr_unit.decode().split()
-            unit_L2 = unit_list[0]
-            unit_T = unit_list[1].split(sep='$')[0]
-            unit_T_1 = "${0}^{{-1}}$".format(unit_T)
-            unit = unit_L2 + ' ' + unit_T_1
-            setattr(dec_buf, data_name + '_unit', np.string_(unit))
+        fit_data('nD', 'nCorr_unit')
+        fit_data('nDTotal', 'nCorr_unit')
 
         for dectype in DecType:
-            dec_buf = getattr(buf, dectype.value)
-            if dec_buf is not None:
-                fit_dec_data(dec_buf, 'decD')
+            dec_buf = hasattr(buf, dectype.value)
+            if hasattr(buf, dectype.value):
+                fit_data('decD', 'decCorr_unit', dectype)
 
     def _write_buffer(self):
         super()._write_buffer()
@@ -627,6 +574,10 @@ class DecondFile(CorrFile):
 
 
 class Error(Exception):
+    pass
+
+
+class FitRangeError(Error):
     pass
 
 
@@ -679,6 +630,28 @@ def _err_to_var(err, n):
         return err
     else:
         return np.full(err.shape, np.nan)
+
+
+def _err_to_std(err, n):
+    """
+    err: standard error of the mean
+    n: number of samples
+    """
+    if n > 1:
+        return err * np.sqrt(n)
+    else:
+        return np.full(err.shape, np.nan)
+
+
+def _std_to_err(std, n):
+    """
+    std: standard deviation
+    n: number of samples
+    """
+    if n > 1:
+        return std / np.sqrt(n)
+    else:
+        return np.full(std.shape, np.nan)
 
 
 def _get_inner_sel(a, b):
@@ -744,7 +717,10 @@ def _fit_to_sel(fit, timelags):
         raise Error("fit should be of shape (N, 2)")
 
     if np.any(fit < timelags[0]) or np.any(fit > timelags[-1]):
-        raise Error("Unreasonable fit, out of timelags range: ".format(fit))
+        raise FitRangeError("fit range is out of timelags range...\n" +
+                    "timelags[0]:{0}, timelags[-1]:{1}\n".format(
+                        timelags[0], timelags[-1]) +
+                    "fit:{0}".format(fit))
 
     dt = timelags[1] - timelags[0]
     for fit_ in fit:
@@ -755,34 +731,71 @@ def _fit_to_sel(fit, timelags):
     return sel
 
 
-def _cesaro_to_fit_err(timelags, cesaro, cesaro_err, num_sample, fit):
-    fit_err = np.empty((len(fit),) + cesaro.shape[:-1])
+def fitlinear(x, y, sig=None):
+    """
+    Given a set of data points x, y with individual standard deviations sig,
+    fit them to a straight line y = a + bx by minimizing chi2.
 
-    fit_slope = np.empty_like(fit_err)
-    cesaro_var = _err_to_var(cesaro_err, num_sample)
-    for i, fit_ in enumerate(fit):
-        # [type, rBins, timeLags] or [type, timeLags] or [timeLags]
-        rec_sig2 = 1 / cesaro_var[..., fit_]
-        # [type, rBins] or [type] or scalar
-        S = np.sum(rec_sig2, -1)
-        # [type, rBins] or [type] or scalar
-        Sx = np.sum(timelags[fit_] * rec_sig2, -1)
-        # [type, rBins] or [type] or scalar
-        Sxx = np.sum(timelags[fit_]**2 * rec_sig2, -1)
-        # [type, rBins] or [type] or scalar
-        Sy = np.sum(cesaro[..., fit_] * rec_sig2, -1)
-        # [type, rBins] or [type] or scalar
-        Sxy = np.sum(timelags[fit_] * cesaro[..., fit_] * rec_sig2, -1)
+    Returned are a,b and their respective probable uncertainties siga and sigb,
+    the chi-square chi2, and the goodness-of-fit probability q (that the fit
+    would have chi2 this large or larger).
+    If no sig is provided, the standard deviations are assumed to be
+    unavailable: q is returned as 1.0 and the normalization of chi2
+    is to unit standard deviation on all points.
 
-        delta = S * Sxx - Sx * Sx
+    Parameters
+    x: 1-dimension
+    y: 1 or more dimensions, fit only the last axis
+    sig (optional): same dimension as y
 
-        # TODO: verifify
-        #  fit_err[i] = np.sqrt(S / delta)  # previous decond version
-        fit_err[i] = np.sqrt(S / delta / num_sample)
-        # can be used for double check
-        fit_slope[i] = (S * Sxy - Sx * Sy) / delta
+    Return:
+    a, b, siga, sigb, chi2, q
+    """
+    if x.ndim != 1:
+        raise Error("x must be one dimensional. x.ndim={0}".format(x.ndim))
+    if x.size is not y.shape[-1]:
+        raise Error("the lengths of the last dimension of x and y do not match"
+                    "\nx.size={0}, y.shape[-1]={1}".format(x.size, y.shape[-1]))
+    if sig is not None:
+        sig2 = sig**2
+        sig2[sig2 == 0] = np.nan  # TODO: not sure if it is a good solution
+        wt = 1 / sig2  # y.shape
+        ss = np.sum(wt, axis=-1)  # y.shape[:-1]
+        sx = np.sum(x * wt, axis=-1)  # y.shape[:-1]
+        sy = np.sum(y * wt, axis=-1)  # y.shape[:-1]
+    else:
+        sx = np.sum(x, axis=-1)  # scalar
+        sy = np.sum(y, axis=-1)  # y.shape[:-1]
+        ss = x.size  # scalar
+    sxoss = sx / ss  # y.shape[:-1] or scalar
+    if sig is not None:
+        t = (x - sxoss[..., np.newaxis]) / sig  # y.shape
+        st2 = np.sum(t * t, axis=-1)  # y.shape[:-1]
+        b = np.sum(t * y / sig, axis=-1)  # y.shape[:-1]
+    else:
+        t = x - sxoss  # x.shape
+        st2 = np.sum(t * t, axis=-1)  # scalar
+        b = np.sum(t * y, axis=-1)  # y.shape[:-1]
 
-    return fit_err, fit_slope
+    b = b / st2  # y.shape[:-1]
+    a = (sy - sx * b) / ss  # y.shape[:-1]
+    siga = np.sqrt((1. + sx * sx / (ss * st2)) / ss)  # y.shape[:-1] or scalar
+    sigb = np.sqrt(1. / st2)  # y.shape[:-1] or scalar
+    q = np.ones(y.shape[:-1])
+    if sig is None:
+        chi2 = np.sum((y - a[..., np.newaxis] - b[..., np.newaxis] * x)**2,
+                      axis=-1)  # y.shape[:-1]
+        sigdat = np.sqrt(chi2 / (x.size - 2))  # y.shape[:-1]
+        siga = siga * sigdat  # y.shape[:-1]
+        sigb = sigb * sigdat  # y.shape[:-1]
+    else:
+        chi2 = np.sum(
+                ((y - a[..., np.newaxis] - b[..., np.newaxis] * x) / sig)**2,
+                axis=-1)  # y.shape[:-1]
+        if x.size > 2:
+            q = gammainc(0.5 * (x.size - 2), 0.5 * chi2)  # y.shape[:-1]
+
+    return a, b, siga, sigb, chi2, q
 
 
 def new_decond(outname, samples, fit):
