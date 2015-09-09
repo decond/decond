@@ -503,15 +503,19 @@ class DecondFile(CorrFile):
             data_cesaro = getattr(buf, data_name + 'Cesaro')
             data_cesaro_err = getattr(buf, data_name + 'Cesaro_err')
             data_cesaro_std = _err_to_std(data_cesaro_err, num_sample)
+            data_fit = np.empty((len(fit_sel),) + data_cesaro.shape[:-1])
+            data_std = np.empty((len(fit_sel),) + data_cesaro.shape[:-1])
+
             if num_sample > 1:
-                for sel in fit_sel:
-                    _, data_fit, _, data_std, _, q = fitlinear(
+                for i, sel in enumerate(fit_sel):
+                    _, data_fit[i], _, data_std[i], _, _ = fitlinear(
                             timeLags[sel], data_cesaro[..., sel],
                             data_cesaro_std[..., sel])
             else:
-                for sel in fit_sel:
-                    _, data_fit, _, data_std, _, _ = fitlinear(
+                for i, sel in enumerate(fit_sel):
+                    _, data_fit[i], _, data_std[i], _, _ = fitlinear(
                             timeLags[sel], data_cesaro[..., sel])
+
             data_err = _std_to_err(data_std, num_sample)
 
             setattr(buf, data_name, data_fit)
@@ -753,7 +757,7 @@ def fitlinear(x, y, sig=None):
     """
     if x.ndim != 1:
         raise Error("x must be one dimensional. x.ndim={0}".format(x.ndim))
-    if x.size is not y.shape[-1]:
+    if x.size != y.shape[-1]:
         raise Error("the lengths of the last dimension of x and y do not match"
                     "\nx.size={0}, y.shape[-1]={1}".format(x.size, y.shape[-1]))
     if sig is not None:
