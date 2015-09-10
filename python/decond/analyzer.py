@@ -136,6 +136,16 @@ class CorrFile(h5py.File):
                        _get_pairtype_index(i, j, self.num_moltype)] = 2
         return ww
 
+    @property
+    def rdf(self):
+        buf = self.buffer
+        sbuf = getattr(buf, DecType.spatial.value)
+        if buf is not None:
+            return paircount_to_rdf(
+                    sbuf.decPairCount, sbuf.decBins, buf.numMol, buf.volume)
+        else:
+            raise Error("No spatialDec is found, so no rdf")
+
     def _cal_cesaro(self):
         """
         Calculate Cesaro data
@@ -799,6 +809,30 @@ def fitlinear(x, y, sig=None):
             q = gammainc(0.5 * (x.size - 2), 0.5 * chi2)  # y.shape[:-1]
 
     return a, b, siga, sigb, chi2, q
+
+
+def paircount_to_rdf(paircount, rbins, nummol, volume):
+    v2 = volume**2
+    pair_density = [n1 * (n2-1) / v2 if e1 == e2 else n1*n2
+                    for (e1, n1) in enumerate(nummol)
+                    for (e2, n2) in enumerate(nummol) if e2 >= e1]
+
+    l_half = volume**(1/3) / 2
+    dr = rbins[1] - rbins[0]
+    dv = 4 * np.pi * dr * rbins**2
+    dvsim = dv.copy()
+    filter = (rbins > l_half) & (rbins < np.sqrt(2) * l_half)
+    dvsim[filter] = 4 * np.pi * dr * rbins[filter] * (3 * l_half -
+                                                      2 * rbins[filter])
+    filter = (rbins >= np.sqrt(2) * l_half)
+    dvsim[filter] = np.nan
+    rho_vdvsim = paircount
+    rho_v = rho_vdvsim / dvsim
+    # rho_dvsim = rho_vdvsim / volume
+    rho = rho_v / volume
+
+    g = rho / pair_density[:, np.newaxis]
+    return g
 
 
 def new_decond(outname, samples, fit):
