@@ -533,7 +533,6 @@ class DecondFile(CorrFile):
         fit_data('nDTotal', 'nCorr_unit')
 
         for dectype in DecType:
-            dec_buf = hasattr(buf, dectype.value)
             if hasattr(buf, dectype.value):
                 fit_data('decD', 'decCorr_unit', dectype)
 
@@ -721,10 +720,10 @@ def _fit_to_sel(fit, timelags):
         raise Error("fit should be of shape (N, 2)")
 
     if np.any(fit < timelags[0]) or np.any(fit > timelags[-1]):
-        raise FitRangeError("fit range is out of timelags range...\n" +
-                    "timelags[0]:{0}, timelags[-1]:{1}\n".format(
-                        timelags[0], timelags[-1]) +
-                    "fit:{0}".format(fit))
+        raise FitRangeError(
+                "fit range is out of timelags range...\n" +
+                "timelags[0]:{0}, timelags[-1]:{1}\n".format(
+                    timelags[0], timelags[-1]) + "fit:{0}".format(fit))
 
     dt = timelags[1] - timelags[0]
     for fit_ in fit:
@@ -758,8 +757,8 @@ def fitlinear(x, y, sig=None):
     if x.ndim != 1:
         raise Error("x must be one dimensional. x.ndim={0}".format(x.ndim))
     if x.size != y.shape[-1]:
-        raise Error("the lengths of the last dimension of x and y do not match"
-                    "\nx.size={0}, y.shape[-1]={1}".format(x.size, y.shape[-1]))
+        raise Error("lengths of the last dimension of x and y do not match\n"
+                    "x.size={0}, y.shape[-1]={1}".format(x.size, y.shape[-1]))
     if sig is not None:
         sig2 = sig**2
         sig2[sig2 == 0] = np.nan  # TODO: not sure if it is a good solution
