@@ -141,7 +141,7 @@ class CorrFile(h5py.File):
         buf = self.buffer
         sbuf = getattr(buf, DecType.spatial.value)
         if buf is not None:
-            return paircount_to_rdf(
+            return _paircount_to_rdf(
                     sbuf.decPairCount, sbuf.decBins, buf.numMol, buf.volume)
         else:
             raise Error("No spatialDec is found, so no rdf")
@@ -811,11 +811,11 @@ def fitlinear(x, y, sig=None):
     return a, b, siga, sigb, chi2, q
 
 
-def paircount_to_rdf(paircount, rbins, nummol, volume):
+def _paircount_to_rdf(paircount, rbins, nummol, volume):
     v2 = volume**2
-    pair_density = [n1 * (n2-1) / v2 if e1 == e2 else n1*n2
-                    for (e1, n1) in enumerate(nummol)
-                    for (e2, n2) in enumerate(nummol) if e2 >= e1]
+    pair_density = np.array([n1 * (n2-1) / v2 if e1 == e2 else n1*n2
+                            for (e1, n1) in enumerate(nummol)
+                            for (e2, n2) in enumerate(nummol) if e2 >= e1])
 
     l_half = volume**(1/3) / 2
     dr = rbins[1] - rbins[0]
@@ -833,6 +833,13 @@ def paircount_to_rdf(paircount, rbins, nummol, volume):
 
     g = rho / pair_density[:, np.newaxis]
     return g
+
+
+def get_rdf(decname):
+    with h5py.File(decname, 'r') as f:
+        gid = f['spatialDec/']
+        return _paircount_to_rdf(gid['decPairCount'][...], gid['decBins'][...],
+                                 f['numMol'][...], f['volume'][...])
 
 
 def new_decond(outname, samples, fit):
