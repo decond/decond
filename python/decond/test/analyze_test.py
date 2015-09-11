@@ -1,5 +1,5 @@
 import numpy as np
-from .. import analyzer as da
+from .. import analyze as da
 from scipy import stats
 import os
 import os.path

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from decond.tests import analyzer_test as at
+from decond.test import analyze_test as at
 import numpy as np
 
 np.seterr(all='raise')

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import argparse
-import decond.analyzer as da
+import decond.analyze as da
 
 DEFAULT_OUTFILENAME = 'decond.d5'
 
