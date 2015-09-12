@@ -149,8 +149,8 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
         if base_temperature is None:
             base_temperature = 300.0
         temperature = base_temperature
-        temperature += ((base_temperature * 0.02) * np.random.rand() * 2 + 1 -
-                   base_temperature * 0.02)
+        temperature += ((base_temperature * 0.02) * np.random.rand() * 2 +
+                        1 - base_temperature * 0.02)
     temperature_unit = np.string_('K')
 
     if os.path.exists(filename):
@@ -461,3 +461,32 @@ def test_fit_decond():
 
     da.fit_decond(decond_fit, decondtest, fit)
     print("test_fit_decond: pass")
+
+
+def test_get_rdf():
+    print("test_get_rdf: starting...")
+    da.get_rdf(decondtest)
+    print("test_get_rdf: pass")
+
+
+def test_get_D():
+    print("test_get_D: starting...")
+    da.get_D(decondtest)
+    print("test_get_D: pass")
+
+
+def test_get_decD():
+    print("test_get_decD: starting...")
+    da.get_decD(decondtest, da.DecType.spatial)
+    da.get_decD(decondtest, da.DecType.energy)
+    print("test_get_decD: pass")
+
+
+def test_get_decsig():
+    print("test_get_decsig: starting...")
+    da.get_decsig(decondtest, da.DecType.spatial)
+    try:
+        da.get_decsig(decondtest, da.DecType.energy)
+    except da.NotImplementedError:
+        print("  NotImplementedError caught")
+    print("test_get_decsig: pass")
