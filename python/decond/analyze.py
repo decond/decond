@@ -948,15 +948,15 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
         nD = f['nD'][...]
         decD, _, _, _, _ = get_decD(decname, dectype, si_unit)
         beta = 1 / (const.k * temperature)
-        decbins = gid['decBins'][...]
+        decBins = gid['decBins'][...]
         paircount = gid['decPairCount'][...]
-        num_decbins = decbins.size
-        bw = decbins[1] - decbins[0]
+        num_decBins = decBins.size
+        bw = decBins[1] - decBins[0]
 
         if sep_nonlocal:
             if dectype is DecType.spatial:
                 if nonlocal_ref is None:
-                    nonlocal_ref_idx = num_decbins / np.sqrt(3)
+                    nonlocal_ref_idx = num_decBins / np.sqrt(3)
                 else:
                     nonlocal_ref_idx = nonlocal_ref / bw
                 if avewidth is None:
@@ -991,13 +991,20 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                   const.e**2)
             sig_nonlocal *= cc
             sig_local *= cc
-            unit = "S m$^{-1}$"
+            decsig_unit = "S m$^{-1}$"
+            if dectype is DecType.spatial:
+                decBins *= const.nano
+                decBins_unit = "m"
+            elif dectype is DecType.energy:
+                decBins *= const.kilo * const.calorie
+                decBins_unit = "joule mol$^{-1}$"
         else:
-            unit = "non-SI unit"
+            decsig_unit = "non-SI unit"
+            decBins_unit = gid['decBins'].attrs['unit'].decode()
 
         sig_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
                     _nD_to_ec_const(temperature, volume, si_unit))
-        decsig = sig_auto[:, :, np.newaxis] * np.ones_like(decbins)
+        decsig = sig_auto[:, :, np.newaxis] * np.ones_like(decBins)
 
         for r in range(num_moltype):
             for c in range(r, num_moltype):
@@ -1008,7 +1015,7 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                     decsig[:, c] += (sig_local[:, idx] +
                                      sig_nonlocal[:, idx, np.newaxis])
 
-        return decsig, unit
+        return decsig, decsig_unit, decBins, decBins_unit
 
 
 def new_decond(outname, samples, fit):
