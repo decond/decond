@@ -867,6 +867,9 @@ def _nD_to_ec_const(temperature, volume, si_unit=True):
 
 
 def get_rdf(decname, si_unit=True):
+    """
+    Return rdf, rbins, rbins_unit
+    """
     with h5py.File(decname, 'r') as f:
         gid = f['spatialDec/']
         rbins = gid['decBins'][...]
@@ -883,6 +886,9 @@ def get_rdf(decname, si_unit=True):
 
 
 def get_D(decname, si_unit=True):
+    """
+    Return D, D_err, unit
+    """
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
@@ -901,6 +907,9 @@ def get_D(decname, si_unit=True):
 
 
 def get_decD(decname, dectype, si_unit=True):
+    """
+    Return decD, decD_err, decD_unit, decBins, decBins_unit
+    """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         decD = gid['decD'][...]  # L^2 T^-1
@@ -925,6 +934,9 @@ def get_decD(decname, dectype, si_unit=True):
 
 def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                avewidth=None, si_unit=True):
+    """
+    Return decsig, unit
+    """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         nummol = f['numMol'][...]
@@ -979,6 +991,9 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                   const.e**2)
             sig_nonlocal *= cc
             sig_local *= cc
+            unit = "S m$^{-1}$"
+        else:
+            unit = "non-SI unit"
 
         sig_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
                     _nD_to_ec_const(temperature, volume, si_unit))
@@ -993,7 +1008,7 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                     decsig[:, c] += (sig_local[:, idx] +
                                      sig_nonlocal[:, idx, np.newaxis])
 
-        return decsig
+        return decsig, unit
 
 
 def new_decond(outname, samples, fit):
