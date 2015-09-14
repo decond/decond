@@ -469,10 +469,10 @@ def test_get_rdf():
     print("test_get_rdf: pass")
 
 
-def test_get_D():
-    print("test_get_D: starting...")
-    da.get_D(decondtest)
-    print("test_get_D: pass")
+def test_get_diffusion():
+    print("test_get_diffusion: starting...")
+    da.get_diffusion(decondtest)
+    print("test_get_diffusion: pass")
 
 
 def test_get_decD():
@@ -482,11 +482,11 @@ def test_get_decD():
     print("test_get_decD: pass")
 
 
-def test_get_decsig():
-    print("test_get_decsig: starting...")
-    da.get_decsig(decondtest, da.DecType.spatial)
+def test_get_ec_dec():
+    print("test_get_ec_dec: starting...")
+    da.get_ec_dec(decondtest, da.DecType.spatial)
     try:
-        da.get_decsig(decondtest, da.DecType.energy)
+        da.get_ec_dec(decondtest, da.DecType.energy)
     except da.NotImplementedError:
         print("  NotImplementedError caught")
-    print("test_get_decsig: pass")
+    print("test_get_ec_dec: pass")

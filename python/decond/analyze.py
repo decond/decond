@@ -858,15 +858,14 @@ def _zz(charge, nummol):
     return zz
 
 
-def _D_to_ec_const(temperature, volume, si_unit=True):
+def _nD_to_ec_const(temperature, volume):
     beta = 1 / (const.k * temperature)
     nD_to_ec = beta / volume
-    if si_unit:
-        nD_to_ec *= const.e**2 / const.nano**3 * (const.nano**2 / const.pico)
+    nD_to_ec *= const.e**2 / const.nano**3 * (const.nano**2 / const.pico)
     return nD_to_ec
 
 
-def get_rdf(decname, si_unit=True):
+def get_rdf(decname):
     """
     Return rdf, rbins, rbins_unit
     """
@@ -875,38 +874,31 @@ def get_rdf(decname, si_unit=True):
         rbins = gid['decBins'][...]
         rdf = _paircount_to_rdf(gid['decPairCount'][...], rbins,
                                 f['numMol'][...], f['volume'][...])
-
-        if si_unit:
-            rbins *= const.nano
-            rbins_unit = "m"
-        else:
-            rbins_unit = gid['decBins'].attrs['unit'].decode()
+        rbins *= const.nano
+        rbins_unit = "m"
 
         return rdf, rbins, rbins_unit
 
 
-def get_D(decname, si_unit=True):
+def get_diffusion(decname):
     """
-    Return D, D_err, unit
+    Return diffusion, diffusion_err, unit
     """
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
         nD = f['nD'][:, :num_moltype]
         nD_err = f['nD_err'][:, :num_moltype]
-        D = nD / nummol  # L^2 T^-1  [fit, num_moltype]
-        D_err = nD_err / nummol
-        if si_unit:
-            cc = const.nano**2 / const.pico
-            D *= cc
-            D_err *= cc
-            unit = "m$^2$ s$^{-1}$"
-        else:
-            unit = f['nD'].attrs['unit'].decode()
-        return D, D_err, unit
+        diffusion = nD / nummol  # L^2 T^-1  [fit, num_moltype]
+        diffusion_err = nD_err / nummol
+        cc = const.nano**2 / const.pico
+        diffusion *= cc
+        diffusion_err *= cc
+        unit = "m$^2$ s$^{-1}$"
+        return diffusion, diffusion_err, unit
 
 
-def get_decD(decname, dectype, si_unit=True):
+def get_decD(decname, dectype):
     """
     Return decD, decD_err, decD_unit, decBins, decBins_unit
     """
@@ -915,27 +907,47 @@ def get_decD(decname, dectype, si_unit=True):
         decD = gid['decD'][...]  # L^2 T^-1
         decD_err = gid['decD_err'][...]
         decBins = gid['decBins'][...]
-        if si_unit:
-            ccD = const.nano**2 / const.pico
-            decD *= ccD
-            decD_err *= ccD
-            decD_unit = "m$^2$ s$^{-1}$"
-            if dectype is DecType.spatial:
-                decBins *= const.nano
-                decBins_unit = "m"
-            elif dectype is DecType.energy:
-                decBins *= const.kilo * const.calorie
-                decBins_unit = "joule mol$^{-1}$"
-        else:
-            decD_unit = gid['decD'].attrs['unit'].decode()
-            decBins_unit = gid['decBins'].attrs['unit'].decode()
+        ccD = const.nano**2 / const.pico
+        decD *= ccD
+        decD_err *= ccD
+        decD_unit = "m$^2$ s$^{-1}$"
+        if dectype is DecType.spatial:
+            decBins *= const.nano
+            decBins_unit = "m"
+        elif dectype is DecType.energy:
+            decBins *= const.kilo * const.calorie
+            decBins_unit = "joule mol$^{-1}$"
+
         return decD, decD_err, decD_unit, decBins, decBins_unit
 
 
-def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
-               avewidth=None, si_unit=True):
+def get_ec(decname):
     """
-    Return decsig, unit
+    Return ec_total, ec_total_err, ec[:num_moltype], ec_err[:num_moltype], unit
+    """
+    with h5py.File(decname, 'r') as f:
+        volume = f['volume'][...]
+        temperature = f['temperature'][...]
+        nDTotal = f['nDTotal'][...]
+        nDTotal_err = f['nDTotal_err'][...]
+        nD = f['nD'][...]
+        nD_err = f['nD_err'][...]
+        nummol = f['numMol'][...]
+        charge = f['charge'][...]
+        zz = _zz(charge, nummol)
+        cc = _nD_to_ec_const(temperature, volume)
+        ec_total = nDTotal * cc
+        ec_totol_err = nDTotal_err * cc
+        ec = nD * zz * cc
+        ec_err = nD_err * zz * cc
+        unit = "S m$^{-1}$"
+        return ec_total, ec_totol_err, ec, ec_err, unit
+
+
+def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
+               avewidth=None):
+    """
+    Return ec_dec, ec_dec_unit, decBins, decBins_unit
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
@@ -946,8 +958,8 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
         num_moltype, _, _ = _numtype(nummol)
         zz = _zz(charge, nummol)
         nD = f['nD'][...]
-        decD, decD_err, _, decBins, decBins_unit = get_decD(
-                decname, dectype, si_unit)
+        decD = gid['decD'][...]  # L^2 T^-1
+        decBins = gid['decBins'][...]
         beta = 1 / (const.k * temperature)
         paircount = gid['decPairCount'][...]
         num_decBins = decBins.size
@@ -964,7 +976,7 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                 avewidth_idx = int(avewidth / bw)
             elif dectype is DecType.energy:
                 raise NotImplementedError(
-                        "decsig is not implemented for DecType.energy yet")
+                        "ec_dec is not implemented for DecType.energy yet")
             else:
                 raise Error("Impossible DecType...")
             decD_nonlocal = np.mean(
@@ -972,49 +984,47 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                          nonlocal_ref_idx - avewidth_idx:
                          nonlocal_ref_idx + avewidth_idx],
                     axis=-1)
-            sig_nonlocal = (_nummolpair(nummol) / volume *
-                            decD_nonlocal *
-                            zz[num_moltype:] * beta)
+            ec_nonlocal = (_nummolpair(nummol) / volume *
+                           decD_nonlocal *
+                           zz[num_moltype:] * beta)
         else:
             decD_nonlocal = np.zeros(decD.shape[:-1])
-            sig_nonlocal = np.zeros_like(decD_nonlocal)
+            ec_nonlocal = np.zeros_like(decD_nonlocal)
 
-        sig_local = (paircount / volume *
-                     (decD - decD_nonlocal[:, :, np.newaxis]) *
-                     zz[num_moltype:, np.newaxis] * beta)
-        sig_local[np.isnan(sig_local)] = 0
-        sig_local = integrate.cumtrapz(sig_local, initial=0)
+        ec_local = (paircount / volume *
+                    (decD - decD_nonlocal[:, :, np.newaxis]) *
+                    zz[num_moltype:, np.newaxis] * beta)
+        ec_local[np.isnan(ec_local)] = 0
+        ec_local = integrate.cumtrapz(ec_local, initial=0)
 
-        if si_unit:
-            cc = (1 / const.nano**3 *
-                  const.nano**2 / const.pico *
-                  const.e**2)
-            sig_nonlocal *= cc
-            sig_local *= cc
-            decsig_unit = "S m$^{-1}$"
-            if dectype is DecType.spatial:
-                decBins *= const.nano
-                decBins_unit = "m"
-            elif dectype is DecType.energy:
-                decBins *= const.kilo * const.calorie
-                decBins_unit = "joule mol$^{-1}$"
-        else:
-            decsig_unit = "non-SI unit"
+        cc = (1 / const.nano**3 *
+              const.nano**2 / const.pico *
+              const.e**2)
+        ec_nonlocal *= cc
+        ec_local *= cc
+        ec_dec_unit = "S m$^{-1}$"
+        if dectype is DecType.spatial:
+            decBins *= const.nano
+            decBins_unit = "m"
+        elif dectype is DecType.energy:
+            decBins *= const.kilo * const.calorie
+            decBins_unit = "joule mol$^{-1}$"
 
-        sig_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
-                    _D_to_ec_const(temperature, volume, si_unit))
-        decsig = sig_auto[:, :, np.newaxis] * np.ones_like(decBins)
+        ec_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
+                   _nD_to_ec_const(temperature, volume))
+        ec_dec = ec_auto[:, :, np.newaxis] * np.ones_like(decBins)
 
+        # ec_dec = ec_auto + ec_cross = ec_auto + (ec_local + ec_nonlocal)
         for r in range(num_moltype):
             for c in range(r, num_moltype):
                 idx = _pairtype_index(r, c, num_moltype)
-                decsig[:, r] += (sig_local[:, idx] +
-                                 sig_nonlocal[:, idx, np.newaxis])
+                ec_dec[:, r] += (ec_local[:, idx] +
+                                 ec_nonlocal[:, idx, np.newaxis])
                 if (r != c):
-                    decsig[:, c] += (sig_local[:, idx] +
-                                     sig_nonlocal[:, idx, np.newaxis])
+                    ec_dec[:, c] += (ec_local[:, idx] +
+                                     ec_nonlocal[:, idx, np.newaxis])
 
-        return decsig, decsig_unit, decBins, decBins_unit
+        return ec_dec, ec_dec_unit, decBins, decBins_unit
 
 
 def new_decond(outname, samples, fit):
