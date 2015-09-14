@@ -699,15 +699,15 @@ def _pairtype_index(moltype1, moltype2, num_moltype):
     """
     Return pairtype from two moltypes
               c
-        | 1  2  3  4
+        | 0  1  2  3
       --+------------
-      1 | 1  2  3  4
+      0 | 0  1  2  3
         |
-      2 |    5  6  7
+      1 |    4  5  6
     r   |
-      3 |       8  9
+      2 |       7  8
         |
-      4 |         10
+      3 |          9
 
       index(r, c) = r * n + c - r * (r + 1) / 2
       where n = size(c) = size(r), r <= c
@@ -858,7 +858,7 @@ def _zz(charge, nummol):
     return zz
 
 
-def _nD_to_ec_const(temperature, volume, si_unit=True):
+def _D_to_ec_const(temperature, volume, si_unit=True):
     beta = 1 / (const.k * temperature)
     nD_to_ec = beta / volume
     if si_unit:
@@ -946,9 +946,9 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
         num_moltype, _, _ = _numtype(nummol)
         zz = _zz(charge, nummol)
         nD = f['nD'][...]
-        decD, _, _, _, _ = get_decD(decname, dectype, si_unit)
+        decD, decD_err, _, decBins, decBins_unit = get_decD(
+                decname, dectype, si_unit)
         beta = 1 / (const.k * temperature)
-        decBins = gid['decBins'][...]
         paircount = gid['decPairCount'][...]
         num_decBins = decBins.size
         bw = decBins[1] - decBins[0]
@@ -958,10 +958,10 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                 if nonlocal_ref is None:
                     nonlocal_ref_idx = num_decBins / np.sqrt(3)
                 else:
-                    nonlocal_ref_idx = nonlocal_ref / bw
+                    nonlocal_ref_idx = int(nonlocal_ref / bw)
                 if avewidth is None:
                     avewidth = 0.25
-                avewidth_idx = avewidth / bw
+                avewidth_idx = int(avewidth / bw)
             elif dectype is DecType.energy:
                 raise NotImplementedError(
                         "decsig is not implemented for DecType.energy yet")
@@ -1000,10 +1000,9 @@ def get_decsig(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                 decBins_unit = "joule mol$^{-1}$"
         else:
             decsig_unit = "non-SI unit"
-            decBins_unit = gid['decBins'].attrs['unit'].decode()
 
         sig_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
-                    _nD_to_ec_const(temperature, volume, si_unit))
+                    _D_to_ec_const(temperature, volume, si_unit))
         decsig = sig_auto[:, :, np.newaxis] * np.ones_like(decBins)
 
         for r in range(num_moltype):
