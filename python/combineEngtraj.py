@@ -88,7 +88,7 @@ fout.attrs['nummol'] = nummolList[0]
 fout.attrs['numpair'] = numpairTotal
 fout.attrs['numframe'] = numframeList[0]
 
-energyTotal = fout.create_dataset("energy", (numpairTotal, numframeList[0]))
+energyTotal = fout.create_dataset("energy", (numpairTotal, numframeList[0]), dtype=np.float64)
 
 start = 0
 for i, file in enumerate(engtrajFiles):
