@@ -865,6 +865,17 @@ def _nD_to_ec_const(temperature, volume):
     return nD_to_ec
 
 
+def get_fit(decname):
+    """
+    Return fit, fit_unit
+    """
+    with h5py.File(decname, 'r') as f:
+        fit = f['fit'][...]
+        fit *= const.pico
+        fit_unit = "s"
+    return fit, fit_unit
+
+
 def get_rdf(decname):
     """
     Return rdf, rbins, rbins_unit
@@ -882,25 +893,28 @@ def get_rdf(decname):
 
 def get_diffusion(decname):
     """
-    Return diffusion, diffusion_err, unit
+    Return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
         nD = f['nD'][:, :num_moltype]
         nD_err = f['nD_err'][:, :num_moltype]
+
         diffusion = nD / nummol  # L^2 T^-1  [fit, num_moltype]
         diffusion_err = nD_err / nummol
         cc = const.nano**2 / const.pico
         diffusion *= cc
         diffusion_err *= cc
-        unit = "m$^2$ s$^{-1}$"
-        return diffusion, diffusion_err, unit
+        diffusion_unit = "m$^2$ s$^{-1}$"
+
+    fit, fit_unit = get_fit(decname)
+    return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
 
 
 def get_decD(decname, dectype):
     """
-    Return decD, decD_err, decD_unit, decBins, decBins_unit
+    Return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
@@ -918,12 +932,16 @@ def get_decD(decname, dectype):
             decBins *= const.kilo * const.calorie
             decBins_unit = "joule mol$^{-1}$"
 
-        return decD, decD_err, decD_unit, decBins, decBins_unit
+    fit, fit_unit = get_fit(decname)
+    return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
 
 
 def get_ec(decname):
     """
-    Return ec_total, ec_total_err, ec[:num_moltype], ec_err[:num_moltype], unit
+    Return
+    ec_total, ec_total_err,
+    ec[:num_moltype], ec_err[:num_moltype], ec_unit,
+    fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         volume = f['volume'][...]
@@ -940,14 +958,16 @@ def get_ec(decname):
         ec_totol_err = nDTotal_err * cc
         ec = nD * zz * cc
         ec_err = nD_err * zz * cc
-        unit = "S m$^{-1}$"
-        return ec_total, ec_totol_err, ec, ec_err, unit
+        ec_unit = "S m$^{-1}$"
+
+    fit, fit_unit = get_fit(decname)
+    return ec_total, ec_totol_err, ec, ec_err, ec_unit, fit, fit_unit
 
 
 def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                avewidth=None):
     """
-    Return ec_dec, ec_dec_unit, decBins, decBins_unit
+    Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
@@ -1024,7 +1044,8 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                     ec_dec[:, c] += (ec_local[:, idx] +
                                      ec_nonlocal[:, idx, np.newaxis])
 
-        return ec_dec, ec_dec_unit, decBins, decBins_unit
+    fit, fit_unit = get_fit(decname)
+    return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
 
 
 def new_decond(outname, samples, fit):
