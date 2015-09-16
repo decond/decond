@@ -957,7 +957,7 @@ def get_ec(decname):
         ec_total = nDTotal * cc
         ec_totol_err = nDTotal_err * cc
         ec = nD * zz * cc
-        ec_err = nD_err * zz * cc
+        ec_err = nD_err * abs(zz) * cc
         ec_unit = "S m$^{-1}$"
 
     fit, fit_unit = get_fit(decname)
