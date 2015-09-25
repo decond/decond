@@ -881,7 +881,7 @@ def get_rdf(decname):
     Return rdf, rbins, rbins_unit
     """
     with h5py.File(decname, 'r') as f:
-        gid = f['spatialDec/']
+        gid = f[DecType.spatial.value]
         rbins = gid['decBins'][...]
         rdf = _paircount_to_rdf(gid['decPairCount'][...], rbins,
                                 f['numMol'][...], f['volume'][...])
@@ -889,6 +889,20 @@ def get_rdf(decname):
         rbins_unit = "m"
 
         return rdf, rbins, rbins_unit
+
+
+def get_edf(decname):
+    """
+    Return edf, ebins, ebins_unit
+    """
+    with h5py.File(decname, 'r') as f:
+        gid = f[DecType.energy.value]
+        ebins = gid['decBins'][...]
+        edf = gid['decPairCount'][...]
+
+        ebins *= const.kilo * const.calorie
+        ebins_unit = "joule mol$^{-1}$"
+        return edf, ebins, ebins_unit
 
 
 def get_diffusion(decname):
@@ -996,7 +1010,8 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                 avewidth_idx = int(avewidth / bw)
             elif dectype is DecType.energy:
                 raise NotImplementedError(
-                        "ec_dec is not implemented for DecType.energy yet")
+                        "ec_dec with sep_nonlocal is not implemented "
+                        "for DecType.energy yet")
             else:
                 raise Error("Impossible DecType...")
             decD_nonlocal = np.mean(
