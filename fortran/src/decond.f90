@@ -157,9 +157,10 @@ program decond
         if (myrank == root) call print_sys(sys)
 
         do n = 1, numMolType
-          charge(n) = sum(sys%mol(n)%atom(:)%charge)
+          charge(n) = nint(sum(sys%mol(n)%atom(:)%charge))
         end do
         totNumMol = sum(sys%mol(:)%num)
+        if (myrank == root) write(*,*) "charge = ", charge
 
       case ('-pm', '--pm')
         if (is_pa_mode) then
@@ -694,7 +695,7 @@ contains
     real(8), dimension(:, :), intent(in) :: vel 
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com
+    integer :: d, i, j, idx_begin, idx_end, idx_com
 
     com_v = 0d0
     idx_com = 0
