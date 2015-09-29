@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import numpy as np
 import itertools as it
@@ -17,6 +18,20 @@ parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
 args = parser.parse_args()
+
+label = ['cation', 'anion']
+color = ['b', 'g', 'b', 'r', 'g']
+
+custom_axis_range = False
+rdf_top = 2.5
+D_top = 0.005
+D_bottom = -0.001
+sig_top = 1
+sig_bottom = -3
+
+rdf_legend_loc = 'upper right'
+D_legend_loc = 'upper center'
+sig_legend_loc = 'upper right'
 
 rc = {'font': {'size': 36,
                'family': 'serif',
@@ -53,10 +68,8 @@ numIonTypes = 2
 numIonTypePairs = numIonTypes * (numIonTypes+1) // 2
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 
-label = ['Na$^+$', 'Cl$^-$']
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
-color = ['b', 'g', 'b', 'r', 'g']
 mpl.rcParams['axes.color_cycle'] = color
 
 fitKey = 0
@@ -89,8 +102,8 @@ abcPos = (0.03, 0.965)
 axs[0].set_color_cycle(color[numIonTypes:])
 #axs[0].axhline(1, linestyle=':', color='black', linewidth=reflinewidth)
 for i, rdf in enumerate(g):
-  axs[0].plot(eBins, rdf, label=label[numIonTypes + i])
-axs[0].legend(loc='upper right')
+    axs[0].plot(eBins, rdf, label=label[numIonTypes + i])
+axs[0].legend(loc=rdf_legend_loc)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$\epsilon$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
 axs[0].set_ylabel(r"$\rho_{IL}(\epsilon)$", labelpad=labelpad)
@@ -100,20 +113,19 @@ plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
 # plot D
 #axs[1].axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, D in enumerate(DI[fitKey]):
-  axs[1].plot(eBins, np.ones_like(eBins)*D, label=label[i], linestyle=lineStyle[i])
+    axs[1].plot(eBins, np.ones_like(eBins)*D, label=label[i], linestyle=lineStyle[i])
 
 for i, D in enumerate(edD[fitKey]):
 #  g_masked = np.where(np.isnan(g[i]), -1, g[i])
 #  D_masked = np.ma.masked_where([c if j <= smallRegion[i] else False
 #                                 for j, c in enumerate(g_masked < threshold)], D)
 #  axs[1].plot(eBins, D_masked, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
-  axs[1].plot(eBins, D, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
+    axs[1].plot(eBins, D, label=label[numIonTypes + i], linestyle=lineStyle[numIonTypes + i])
 
 axs[1].set_xlabel(r"$\epsilon$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(\epsilon)$\ \ (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
-#    axs[1].legend(loc='center right')
 #axs[1].legend(loc=(0.515, 0.245), labelspacing=0.2)
-axs[1].legend(loc='lower right', labelspacing=0.2)
+axs[1].legend(loc=D_legend_loc, labelspacing=0.2)
 #    axs[1].set_title("threshold {}".format(threshold))
 plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='top')
@@ -121,16 +133,17 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 # plot sig
 for i, sig in enumerate(sigI[fitKey]):
   axs[2].plot(eBins, sig, label=label[i])
-  axs[2].legend(loc='upper right')
+  axs[2].legend(loc=sig_legend_loc)
 axs[2].set_xlabel(r"$\lambda$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
-#axs[0].set_ylim(top=6)
-#axs[1].set_ylim(bottom=-0.035, top=0.225)
-axs[1].set_yticks(np.arange(-0.2,0.3,0.1))
-#axs[2].set_ylim(bottom=2.5, top=8.6)
+if custom_axis_range:
+    axs[0].set_ylim(top=edf_top)
+    axs[1].set_ylim(bottom=D_bottom, top=D_top)
+    #axs[1].set_yticks(np.arange(0.0,0.3,0.1))
+    axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
 
 for ax in axs:
 #  ax.set_xticks(xticks)
