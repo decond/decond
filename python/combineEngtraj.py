@@ -44,7 +44,7 @@ class DataInconsistentError(Exception):
 # === Check data consistency ===
 for file in engtrajFiles:
   with h5py.File(file, 'r') as f:
-    sltspecList.append(f.attrs['sltspec'])
+    sltspecList.append(f.attrs['sltspec'][0])
     sltfirsttagList.append(f.attrs['sltfirsttag'])
     numsltList.append(f.attrs['numslt'])
     nummolList.append(f.attrs['nummol'])
@@ -54,11 +54,12 @@ for file in engtrajFiles:
 # sort the files and other attribute list according to sltspec
 # ref: http://stackoverflow.com/questions/9543211/sorting-a-list-in-python-using-the-result-from-sorting-another-list
 sortLists = (sltspecList, engtrajFiles, sltfirsttagList, numsltList, nummolList, numpairList, numframeList)
-sortLists = zip(*sorted(zip(*sortLists)))
+sltspecList, engtrajFiles, sltfirsttagList, numsltList, nummolList, numpairList, numframeList = zip(*sorted(zip(*sortLists)))
 
-if not sltspecList == list(range(1, len(sltspecList) + 1)):
-  print(sltspecList)
-  print(list(range(1, len(sltspecList) + 1)))
+testlist = tuple(range(1, len(sltspecList) + 1))
+if not sltspecList == testlist:
+  print('sltspecList=', sltspecList)
+  print('testlist=', testlist)
   raise DataInconsistentError("sltspec's are not continous integers starting from 1")
 
 for i in range(len(sltfirsttagList) - 1):
