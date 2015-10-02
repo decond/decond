@@ -151,6 +151,7 @@ contains
   end subroutine ed_prepCorrMemory
 
   subroutine openEngtraj(engtrajFileid)
+    use utility, only: parse_version
     use HDF5
     use H5LT
     implicit none
@@ -181,7 +182,7 @@ contains
     call H5LTget_attribute_string_f(engtrajFileid, "/", "version", engtrajVer, ierr)
     ! check compatibility at root
     if (myrank == root) then
-      call parseVersion(engtrajVer, engtrajVer_major)
+      call parse_version(engtrajVer, engtrajVer_major)
       if (engtrajVer_major < MIN_ENGTRJ_VER_MAJOR) then
         write(*,*) "Only engtraj with a major version number greater than ", MIN_ENGTRJ_VER_MAJOR, " is supported."
         write(*,*) "The major version of the file '", trim(engtrajFilename), " is: ", engtrajVer_major
@@ -203,20 +204,6 @@ contains
       end if
     end if
   end subroutine openEngtraj
-
-  subroutine parseVersion(ver, major, minor, patch)
-    implicit none
-    character(len=11) :: ver
-    integer, intent(out) :: major
-    integer, optional, intent(out) :: minor, patch
-    integer :: p1, p2
-
-    p1 = scan(ver, '.')
-    p2 = scan(ver, '.', .true.)
-    read(ver(1:p1-1), *) major
-    if (present(minor)) read(ver(p1+1:p2-1), *) minor
-    if (present(patch)) read(ver(p2+1:), *) patch
-  end subroutine parseVersion
 
   subroutine readPairEng(eng, r, c, engtrajFileid, numFrame)
     use HDF5
