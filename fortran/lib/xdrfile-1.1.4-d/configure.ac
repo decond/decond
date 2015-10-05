@@ -3,7 +3,7 @@
 #######################################################################
  
 AC_PREREQ(2.50)
-AC_INIT(xdrfile, 1.1.1, [gmx-users@gromacs.org])
+AC_INIT(xdrfile, 1.1.2, [gmx-users@gromacs.org])
 AC_CONFIG_SRCDIR(src/xdrfile.c)
 AC_CONFIG_AUX_DIR(config)
 AC_CANONICAL_HOST
