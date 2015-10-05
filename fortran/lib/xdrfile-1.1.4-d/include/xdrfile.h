@@ -105,8 +105,8 @@ extern "C"
 	extern char *exdr_message[exdrNR];
 
 #define DIM 3
-	typedef float matrix[DIM][DIM];
-	typedef float rvec[DIM];
+	typedef double matrix[DIM][DIM];
+	typedef double rvec[DIM];
 	typedef int   mybool;
 
 
