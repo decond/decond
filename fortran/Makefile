@@ -18,7 +18,7 @@ FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
 ### for dynamic linking ###
 #FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
-XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
+XDRFILEDIR = $(HOME)/local/xdrfile-1.1.4-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
 
 HDF5_INCLUDE_DIR = /home/kmtu/local/hdf5-1.8.15/include
