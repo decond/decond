@@ -25,7 +25,7 @@ HDF5_INCLUDE_DIR = /home/kmtu/local/hdf5-1.8.15/include
 
 
 #========== Basically NO modification is needed below this line ===========#
-PROGRAM = decond trjconv2com
+PROGRAM = decond trjconv2com combine_eng
 DIR = $(MODDIR) $(OUTDIR)
 vpath %.f90 $(SRCDIR)
 
@@ -36,6 +36,12 @@ dir :
 	mkdir -p $(DIR)
 
 # ---------------------------
+combine_eng : utility.o combine_eng.o
+	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
+
+combine_eng.o : combine_eng.f90
+	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
 trjconv2com : utility.o xdr.o top.o trjconv2com.o
 	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
 
