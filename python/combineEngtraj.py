@@ -95,7 +95,10 @@ start = 0
 for i, file in enumerate(engtrajFiles):
   with h5py.File(file, 'r') as f:
     end = start + numpairList[i]
-    energyTotal[start:end, :] = f['energy'][:, :] 
+    energyTotal[start:end, :] = f['energy'][:, :]
+#   for en, n in enumerate(range(start, end)):  # use less memory?
+#       energyTotal[n, :] = f['energy'][en, :]
     start = end
 
+fout.close()
 print("File is output as: " + outFile)
