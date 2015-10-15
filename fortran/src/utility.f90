@@ -136,12 +136,13 @@ contains
     character(len=11), intent(in) :: ver
     integer, intent(out) :: major
     integer, optional, intent(out) :: minor, patch
-    integer :: p1, p2
+    integer :: p1, p2, p_null
 
     p1 = scan(ver, '.')
     p2 = scan(ver, '.', .true.)
+    p_null = scan(ver, char(0))
     read(ver(1:p1-1), *) major
     if (present(minor)) read(ver(p1+1:p2-1), *) minor
-    if (present(patch)) read(ver(p2+1:), *) patch
+    if (present(patch)) read(ver(p2+1:p_null-1), *) patch
   end subroutine parse_version
 end module utility
