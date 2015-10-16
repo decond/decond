@@ -5,7 +5,7 @@ program combine_eng
   character(len=*), parameter :: VERSION = "0.4.0"
   character(len=*), parameter :: OUTFILENAME = "engtraj-all.h5"
   character(len=*), parameter :: GROUP_ROOT = '/'
-  integer, parameter :: VERSION_LEN = 11
+  integer(hsize_t), parameter :: VERSION_LEN = 11
   integer :: num_files, hdferr
   character(len=FILENAME_LEN), allocatable :: engfiles(:)
   integer, allocatable :: sltspec_list(:), sltfirsttag_list(:), numslt_list(:)
