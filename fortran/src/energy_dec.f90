@@ -368,11 +368,17 @@ contains
     implicit none
     if (myrank == root) then
       call mpi_reduce(MPI_IN_PLACE, edCorr, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, edPairCount, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(edCorr, dummy_null, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
+
+    if (myrank == root) then
+      call mpi_reduce(MPI_IN_PLACE, edPairCount, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    else
       call mpi_reduce(edPairCount, dummy_null, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
   end subroutine ed_collectCorr
 
   subroutine ed_average(numFrame, numMolType, frameCount)

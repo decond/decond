@@ -185,11 +185,17 @@ contains
     implicit none
     if (myrank == root) then
       call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
+
+    if (myrank == root) then
+      call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    else
       call mpi_reduce(sdPairCount, dummy_null, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
   end subroutine sd_collectCorr
 
   subroutine sd_average(numFrame, numMolType, frameCount)

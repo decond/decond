@@ -595,6 +595,7 @@ program decond
   else
     call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   end if
+  call mpi_barrier(MPI_COMM_WORLD, ierr)
   if (is_sd) call sd_collectCorr()
   if (is_ed) call ed_collectCorr()
   endtime = MPI_Wtime()
