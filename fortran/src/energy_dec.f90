@@ -152,8 +152,9 @@ contains
     end do
   end subroutine read_attrs
 
-  subroutine check_sanity()
+  subroutine check_sanity(nummol)
     implicit none
+    integer, intent(in) :: nummol
     integer :: i
 
     do i = 1, num_engfiles
@@ -177,6 +178,14 @@ contains
     if (.not. all(nummol_list == nummol_list(1))) then
       write(*,*) "nummol's should be all the same"
       write(*,*) "nummol_list =", nummol_list
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if
+
+    if (nummol /= nummol_list(1)) then
+      write(*,*) "nummol inconsistent:"
+      write(*,*) "nummol from topology:", nummol
+      write(*,*) "nummol from energy trajectories =", nummol_list
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
@@ -222,7 +231,7 @@ contains
       call check_version()
       call sort_engfiles()
       call read_attrs()
-      call check_sanity()
+      call check_sanity(nummol)
     end if
 
     call bcast_attrs()
@@ -588,9 +597,12 @@ contains
 
   subroutine ed_finish()
     implicit none
-    deallocate(engfiles, engfileids, sltspec_list, sltfirsttag_list)
-    deallocate(numslt_list, nummol_list, numpair_list)
+    deallocate(engfiles, engfileids, sltfirsttag_list)
     deallocate(eBinIndexAll, engLocLookupTable, edCorr)
+    if (myrank == root) then
+      deallocate(sltspec_list, numslt_list, nummol_list)
+      deallocate(numpair_list, numframe_list)
+    end if
     ! ed_binIndex has been deallocated in the main program
   end subroutine ed_finish
 
