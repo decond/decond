@@ -1,19 +1,21 @@
 program decond
   use mpiproc
   use HDF5
-  use utility, only: handle, getMolTypePairIndexFromTypes, newunit
+  use utility, only: handle, get_pairindex_upper_diag, newunit
   use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
   use top, only: open_top, close_top, read_top, system, print_sys
   use correlation
-  use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdPairCount, sdCorr, pos, num_rBin, &
-                         com_pos, sd_binIndex, sd_prepCorrMemory, sd_getBinIndex, &
-                         sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
-                         sd_collectCorr, sd_average, sd_make_rBins, sd_finish
-  use energy_dec, only: engtrajFilename, ed_readEng, ed_getBinIndex, ed_binIndex, num_eBin, &
-                        ed_binIndex, ed_prepCorrMemory, ed_getBinIndex, skipEng, &
-                        ed_collectCorr, ed_average, edPairCount, edCorr, eBinWidth, &
-                        ed_init, ed_make_eBins, ed_finish
-
+  use spatial_dec, only: sd_init, rBinWidth, pos_r, pos_c, sdPairCount, &
+                        &sdCorr, pos, num_rBin, com_pos, sd_binIndex, &
+                        &sd_prepCorrMemory, sd_getBinIndex, &
+                        &sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
+                        &sd_collectCorr, sd_average, sd_make_rBins, sd_finish
+  use energy_dec, only: engfiles, ed_readEng, ed_getBinIndex, &
+                       &ed_binIndex, num_eBin, ed_binIndex, ed_prepCorrMemory, &
+                       &ed_getBinIndex, skipEng, ed_collectCorr, ed_average, &
+                       &edPairCount, edCorr, eBinWidth, ed_init, &
+                       &ed_make_eBins, ed_finish, num_engfiles, &
+                       &ed_prep_engfiles
 
   implicit none
   character(len=*), parameter :: DECOND_VERSION = "0.4.0"
@@ -242,8 +244,12 @@ program decond
 
       case ('-ed')
         is_ed = .true.
-        call get_command_argument(i, engtrajFilename)
-        i = i + 1
+        num_engfiles = count_arg(i, num_arg)
+        call ed_prep_engfiles()
+        do n = 1, num_engfiles
+          call get_command_argument(i, engfiles(n))
+          i = i + 1
+        end do
 
       case ('-sbwidth')
         call get_command_argument(i, arg)
@@ -318,7 +324,7 @@ program decond
       write(*,*) "start preparing eBinIndex..."
       starttime = MPI_Wtime()
     end if
-    call ed_readEng(engtrajFilename, numFrame)
+    call ed_readEng(numFrame, totNumMol)
     if (myrank == root) then
       endtime = MPI_Wtime()
       write(*,*) "finished preparing eBinIndex. It took ", endtime - starttime, "seconds"
@@ -613,7 +619,7 @@ program decond
     do j = 1, numMolType
       do i = j, numMolType
         if (i /= j) then
-          molTypePairIndex = getMolTypePairIndexFromTypes(i, j, numMolType)
+          molTypePairIndex = get_pairindex_upper_diag(i, j, numMolType)
           molTypePairAllIndex = molTypePairIndex + numMolType
           nCorr(:, molTypePairAllIndex) = nCorr(:, molTypePairAllIndex) / 2d0
         end if
