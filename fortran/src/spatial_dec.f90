@@ -184,6 +184,7 @@ contains
   subroutine sd_collectCorr()
     implicit none
     if (myrank == root) then
+      write(*,*) "collecting sdCorr"
       call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
@@ -191,6 +192,7 @@ contains
     call mpi_barrier(MPI_COMM_WORLD, ierr)
 
     if (myrank == root) then
+      write(*,*) "collecting sdPairCount"
       call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdPairCount, dummy_null, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)

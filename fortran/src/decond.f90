@@ -597,6 +597,7 @@ program decond
   if (myrank == root) write(*,*) "start collecting results"
   starttime = MPI_Wtime()
   if (myrank == root) then
+    write(*,*) "collecting nCorr"
     call mpi_reduce(MPI_IN_PLACE, nCorr, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
   else
     call mpi_reduce(nCorr, dummy_null, size(nCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
