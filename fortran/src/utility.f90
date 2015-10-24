@@ -34,6 +34,10 @@ module utility
      character(len=LINE_LEN) :: filename
   end type handle
 
+  interface swap
+    module procedure swap_int, swap_char
+  end interface
+
 contains
   ! The following function is a snippet from Fortran wiki and in public
   ! domain.
@@ -108,10 +112,10 @@ contains
     end if
   end function
 
-  integer function getMolTypePairIndexFromTypes(type1, type2, numMolType)
+  integer function get_pairindex_upper_diag(i, j, n)
     implicit none
-    integer, intent(in) :: type1, type2, numMolType
-    integer :: r, c, ii, jj
+    integer, intent(in) :: i, j, n
+    integer :: r, c
     !          c
     !    | 1  2  3  4
     !  --+------------
@@ -126,10 +130,41 @@ contains
     !  index(r, c) = (r - 1) * n + c - r * (r - 1) / 2
     !  where n = size(c) = size(r), r <= c
 
-    r = min(type1, type2)
-    c = max(type1, type2)
-    getMolTypePairIndexFromTypes = (r - 1) * numMolType + c - r * (r - 1) / 2
-  end function getMolTypePairIndexFromTypes
+    r = min(i, j)
+    c = max(i, j)
+    if (r < 1 .or. c < 1 .or. n < 1 .or. r > n .or. c > n) then
+      get_pairindex_upper_diag = -1
+    else
+      get_pairindex_upper_diag = (r - 1) * n + c - r * (r - 1) / 2
+    end if
+  end function get_pairindex_upper_diag
+
+  integer function get_pairindex_upper_nodiag(i, j, n)
+    implicit none
+    integer, intent(in) :: i, j, n
+    integer :: r, c
+    !          c
+    !    | 1  2  3  4
+    !  --+------------
+    !  1 |    1  2  3
+    !    |
+    !  2 |       4  5
+    !r   |
+    !  3 |          6
+    !    |
+    !  4 |
+    !
+    !  index(r, c) = (r - 1) * n + c - ((r + 1) * r) / 2
+    !  where n = size(c) = size(r), r < c
+
+    r = min(i, j)
+    c = max(i, j)
+    if (r < 1 .or. c < 1 .or. n < 1 .or. r == c .or. r > n .or. c > n) then
+      get_pairindex_upper_nodiag = -1
+    else
+      get_pairindex_upper_nodiag = (r - 1) * n + c - ((r + 1) * r) / 2
+    end if
+  end function get_pairindex_upper_nodiag
 
   subroutine parse_version(ver, major, minor, patch)
     implicit none
@@ -145,4 +180,26 @@ contains
     if (present(minor)) read(ver(p1+1:p2-1), *) minor
     if (present(patch)) read(ver(p2+1:p_null-1), *) patch
   end subroutine parse_version
+
+  subroutine swap_int(list, i, j)
+    implicit none
+    integer, intent(inout) :: list(:)
+    integer, intent(in) :: i, j
+    integer :: tmp
+
+    tmp = list(i)
+    list(i) = list(j)
+    list(j) = tmp
+  end subroutine swap_int
+
+  subroutine swap_char(list, i, j)
+    implicit none
+    character(len=LINE_LEN), intent(inout) :: list(:)
+    integer, intent(in) :: i, j
+    character(len=LINE_LEN) :: tmp
+
+    tmp = list(i)
+    list(i) = list(j)
+    list(j) = tmp
+  end subroutine swap_char
 end module utility

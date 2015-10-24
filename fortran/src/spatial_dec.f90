@@ -199,7 +199,7 @@ contains
   end subroutine sd_collectCorr
 
   subroutine sd_average(numFrame, numMolType, frameCount)
-    use utility, only: getMolTypePairIndexFromTypes
+    use utility, only: get_pairindex_upper_diag
     implicit none
     integer, intent(in) :: numFrame, numMolType, frameCount(:)
     integer :: i, t1, t2, n, molTypePairIndex
@@ -214,7 +214,7 @@ contains
     do t2 = 1, numMolType
       do t1 = t2, numMolType
         if (t1 /= t2) then
-          molTypePairIndex = getMolTypePairIndexFromTypes(t1, t2, numMolType)
+          molTypePairIndex = get_pairindex_upper_diag(t1, t2, numMolType)
           sdPairCount(:, molTypePairIndex) = sdPairCount(:, molTypePairIndex) / 2d0
         end if
       end do
