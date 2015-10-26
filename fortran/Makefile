@@ -8,6 +8,7 @@ MODFLAG = -module
 SRCDIR = ./src/
 MODDIR = ./mod/
 OUTDIR = ./out/
+BINDIR = ../bin/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 ### for debug ###
@@ -32,6 +33,8 @@ vpath %.f90 $(SRCDIR)
 # Program ==================================
 .PHONY : all dir
 all : dir $(PROGRAM)
+	ln -sf ../fortran/$(OUTDIR)* $(BINDIR)
+
 dir :
 	mkdir -p $(DIR)
 
@@ -78,4 +81,5 @@ clean :
 	rm -f $(SRCDIR)*.o $(MODDIR)*.mod
 	rm -f $(addprefix $(OUTDIR), $(PROGRAM) )
 	rm -f *~ $(SRCDIR)*~
+	rm -f $(addprefix $(BINDIR), $(PROGRAM) )
 
