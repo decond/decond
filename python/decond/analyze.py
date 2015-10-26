@@ -411,7 +411,8 @@ class DecondFile(CorrFile):
 
             temp = new_weight + sum_weight
             delta = new_data - mean
-            r = delta * new_weight[..., np.newaxis] / temp[..., np.newaxis]
+            with np.errstate(invalid='ignore'):
+                r = delta * new_weight[..., np.newaxis] / temp[..., np.newaxis]
             mean += r
             m2 += sum_weight[..., np.newaxis] * delta * r
             sum_weight = temp
