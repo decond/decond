@@ -389,10 +389,8 @@ class DecondFile(CorrFile):
             mean += delta / num_sample
             m2 += delta * (new_data - mean)
 
-            if np.isscalar(mean):
-                setattr(buf, data_name, mean)
-                setattr(buf, data_name + '_m2', m2)
-
+            setattr(buf, data_name, mean)
+            setattr(buf, data_name + '_m2', m2)
             setattr(buf, data_name + '_err',
                     _m2_to_err(m2, num_sample))
 

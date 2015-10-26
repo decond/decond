@@ -402,25 +402,58 @@ def test_new_decond():
 
 extend_file = ['corr_extend1_test.c5', 'corr_extend2_test.c5']
 decond_extend = ['decond_extend_test.d5', 'decond_extend_changefit_test.d5']
+decond_onebyone = ['decond_extend1_test.d5', 'decond_extend2_test.d5']
 
 
 def test_extend_decond():
     print("test_extend_decond: starting...")
-    for file in decond_extend:
+    for file in decond_extend + decond_onebyone:
         if os.path.exists(file):
             os.remove(file)
 
     for file in extend_file:
         rand_c5(file, nummoltype)
 
+    # extend all at once
     try:
         da.extend_decond(decond_extend[0], decondtest, extend_file)
     except da.FitRangeError:
         print("  Extension failed: FitRangeError occurred\n"
               "  Ignore the first part of this test")
     else:
-        with da.DecondFile(decond_extend[0]) as f:
-            assert(f.buffer.numSample == len(testfile) + len(extend_file))
+        with da.DecondFile(decond_extend[0]) as f, \
+                da.DecondFile(decondtest) as f_old:
+            assert(f.buffer.numSample ==
+                   f_old.buffer.numSample + len(extend_file))
+
+    # extend one by one
+    try:
+        da.extend_decond(decond_onebyone[0], decondtest, extend_file[0])
+    except da.FitRangeError:
+        print("  Extension failed: FitRangeError occurred\n"
+              "  Ignore the first part of this test")
+    else:
+        with da.DecondFile(decond_onebyone[0]) as f, \
+                da.DecondFile(decondtest) as f_old:
+            assert(f.buffer.numSample == f_old.buffer.numSample + 1)
+
+    try:
+        da.extend_decond(decond_onebyone[1], decond_onebyone[0],
+                         extend_file[1])
+    except da.FitRangeError:
+        print("  Extension failed: FitRangeError occurred\n"
+              "  Ignore the first part of this test")
+    else:
+        with da.DecondFile(decond_onebyone[1]) as f, \
+                da.DecondFile(decond_onebyone[0]) as f_old:
+            assert(f.buffer.numSample == f_old.buffer.numSample + 1)
+
+    with da.DecondFile(decond_extend[0]) as f_all, \
+            da.DecondFile(decond_onebyone[1]) as f_one:
+        assert(f_all.buffer.temperature == f_one.buffer.temperature)
+        assert(f_all.buffer.temperature_err == f_one.buffer.temperature_err)
+        assert(f_all.buffer.volume == f_one.buffer.volume)
+        assert(f_all.buffer.volume_err == f_one.buffer.volume_err)
 
     # get common timeLags
     fs = ([da.CorrFile(file) for file in extend_file] +
