@@ -294,7 +294,7 @@ class DecondFile(CorrFile):
             if type_.value in self:
                 do_dec(type_)
 
-    def _add_sample(self, samples, fit):
+    def _add_sample(self, samples, fit, report):
         if not isinstance(samples, list):
             samples = [samples]
 
@@ -435,7 +435,11 @@ class DecondFile(CorrFile):
             # Note that decPairCount must be updated last
             add_data('decPairCount', buf.decPairCount, dectype)
 
-        for sample in samples[begin:]:
+        for i, sample in enumerate(samples[begin:]):
+            if (report):
+                print("Reading {0} of {1} files: {2}".format(
+                    i+1, len(samples[begin:]), samples[i]))
+
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
                 self._intersect_buffer(f)
@@ -1062,17 +1066,19 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
     return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
 
 
-def new_decond(outname, samples, fit):
+def new_decond(outname, samples, fit, report=True):
     with DecondFile(outname, 'x') as outfile:
-        outfile._add_sample(samples, fit)
+        outfile._add_sample(samples, fit, report)
         return outfile.buffer
 
 
-def extend_decond(outname, decname, samples, fit=None):
+def extend_decond(outname, decname, samples, fit=None, report=True):
     with DecondFile(outname, 'x') as outfile:
+        if (report):
+            print("Reading decond file: {0}".format(decname))
         with DecondFile(decname) as infile:
             outfile.buffer = infile.buffer
-        outfile._add_sample(samples, fit)
+        outfile._add_sample(samples, fit, report)
         return outfile.buffer
 
 
