@@ -299,6 +299,9 @@ class DecondFile(CorrFile):
             samples = [samples]
 
         if self.buffer.numSample == 0:
+            if (report):
+                print("Reading {0} of {1} corr files: {2}".format(
+                    1, len(samples), samples[0]))
             with CorrFile(samples[0]) as cf:
                 cf._cal_cesaro()
                 self.buffer = cf.buffer
@@ -437,8 +440,8 @@ class DecondFile(CorrFile):
 
         for i, sample in enumerate(samples[begin:]):
             if (report):
-                print("Reading {0} of {1} files: {2}".format(
-                    i+1, len(samples[begin:]), samples[i]))
+                print("Reading {0} of {1} corr files: {2}".format(
+                    i+begin+1, len(samples), samples[i]))
 
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
