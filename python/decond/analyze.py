@@ -441,7 +441,7 @@ class DecondFile(CorrFile):
         for i, sample in enumerate(samples[begin:]):
             if (report):
                 print("Reading {0} of {1} corr files: {2}".format(
-                    i+begin+1, len(samples), samples[i]))
+                    i+begin+1, len(samples), sample))
 
             with CorrFile(sample) as f:
                 self.buffer.numSample += 1
