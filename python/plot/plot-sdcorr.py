@@ -16,21 +16,15 @@ parser.add_argument('corrData', help="correlation data file <c5 or d5>")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
-parser.add_argument('--threshold', type=float, default=0,
-                    help="RDF threshold for plotting sdCorr, default = 0")
-parser.add_argument('--color', nargs='*',
-                    help="manually assign line color for each auto and cross "
-                         "terms. <auto1>...<autoN> <cross11>...<cross1N> "
-                         "<cross22>...<cross2N> .. <crossNN>")
-parser.add_argument('--label', nargs='*',
-                    help="manually assign label for each component. "
-                         "<mol1>...<molN>")
 parser.add_argument('-c', '--custom', action='store_true',
                     help="Read the customized parameters in the script")
 args = parser.parse_args()
 
 # ======= basic customization ==========
 if (args.custom):
+    label = ['cation', 'anion']
+    color = ['b', 'g', 'b', 'r', 'g']
+    threshold = 0.1
     tmin, tmax, tstep = 0, 125, 1
     rmin, rmax, rstep = 35, 101, 1
     cbounds = np.arange(-0.05, 0.301, 0.01)
@@ -38,16 +32,16 @@ if (args.custom):
     cmap = cm.get_cmap('RdYlBu_r')
     cmin, cmax = (-0.3, 0.3)
     xticks = np.arange(0, 2.5, 0.5)
-    yticks = np.arange(0, 11, 1)
+    yticks = None  # set to None for auto-yticks
 # ======================================
 else:
-    tmin, tmax, tstep = 0, 100, 1
-    rmin, rmax, rstep = 0, 100, 1
+    tmin, tmax, tstep = 0, 200, 2
+    rmin, rmax, rstep = 0, 200, 2
     cbounds = 12
     colorbar_ticks = None
     cmap = cm.get_cmap('RdYlBu_r')
+    threshold = 0
 
-threshold = args.threshold
 
 with h5py.File(args.corrData, 'r') as f:
     timeLags = f['timeLags'][...]
@@ -64,20 +58,14 @@ with h5py.File(args.corrData, 'r') as f:
 g = da.get_rdf(args.corrData)[0]
 
 # validate arguments
-if (args.color is not None):
-    assert(len(args.color) == numIonTypes + numIonTypePairs)
-    mpl.rcParams['axes.color_cycle'] = args.color
-
-
-def connectLabel(label):
-    return label[0] + '-' + label[1]
-
-if (args.label is not None):
-    assert(len(args.label) == numIonTypes)
-    label = args.label
+if (args.custom):
+    assert(len(color) == numIonTypes + numIonTypePairs)
+    mpl.rcParams['axes.color_cycle'] = color
+    assert(len(label) == numIonTypes)
 else:
     label = ['{}'.format(i+1) for i in range(numIonTypes)]
-label += [connectLabel(l) for l in it.combinations_with_replacement(label, 2)]
+
+label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
 # plot sdCorr
 rc = {'font': {'size': 46,
@@ -156,11 +144,11 @@ for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr_masked)):
     #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
-    if (args.custom):
+    if (args.custom and xticks is not None):
         plt.xticks(xticks)
     if (i == 0):
         ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
-        if (args.custom):
+        if (args.custom and yticks is not None):
             ax.set_yticks(yticks)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None,

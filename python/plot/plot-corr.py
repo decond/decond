@@ -13,14 +13,18 @@ parser.add_argument('corrData', help="correlation data file <c5 or d5>")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
-parser.add_argument('--color', nargs='*',
-                    help="manually assign line color for each auto and cross "
-                         "terms. <auto1>...<autoN> <cross11>...<cross1N> "
-                         "<cross22>...<cross2N> .. <crossNN>")
-parser.add_argument('--label', nargs='*',
-                    help="manually assign label for each component. "
-                         "<mol1>...<molN>")
+parser.add_argument('-c', '--custom', action='store_true',
+                    help="Read the customized parameters in the script")
 args = parser.parse_args()
+
+# ======= basic customization ==========
+if (args.custom):
+    label = ['cation', 'anion']
+    color = ['b', 'g', 'b', 'r', 'g']
+    xmax = 3
+# ======================================
+else:
+    xmax = 1
 
 with h5py.File(args.corrData, 'r') as f:
     timeLags = f['timeLags'][...]
@@ -31,20 +35,13 @@ with h5py.File(args.corrData, 'r') as f:
     numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2
 
 # validate arguments
-if (args.color is not None):
-    assert(len(args.color) == numIonTypes + numIonTypePairs)
-    mpl.rcParams['axes.color_cycle'] = args.color
-
-
-def connectLabel(label):
-    return label[0] + '-' + label[1]
-
-if (args.label is not None):
-    assert(len(args.label) == numIonTypes)
-    label = args.label
+if (args.custom):
+    assert(len(color) == numIonTypes + numIonTypePairs)
+    mpl.rcParams['axes.color_cycle'] = color
+    assert(len(label) == numIonTypes)
 else:
     label = ['{}'.format(i+1) for i in range(numIonTypes)]
-label += [connectLabel(l) for l in it.combinations_with_replacement(label, 2)]
+label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
 # plot nCorr
 rc = {'font': {'size': 34,
@@ -82,7 +79,7 @@ for i, corr in enumerate(nCorr):
     plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
 
 leg = plt.legend()
-plt.xlim(xmax=0.5)
+plt.xlim(xmax=xmax)
 plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
 plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)',
            labelpad=ylabelpad)
