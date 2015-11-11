@@ -25,7 +25,27 @@ parser.add_argument('--color', nargs='*',
 parser.add_argument('--label', nargs='*',
                     help="manually assign label for each component. "
                          "<mol1>...<molN>")
+parser.add_argument('-c', '--custom', action='store_true',
+                    help="Read the customized parameters in the script")
 args = parser.parse_args()
+
+# ======= basic customization ==========
+if (args.custom):
+    tmin, tmax, tstep = 0, 125, 1
+    rmin, rmax, rstep = 35, 101, 1
+    cbounds = np.arange(-0.05, 0.301, 0.01)
+    colorbar_ticks = np.arange(-0.05, 0.301, 0.05)
+    cmap = cm.get_cmap('RdYlBu_r')
+    cmin, cmax = (-0.3, 0.3)
+    xticks = np.arange(0, 2.5, 0.5)
+    yticks = np.arange(0, 11, 1)
+# ======================================
+else:
+    tmin, tmax, tstep = 0, 100, 1
+    rmin, rmax, rstep = 0, 100, 1
+    cbounds = 12
+    colorbar_ticks = None
+    cmap = cm.get_cmap('RdYlBu_r')
 
 threshold = args.threshold
 
@@ -116,55 +136,37 @@ for i in range(numIonTypePairs):
                      np.newaxis, :, np.newaxis]))
 sdCorr_masked = np.ma.masked_array(sdCorr_masked)
 
-tmin, tmax, tstep = 0, 41, 1
-rmin, rmax, rstep = 19, 71, 1
+# ====== Determine the overall data range and color map ========
 T, R = np.meshgrid(timeLags[tmin:tmax:tstep], rBins[rmin:rmax:rstep])
-cmap = cm.get_cmap('RdYlBu_r')
 
-for i, sd in enumerate(sdCorr_masked):
-    vmin, vmax = (
-            np.nanmin(sdCorr_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]),
-            np.nanmax(sdCorr_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]))
-    norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=vmin, vmax=vmax)
-    plt.figure()
-    c = plt.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep],
-                     32, norm=norm, cmap=cmap)
-    # plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep], [0],
-    #       colors='black')
-    ax = plt.gca()
-    ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
-    ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
-    ax.set_title(label[numIonTypes + i])
-    cb = plt.colorbar(c)
-    cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)')
-    #    plt.tight_layout()
-    plt.savefig(args.out + '-' + str(i) + '.' + format,
-                bbox_inches="tight", pad_inches=0.15)
+if (not args.custom):
+    cmin, cmax = (
+            np.nanmin(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]),
+            np.nanmax(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]))
 
-vmin, vmax = (np.nanmin(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]),
-              np.nanmax(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]))
-norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=-1.2, vmax=1.8)
-bounds = np.arange(-0.20, 1.801, 0.1)
+norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=cmin, vmax=cmax)
 fig, axs = plt.subplots(1, numIonTypePairs, sharex=True, sharey=True,
                         figsize=figsize3)
 for i, (ax, sd) in enumerate(zip(axs.flat, sdCorr_masked)):
     c = ax.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep],
-                    bounds, norm=norm, cmap=cmap)
-    #  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep] * nm2AA**2, [0],
+                    cbounds, norm=norm, cmap=cmap)
+    #  ax.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep], [0],
     #  colors='black')
     ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
     #    ax.set_title(label[numIonTypes + i])
     plt.sca(ax)
     plt.title(label[numIonTypes + i], y=1.02)
-    plt.xticks([0, 0.1, 0.2, 0.3])
+    if (args.custom):
+        plt.xticks(xticks)
     if (i == 0):
         ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
+        if (args.custom):
+            ax.set_yticks(yticks)
 
 #  plt.subplots_adjust(left=None, bottom=None, right=None, top=None,
 #  wspace=None, hspace=None)
 plt.subplots_adjust(left=0.05, bottom=0.15, right=1.05, wspace=0.07)
-cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=np.arange(0, 1.801, 0.4),
-                  pad=0.01)
+cb = plt.colorbar(c, ax=axs.ravel().tolist(), ticks=colorbar_ticks, pad=0.01)
 cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)', labelpad=clabelpad)
 #  plt.tight_layout()
 
@@ -175,3 +177,27 @@ for ax in axs:
         sp.set_linewidth(spineLineWidth)
 
 plt.savefig(args.out + '.' + format, bbox_inches="tight", pad_inches=0.15)
+
+
+# ====== Draw figures one by one ========
+# to help determining the appropriate cmin and cmax
+if (not args.custom):
+    for i, sd in enumerate(sdCorr_masked):
+        cmin, cmax = (
+                np.nanmin(sdCorr_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]),
+                np.nanmax(sdCorr_masked[i, rmin:rmax:rstep, tmin:tmax:tstep]))
+        norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=cmin, vmax=cmax)
+        plt.figure()
+        c = plt.contourf(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep],
+                         32, norm=norm, cmap=cmap)
+        # plt.contour(T, R, sd[rmin:rmax:rstep, tmin:tmax:tstep], [0],
+        #       colors='black')
+        ax = plt.gca()
+        ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
+        ax.set_ylabel(r'$r$\ \ (\AA)', labelpad=ylabelpad)
+        ax.set_title(label[numIonTypes + i])
+        cb = plt.colorbar(c)
+        cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)')
+        #    plt.tight_layout()
+        plt.savefig(args.out + '-' + str(i) + '.' + format,
+                    bbox_inches="tight", pad_inches=0.15)
