@@ -20,7 +20,15 @@
 .nfs*
 *~
 
+# Compiled Python scripts
+*.pyc
+
 tags
 GPATH
 GRTAGS
 GTAGS
+
+*.d5
+*.c5
+*.h5
+*.eps

@@ -8,6 +8,7 @@ MODFLAG = -module
 SRCDIR = ./src/
 MODDIR = ./mod/
 OUTDIR = ./out/
+BINDIR = ../bin/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
 ### for debug ###
@@ -18,18 +19,22 @@ FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
 ### for dynamic linking ###
 #FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
 
-XDRFILEDIR = $(HOME)/local/xdrfile-1.1.1-d
+XDRFILEDIR = $(HOME)/local/xdrfile-1.1.4-d
 XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
+
+HDF5_INCLUDE_DIR = /home/kmtu/local/hdf5-1.8.15/include
 
 
 #========== Basically NO modification is needed below this line ===========#
-PROGRAM = decompose_mpi trjconv2com
+PROGRAM = decond trjconv2com
 DIR = $(MODDIR) $(OUTDIR)
 vpath %.f90 $(SRCDIR)
 
 # Program ==================================
 .PHONY : all dir
 all : dir $(PROGRAM)
+	ln -sf ../fortran/$(OUTDIR)* $(BINDIR)
+
 dir :
 	mkdir -p $(DIR)
 
@@ -40,15 +45,18 @@ trjconv2com : utility.o xdr.o top.o trjconv2com.o
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-decompose_mpi : mpiproc.o spatial_dec.o correlation.o utility.o xdr.o top.o decompose_mpi.o
+decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decond.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
-decompose_mpi.o : decompose_mpi.f90
+decond.o : decond.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # Library ===================================
-spatial_dec.o : spatial_dec.f90 mpiproc.o
+spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+energy_dec.o : energy_dec.f90 mpiproc.o utility.o
+	$(FCMPI) $(FCFLAGS) -I$(HDF5_INCLUDE_DIR) -o $(SRCDIR)$(@F) -c $<
 
 mpiproc.o : mpiproc.f90
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
@@ -73,4 +81,5 @@ clean :
 	rm -f $(SRCDIR)*.o $(MODDIR)*.mod
 	rm -f $(addprefix $(OUTDIR), $(PROGRAM) )
 	rm -f *~ $(SRCDIR)*~
+	rm -f $(addprefix $(BINDIR), $(PROGRAM) )
 

@@ -5,7 +5,9 @@ module spatial_dec
   integer :: num_rBin
   integer, allocatable :: sd_binIndex(:)
   real(8) :: rBinWidth
-  real(8), allocatable :: rho(:, :), sdCorr(:, :, :), pos(:, :, :)
+  real(8), allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :), rBins(:)
+  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
+  !sdPairCount: (num_rBin, molTypePairIndex)
   integer :: stat
 
   !MPI variables
@@ -130,8 +132,10 @@ contains
   subroutine sd_prepCorrMemory(maxLag, numMolType, numFrame)
     implicit none
     integer, intent(in) :: maxLag, numMolType, numFrame
+    integer :: numMolTypePair
 
-    allocate(sdCorr(maxLag+1, num_rBin, numMolType*numMolType), stat=stat)
+    numMolTypePair = numMolType * (numMolType + 1) / 2
+    allocate(sdCorr(maxLag+1, num_rBin, numMolTypePair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdCorr"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -139,13 +143,13 @@ contains
     end if
     sdCorr = 0d0
 
-    allocate(rho(num_rBin, numMolType*numMolType), stat=stat)
+    allocate(sdPairCount(num_rBin, numMolTypePair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: rho"
+      write(*,*) "Allocation failed: sdPairCount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    rho = 0d0
+    sdPairCount = 0d0
 
     allocate(sd_binIndex(numFrame), stat=stat)
     if (stat /= 0) then
@@ -155,15 +159,15 @@ contains
     end if
   end subroutine sd_prepCorrMemory
 
-  subroutine sd_getBinIndex(p1, p2, cell, sd_binIndex)
+  subroutine sd_getBinIndex(r, c, cell, sd_binIndex)
     implicit none
-    real(8), intent(in) :: p1(:,:), p2(:,:), cell(3)
-    !p1(dim,timeFrame)
+    integer, intent(in) :: r, c
+    real(8), intent(in) :: cell(3)
     integer, intent(out) :: sd_binIndex(:)
-    real(8) :: pp(size(p1,1), size(p1,2))
+    real(8) :: pp(3, size(sd_binIndex))
     integer :: d
 
-    pp = p1 - p2
+    pp = pos_r(:,:,r) - pos_c(:,:,c)
     do d = 1, 3
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
@@ -180,24 +184,60 @@ contains
   subroutine sd_collectCorr()
     implicit none
     if (myrank == root) then
+      write(*,*) "collecting sdCorr"
       call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(MPI_IN_PLACE, rho, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
       call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
-      call mpi_reduce(rho, dummy_null, size(rho), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
+
+    if (myrank == root) then
+      write(*,*) "collecting sdPairCount"
+      call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    else
+      call mpi_reduce(sdPairCount, dummy_null, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+    end if
+    call mpi_barrier(MPI_COMM_WORLD, ierr)
   end subroutine sd_collectCorr
 
-  subroutine sd_normalize(numFrame, numMolType, norm)
+  subroutine sd_average(numFrame, numMolType, frameCount)
+    use utility, only: get_pairindex_upper_diag
     implicit none
-    integer, intent(in) :: numFrame, numMolType, norm(:)
-    integer :: i, n
+    integer, intent(in) :: numFrame, numMolType, frameCount(:)
+    integer :: i, t1, t2, n, molTypePairIndex
 
-    rho = rho / numFrame
-    do n = 1, numMolType*numMolType
+    sdPairCount = sdPairCount / numFrame
+    do n = 1, numMolType * (numMolType + 1) / 2
       do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / norm / rho(i, n)
+        sdCorr(:,i,n) = sdCorr(:,i,n) / frameCount / sdPairCount(i, n)
       end do
     end do
-  end subroutine sd_normalize
+
+    do t2 = 1, numMolType
+      do t1 = t2, numMolType
+        if (t1 /= t2) then
+          molTypePairIndex = get_pairindex_upper_diag(t1, t2, numMolType)
+          sdPairCount(:, molTypePairIndex) = sdPairCount(:, molTypePairIndex) / 2d0
+        end if
+      end do
+    end do
+  end subroutine sd_average
+
+  subroutine sd_make_rBins()
+    implicit none
+    integer :: i, stat
+    allocate(rBins(num_rBin), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: rBins"
+      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call exit(1)
+    end if 
+    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
+  end subroutine sd_make_rBins
+
+  subroutine sd_finish()
+    implicit none
+    deallocate(pos_r, pos_c, sdCorr, sdPairCount)
+    ! sd_binIndex has been deallocated in the main program
+  end subroutine sd_finish
 end module spatial_dec
