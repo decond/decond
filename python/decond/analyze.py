@@ -1091,3 +1091,35 @@ def fit_decond(outname, decname, fit):
             outfile.buffer = infile.buffer
         outfile._fit_cesaro(fit)
         return outfile.buffer
+
+
+def report_decond(decname):
+    print()
+
+    diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
+        get_diffusion(decname)
+    print("Diffusion")
+    print("=========")
+    print("{:<15} {:<}".format(
+        'Fit (ps)', 'Diffusion (' + diffusion_unit + ')'))
+    for i in range(len(fit)):
+        print("{:<15}    {:<}".format(str(fit[i] * 1e12), str(diffusion[i])))
+        print("{:<15} +/-{:<}".format('', str(diffusion_err[i])))
+        print()
+
+    print()
+
+    ec_total, ec_total_err, ec, ec_err, ec_unit, fit, fit_unit = \
+        get_ec(decname)
+    print("Electrical conductivity")
+    print("=======================")
+    print("{:<15} {:<15}".format(
+        'Fit (ps)', 'Electrical conductivity (' + ec_unit + ')'))
+    for i in range(len(fit)):
+        print("{:<15}    {:<}".format(str(fit[i] * 1e12), str(ec[i])))
+        print("{:<15} +/-{:<}".format('', str(ec_err[i])))
+        print("{:<15} Total: {:<} +/- {:<}".format(
+            '', str(ec_total[i]), str(ec_total_err[i])))
+        print()
+
+    print()

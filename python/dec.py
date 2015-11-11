@@ -20,6 +20,10 @@ def fit(args):
     print("output: " + args.out)
 
 
+def report(args):
+    da.report_decond(args.decond)
+
+
 # create the top-level parser
 parser = argparse.ArgumentParser(
         description="Decond analysis tool, use subcommands to perform tasks")
@@ -86,6 +90,17 @@ parser_add.add_argument('-o', '--out', default=DEFAULT_OUTFILENAME,
                             DEFAULT_OUTFILENAME))
 
 parser_add.set_defaults(func=fit)
+
+
+# create the parser for the "report" subcommand
+parser_add = subparsers.add_parser(
+        'report',
+        help="show an overall report to standard output")
+
+parser_add.add_argument('decond',
+                        help="decond analysis file. <decond.d5>")
+
+parser_add.set_defaults(func=report)
 
 
 # parse the args and call whatever function was selected
