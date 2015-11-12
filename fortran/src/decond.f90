@@ -979,7 +979,7 @@ contains
     write(*, *) 
     write(*, *) "  -sd: do spatial decomposition. default no sd."
     write(*, *)
-    write(*, *) "  -ed <engtraj.dat>: do energy decomposition. default no ed."
+    write(*, *) "  -ed <engtraj> <engtraj> ...: do energy decomposition. default no ed."
     write(*, *)
     write(*, *) "  -sbwidth <sBinWidth(nm)>: spatial-decomposition bin width. default = 0.01."
     write(*, *) "                            only meaningful when -sd is given."
