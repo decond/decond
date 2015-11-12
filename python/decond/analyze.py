@@ -542,7 +542,7 @@ class DecondFile(CorrFile):
         fit_data('nDTotal', 'nCorr_unit')
 
         for dectype in DecType:
-            if hasattr(buf, dectype.value):
+            if getattr(buf, dectype.value) is not None:
                 fit_data('decD', 'decCorr_unit', dectype)
 
     def _write_buffer(self):
@@ -1070,13 +1070,13 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
 
 
 def new_decond(outname, samples, fit, report=True):
-    with DecondFile(outname, 'x') as outfile:
+    with DecondFile(outname, 'w-') as outfile:
         outfile._add_sample(samples, fit, report)
         return outfile.buffer
 
 
 def extend_decond(outname, decname, samples, fit=None, report=True):
-    with DecondFile(outname, 'x') as outfile:
+    with DecondFile(outname, 'w-') as outfile:
         if (report):
             print("Reading decond file: {0}".format(decname))
         with DecondFile(decname) as infile:
@@ -1086,7 +1086,7 @@ def extend_decond(outname, decname, samples, fit=None, report=True):
 
 
 def fit_decond(outname, decname, fit):
-    with DecondFile(outname, 'x') as outfile:
+    with DecondFile(outname, 'w-') as outfile:
         with DecondFile(decname) as infile:
             outfile.buffer = infile.buffer
         outfile._fit_cesaro(fit)

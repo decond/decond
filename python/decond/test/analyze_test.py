@@ -189,7 +189,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
                            np.random.sample((numpairtype, numebin)) -
                            paircount_amp / 2 + paircount_offset) / numebin
 
-    with da.CorrFile(filename, 'x') as f:
+    with da.CorrFile(filename, 'w-') as f:
         f.buffer.charge = charge
         f.buffer.charge_unit = charge_unit
         f.buffer.numMol = numMol
