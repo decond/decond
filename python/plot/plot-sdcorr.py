@@ -23,7 +23,6 @@ args = parser.parse_args()
 # ======= basic customization ==========
 if (args.custom):
     label = ['cation', 'anion']
-    color = ['b', 'g', 'b', 'r', 'g']
     threshold = 0.1
     tmin, tmax, tstep = 0, 125, 1
     rmin, rmax, rstep = 35, 101, 1
@@ -59,8 +58,6 @@ g = da.get_rdf(args.corrData)[0]
 
 # validate arguments
 if (args.custom):
-    assert(len(color) == numIonTypes + numIonTypePairs)
-    mpl.rcParams['axes.color_cycle'] = color
     assert(len(label) == numIonTypes)
 else:
     label = ['{}'.format(i+1) for i in range(numIonTypes)]
