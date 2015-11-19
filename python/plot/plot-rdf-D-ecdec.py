@@ -12,6 +12,10 @@ import matplotlib.ticker as ticker
 default_outbasename = "g-D-ecdec"
 parser = argparse.ArgumentParser(description="Plot rdf-D-ecdec")
 parser.add_argument('decond', help="decond analysis file. <decond.d5>")
+parser.add_argument('--decond_D', metavar='DECOND',
+                    help="decond analysis file for plotting D. <decond.d5>")
+parser.add_argument('--decond_ecdec', metavar='DECOND',
+                    help="decond analysis file for plotting ecdec. <decond.d5>")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
@@ -90,12 +94,25 @@ if (args.custom):
 
 fitKey = 0
 
+if (args.decond_D is None):
+    decond_D = args.decond
+else:
+    decond_D = args.decond_D
+
+if (args.decond_ecdec is None):
+    decond_ecdec = args.decond
+else:
+    decond_ecdec = args.decond_ecdec
+
 g, rBins = da.get_rdf(args.decond)[0:2]
-DI, _, _, fit = da.get_diffusion(args.decond)[0:4]
-sdD = da.get_decD(args.decond, da.DecType.spatial)[0]
-sigI = da.get_ec_dec(args.decond, da.DecType.spatial)[0]
+DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
+sdD, _, _, rBins_sdD = da.get_decD(decond_D, da.DecType.spatial)[0:4]
+g_sdD = da.get_rdf(args.decond_D)[0]
+sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial)[0:3]
 
 rBins /= da.const.angstrom
+rBins_sdD /= da.const.angstrom
+rBins_sigI /= da.const.angstrom
 DI /= da.const.angstrom**2 / da.const.pico
 sdD /= da.const.angstrom**2 / da.const.pico
 
@@ -132,11 +149,11 @@ for i, D in enumerate(DI[fitKey]):
                 linestyle=lineStyle[i])
 
 for i, D in enumerate(sdD[fitKey]):
-    g_masked = np.where(np.isnan(g[i]), -1, g[i])
+    g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
     D_masked = np.ma.masked_where(
             [c if j <= smallRegion[i] else False
              for j, c in enumerate(g_masked < threshold)], D)
-    axs[1].plot(rBins, D_masked, label=label[numIonTypes + i],
+    axs[1].plot(rBins_sdD, D_masked, label=label[numIonTypes + i],
                 linestyle=lineStyle[numIonTypes + i])
 
 axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
@@ -150,7 +167,7 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 
 # plot sig
 for i, sig in enumerate(sigI[fitKey]):
-    axs[2].plot(rBins, sig, label=label[i])
+    axs[2].plot(rBins_sigI, sig, label=label[i])
     axs[2].legend(loc=sig_legend_loc)
 axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
@@ -169,7 +186,7 @@ for ax in axs:
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
     ax.set_xlim(xmax=halfCellLength)
     ax.xaxis.labelpad = 1
-    ax.yaxis.set_label_coords(-0.15, 0.5)
+    ax.yaxis.set_label_coords(-0.18, 0.5)
     for sp in ax.spines.values():
         sp.set_linewidth(spineLineWidth)
 
