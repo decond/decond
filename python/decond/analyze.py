@@ -932,15 +932,34 @@ def get_diffusion(decname):
     return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
 
 
-def get_decD(decname, dectype):
+def get_decD(decname, dectype, window=1):
     """
     Return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
-        decD = gid['decD'][...]  # L^2 T^-1
-        decD_err = gid['decD_err'][...]
         decBins = gid['decBins'][...]
+        decD = gid['decD'][...]  # [fit, type, bins]  # L^2 T^-1
+        decPairCount = gid['decPairCount'][...]  # [type, bins]
+        decD_err = gid['decD_err'][...]
+
+        if (window > 1):
+            # removes trailing undividable bins
+            decBins = decBins[:decBins.size // window * window]
+            decBins = np.concatenate(np.mean(np.split(
+                decBins, decBins.size // window, axis=0), axis=1, keepdims=True), axis=0)
+
+            decD = decD[:, :, :decBins.size*window]  # [fit, type, decBins*window]  # L^2 T^-1
+            decPairCount = decPairCount[:, :decBins.size*window]  # [type, decBins*window]
+            decD *= decPairCount[np.newaxis, :, :]  # [fit, type, decBins*window]
+            decD = np.array(np.split(decD, decBins.size, axis=2))  # [decBins, fit, type, window]
+            decD = np.rollaxis(np.sum(decD, axis=3), 0, 3)  # [fit, type, decBins]
+            decPairCount = np.array(np.split(decPairCount, decBins.size, axis=1))  # [decBins, type, window]
+            decPairCount = np.sum(decPairCount, axis=2).T  # [type, decBins]
+
+            # TODO: see how to decide err when window > 1
+            decD_err = np.full(decD.shape, np.nan)
+
         ccD = const.nano**2 / const.pico
         decD *= ccD
         decD_err *= ccD
