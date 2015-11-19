@@ -20,6 +20,13 @@ def fit(args):
     print("output: " + args.out)
 
 
+def window(args):
+    window = {da.DecType.spatial: args.spatial,
+              da.DecType.energy: args.energy}
+    da.window_decond(args.out, args.decond, window)
+    print("output: " + args.out)
+
+
 def report(args):
     da.report_decond(args.decond)
 
@@ -90,6 +97,26 @@ parser_add.add_argument('-o', '--out', default=DEFAULT_OUTFILENAME,
                             DEFAULT_OUTFILENAME))
 
 parser_add.set_defaults(func=fit)
+
+
+# create the parser for the "window" subcommand
+parser_add = subparsers.add_parser(
+        'window',
+        help="change binning window of existing decond.d5")
+
+parser_add.add_argument('decond',
+                        help="decond analysis file. <decond.d5>")
+parser_add.add_argument('-s', '--spatial', type=int, metavar=('WINDOW'),
+                        default=1,
+                        help="spatial window")
+parser_add.add_argument('-e', '--energy', type=int, metavar=('WINDOW'),
+                        default=1,
+                        help="energy window")
+parser_add.add_argument('-o', '--out', default=DEFAULT_OUTFILENAME,
+                        help="output decond file, default <{0}>".format(
+                            DEFAULT_OUTFILENAME))
+
+parser_add.set_defaults(func=window)
 
 
 # create the parser for the "report" subcommand

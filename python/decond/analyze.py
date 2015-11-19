@@ -545,6 +545,62 @@ class DecondFile(CorrFile):
             if getattr(buf, dectype.value) is not None:
                 fit_data('decD', 'decCorr_unit', dectype)
 
+    def _change_window(self, window):
+        buf = self.buffer
+        def window_data(dectype):
+            decbuf = getattr(buf, dectype.value)
+            binw = window[dectype]
+
+            # removes trailing undividable bins
+            decbuf.decBins = decbuf.decBins[:decbuf.decBins.size // binw * binw]
+            decbuf.decBins = np.concatenate(np.mean(np.split(
+                decbuf.decBins, decbuf.decBins.size // binw, axis=0), axis=1, keepdims=True), axis=0)
+            initsize = decbuf.decBins.size * binw
+
+            # decPairCount: [type, bins]
+            decbuf.decPairCount = decbuf.decPairCount[:, :initsize]  # [type, decBins*binw]
+
+            # decD: [fit, type, bins]  # L^2 T^-1
+            decbuf.decD = decbuf.decD[:, :, :initsize]  # [fit, type, decBins*binw]
+            decbuf.decD *= decbuf.decPairCount[np.newaxis, :, :]  # [fit, type, decBins*binw]
+            decbuf.decD = np.array(np.split(decbuf.decD, decbuf.decBins.size, axis=2))  # [decBins, fit, type, binw]
+            decbuf.decD = np.rollaxis(np.sum(decbuf.decD, axis=3), 0, 3)  # [fit, type, decBins]
+
+            # decCorr: [type, bins, time]
+            decbuf.decCorr = decbuf.decCorr[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decCorr *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
+            decbuf.decCorr = np.array(np.split(decbuf.decCorr, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
+            decbuf.decCorr = np.rollaxis(np.sum(decbuf.decCorr, axis=2), 0, 2)  # [type, decBins, time]
+
+            # decDCesaro: [type, bins, time]
+            decbuf.decDCesaro = decbuf.decDCesaro[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decDCesaro *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
+            decbuf.decDCesaro = np.array(np.split(decbuf.decDCesaro, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
+            decbuf.decDCesaro = np.rollaxis(np.sum(decbuf.decDCesaro, axis=2), 0, 2)  # [type, decBins, time]
+
+            # window decPairCount
+            decbuf.decPairCount = np.array(np.split(decbuf.decPairCount, decbuf.decBins.size, axis=1))  # [decBins, type, binw]
+            decbuf.decPairCount = np.sum(decbuf.decPairCount, axis=2).T  # [type, decBins]
+
+            # normalize again
+            decbuf.decD /= decbuf.decPairCount[np.newaxis, :, :]
+            decbuf.decCorr /= decbuf.decPairCount[:, :, np.newaxis]
+            decbuf.decDCesaro /= decbuf.decPairCount[:, :, np.newaxis]
+
+            # TODO: see how to decide error when binw > 1
+            decbuf.decD_err = np.full(decbuf.decD.shape, np.nan)
+            decbuf.decCorr_err = np.full(decbuf.decCorr.shape, np.nan)
+            decbuf.decDCesaro_err = np.full(decbuf.decDCesaro.shape, np.nan)
+            decbuf.decPairCount_err = np.full(decbuf.decPairCount.shape, np.nan)
+
+        for dectype in window:
+            if getattr(buf, dectype.value) is None:
+                raise Error("{} does not have {} data".format(
+                    self.filename, dectype.value))
+            else:
+                if window[dectype] > 1:
+                    window_data(dectype)
+
     def _write_buffer(self):
         super()._write_buffer()
         self['numSample'] = self.buffer.numSample
@@ -932,34 +988,15 @@ def get_diffusion(decname):
     return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
 
 
-def get_decD(decname, dectype, window=1):
+def get_decD(decname, dectype):
     """
     Return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
-        decBins = gid['decBins'][...]
-        decD = gid['decD'][...]  # [fit, type, bins]  # L^2 T^-1
-        decPairCount = gid['decPairCount'][...]  # [type, bins]
+        decD = gid['decD'][...]  # L^2 T^-1
         decD_err = gid['decD_err'][...]
-
-        if (window > 1):
-            # removes trailing undividable bins
-            decBins = decBins[:decBins.size // window * window]
-            decBins = np.concatenate(np.mean(np.split(
-                decBins, decBins.size // window, axis=0), axis=1, keepdims=True), axis=0)
-
-            decD = decD[:, :, :decBins.size*window]  # [fit, type, decBins*window]  # L^2 T^-1
-            decPairCount = decPairCount[:, :decBins.size*window]  # [type, decBins*window]
-            decD *= decPairCount[np.newaxis, :, :]  # [fit, type, decBins*window]
-            decD = np.array(np.split(decD, decBins.size, axis=2))  # [decBins, fit, type, window]
-            decD = np.rollaxis(np.sum(decD, axis=3), 0, 3)  # [fit, type, decBins]
-            decPairCount = np.array(np.split(decPairCount, decBins.size, axis=1))  # [decBins, type, window]
-            decPairCount = np.sum(decPairCount, axis=2).T  # [type, decBins]
-
-            # TODO: see how to decide err when window > 1
-            decD_err = np.full(decD.shape, np.nan)
-
+        decBins = gid['decBins'][...]
         ccD = const.nano**2 / const.pico
         decD *= ccD
         decD_err *= ccD
@@ -1104,11 +1141,23 @@ def extend_decond(outname, decname, samples, fit=None, report=True):
         return outfile.buffer
 
 
-def fit_decond(outname, decname, fit):
+def fit_decond(outname, decname, fit, report=True):
     with DecondFile(outname, 'w-') as outfile:
+        if (report):
+            print("Reading decond file: {0}".format(decname))
         with DecondFile(decname) as infile:
             outfile.buffer = infile.buffer
         outfile._fit_cesaro(fit)
+        return outfile.buffer
+
+
+def window_decond(outname, decname, window, report=True):
+    with DecondFile(outname, 'w-') as outfile:
+        if (report):
+            print("Reading decond file: {0}".format(decname))
+        with DecondFile(decname) as infile:
+            outfile.buffer = infile.buffer
+        outfile._change_window(window)
         return outfile.buffer
 
 

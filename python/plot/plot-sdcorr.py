@@ -26,6 +26,7 @@ if (args.custom):
     threshold = 0.1
     tmin, tmax, tstep = 0, 125, 1
     rmin, rmax, rstep = 35, 101, 1
+    window = 1
     cbounds = np.arange(-0.05, 0.301, 0.01)
     colorbar_ticks = np.arange(-0.05, 0.301, 0.05)
     cmap = cm.get_cmap('RdYlBu_r')
@@ -41,6 +42,11 @@ else:
     cmap = cm.get_cmap('RdYlBu_r')
     threshold = 0
 
+rmin //= window
+rmax //= window
+rstep //= window
+if rstep < 1:
+    rstep = 1
 
 with h5py.File(args.corrData, 'r') as f:
     timeLags = f['timeLags'][...]
