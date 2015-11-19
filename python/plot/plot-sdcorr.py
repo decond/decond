@@ -34,19 +34,18 @@ if (args.custom):
     xticks = np.arange(0, 2.5, 0.5)
     yticks = None  # set to None for auto-yticks
 # ======================================
+    rmin //= window
+    rmax //= window
+    rstep //= window
+    if rstep < 1:
+        rstep = 1
 else:
     tmin, tmax, tstep = 0, 200, 2
     rmin, rmax, rstep = 0, 200, 2
-    cbounds = 12
     colorbar_ticks = None
     cmap = cm.get_cmap('RdYlBu_r')
     threshold = 0
-
-rmin //= window
-rmax //= window
-rstep //= window
-if rstep < 1:
-    rstep = 1
+    cnum = 31
 
 with h5py.File(args.corrData, 'r') as f:
     timeLags = f['timeLags'][...]
@@ -134,6 +133,7 @@ if (not args.custom):
     cmin, cmax = (
             np.nanmin(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]),
             np.nanmax(sdCorr_masked[:, rmin:rmax:rstep, tmin:tmax:tstep]))
+    cbounds = np.arange(cmin, cmax, (cmax-cmin)/(cnum+1))
 
 norm = CustomNormalize(vanchor=0, canchor=0.42, vmin=cmin, vmax=cmax)
 fig, axs = plt.subplots(1, numIonTypePairs, sharex=True, sharey=True,
