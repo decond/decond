@@ -107,7 +107,7 @@ else:
 g, rBins = da.get_rdf(args.decond)[0:2]
 DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
 sdD, _, _, rBins_sdD = da.get_decD(decond_D, da.DecType.spatial)[0:4]
-g_sdD = da.get_rdf(args.decond_D)[0]
+g_sdD = da.get_rdf(decond_D)[0]
 sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial)[0:3]
 
 rBins /= da.const.angstrom
@@ -122,7 +122,7 @@ halfCellIndex = rBins.size / np.sqrt(3)
 halfCellLength = rBins[halfCellIndex]
 
 smallRegion = []
-for rdf in g:
+for rdf in g_sdD:
     smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
 
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)

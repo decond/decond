@@ -899,6 +899,14 @@ def _paircount_to_rdf(paircount, rbins, nummol, volume):
     return g
 
 
+def _paircount_to_edf(paircount, volume):
+    rho_vde = paircount
+    rho_de = rho_vde / volume
+    # normalize
+    edf = rho_de / integrate.trapz(rho_de)[..., np.newaxis]
+    return edf  # L^3 E^-1
+
+
 def _numtype(nummol):
     """
     Return: num_moltype, num_pairtype, num_alltype
@@ -960,7 +968,7 @@ def get_edf(decname):
     with h5py.File(decname, 'r') as f:
         gid = f[DecType.energy.value]
         ebins = gid['decBins'][...]
-        edf = gid['decPairCount'][...]
+        edf = _paircount_to_edf(gid['decPairCount'][...], f['volume'][...])
 
         ebins *= const.kilo * const.calorie
         ebins_unit = "joule mol$^{-1}$"
