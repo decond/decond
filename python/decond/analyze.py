@@ -899,11 +899,13 @@ def _paircount_to_rdf(paircount, rbins, nummol, volume):
     return g
 
 
-def _paircount_to_edf(paircount, volume):
+def _paircount_to_edf(paircount, ebins, volume):
+    de = ebins[1] - ebins[0]
     rho_vde = paircount
     rho_de = rho_vde / volume
+    edf = rho_de / de
     # normalize
-    edf = rho_de / integrate.trapz(rho_de)[..., np.newaxis]
+    # edf = rho_de / integrate.trapz(rho_de)[..., np.newaxis]
     return edf  # L^3 E^-1
 
 
@@ -967,12 +969,12 @@ def get_edf(decname):
     """
     with h5py.File(decname, 'r') as f:
         gid = f[DecType.energy.value]
-        ebins = gid['decBins'][...]
-        edf = _paircount_to_edf(gid['decPairCount'][...], f['volume'][...])
-
-        ebins *= const.kilo * const.calorie
-        ebins_unit = "joule mol$^{-1}$"
-        return edf, ebins, ebins_unit
+        ebins = gid['decBins'][...] * const.calorie
+        volume = f['volume'][...] * const.nano**3
+        edf = _paircount_to_edf(gid['decPairCount'][...], ebins, volume)
+        edf_unit = "m$^{-3}$ kJ$^{-1} mol"
+        ebins_unit = "kJ mol$^{-1}$"
+        return edf, edf_unit, ebins, ebins_unit
 
 
 def get_diffusion(decname):
@@ -1013,8 +1015,8 @@ def get_decD(decname, dectype):
             decBins *= const.nano
             decBins_unit = "m"
         elif dectype is DecType.energy:
-            decBins *= const.kilo * const.calorie
-            decBins_unit = "joule mol$^{-1}$"
+            decBins *= const.calorie
+            decBins_unit = "kJ mol$^{-1}$"
 
     fit, fit_unit = get_fit(decname)
     return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
@@ -1112,8 +1114,8 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
             decBins *= const.nano
             decBins_unit = "m"
         elif dectype is DecType.energy:
-            decBins *= const.kilo * const.calorie
-            decBins_unit = "joule mol$^{-1}$"
+            decBins *= const.calorie
+            decBins_unit = "kJ mol$^{-1}$"
 
         ec_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
                    _nD_to_ec_const(temperature, volume))
