@@ -1050,6 +1050,25 @@ def get_ec(decname):
     return ec_total, ec_totol_err, ec, ec_err, ec_unit, fit, fit_unit
 
 
+def _symmetrize_array(arr, decBins, center=0, axis=-1):
+    center_idx = np.where(decBins==0)[0][0]
+    num_left = center_idx
+    num_right = decBins.size - num_left - 1
+    bw = decBins[1] - decBins[0]
+    if num_left > num_right:
+        # postpad zero
+        numpad = num_left - num_right
+        arr = np.append(arr, np.zeros(arr.shape[:-1]+(numpad,)), axis=axis)
+        decBins = np.hstack((decBins, [decBins[-1] + (i+1) * bw for i in range(numpad)]))
+    elif num_left < num_right:
+        # prepad zero
+        numpad = num_right - num_left
+        arr = np.insert(arr, [0]*numpad, 0., axis=axis)
+        decBins = np.hstack((list(reversed([decBins[0] - (i+1) * bw for i in range(numpad)])), decBins))
+
+    return arr, decBins
+
+
 def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                avewidth=None):
     """
@@ -1068,13 +1087,16 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
         decBins = gid['decBins'][...]
         beta = 1 / (const.k * temperature)
         paircount = gid['decPairCount'][...]
-        num_decBins = decBins.size
         bw = decBins[1] - decBins[0]
+
+        if dectype is DecType.energy:
+            decD, _ = _symmetrize_array(decD, decBins)
+            paircount, decBins = _symmetrize_array(paircount, decBins)
 
         if sep_nonlocal:
             if dectype is DecType.spatial:
                 if nonlocal_ref is None:
-                    nonlocal_ref_idx = num_decBins / np.sqrt(3)
+                    nonlocal_ref_idx = decBins.size / np.sqrt(3)
                 else:
                     nonlocal_ref_idx = int(nonlocal_ref / bw)
                 if avewidth is None:
@@ -1102,7 +1124,14 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                     (decD - decD_nonlocal[:, :, np.newaxis]) *
                     zz[num_moltype:, np.newaxis] * beta)
         ec_local[np.isnan(ec_local)] = 0
-        ec_local = integrate.cumtrapz(ec_local, initial=0)
+
+        if dectype is DecType.energy:
+            ec_local = (integrate.cumtrapz(ec_local[..., :(decBins.size+1)/2], initial=0) +
+                        integrate.cumtrapz(ec_local[..., -1:(decBins.size-1)/2-1:-1], initial=0))
+            ec_nonlocal = np.zeros(ec_local.shape[:-1])
+            decBins = decBins[:(decBins.size+1)/2]
+        else:
+            ec_local = integrate.cumtrapz(ec_local, initial=0)
 
         cc = (1 / const.nano**3 *
               const.nano**2 / const.pico *

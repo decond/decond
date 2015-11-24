@@ -32,8 +32,8 @@ if args.custom:
     edf_top = 0.04
     D_top = 0.004
     D_bottom = -0.0005
-    sig_top = 0.8
-    sig_bottom = -2
+    sig_top = 0.5
+    sig_bottom = -0.1
 
     # set to None for auto-ticks
     xticks = [-200, -100, 0, 100, 200]
@@ -41,7 +41,7 @@ if args.custom:
     yticks_D = np.arange(0, 0.0041, 0.001)
     edf_legend_loc = 'lower left'
     D_legend_loc = 'upper center'
-    sig_legend_loc = 'center left'
+    sig_legend_loc = 'upper center'
 # ======================================
 else:
     threshold_D = 0
@@ -175,11 +175,14 @@ if args.custom:
         axs[1].set_yticks(yticks_D)
     axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
 
-for ax in axs:
+for i, ax in enumerate(axs):
     if (args.custom and xticks is not None):
         ax.set_xticks(xticks)
         ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-    ax.set_xlim(xmin=eBins[0], xmax=eBins[-1])
+    if i == 2:
+        ax.set_xlim(xmin=eBins_sigI[0], xmax=eBins_sigI[-1])
+    else:
+        ax.set_xlim(xmin=eBins[0], xmax=eBins[-1])
     ax.xaxis.labelpad = 1
     ax.yaxis.set_label_coords(-0.18, 0.5)
     for sp in ax.spines.values():
