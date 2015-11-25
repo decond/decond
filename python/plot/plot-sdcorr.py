@@ -122,8 +122,7 @@ for i in range(numIonTypePairs):
     sdCorr_masked.append(np.ma.masked_array(
             sdCorr[i], np.ones_like(sdCorr[i]) * np.array(
                 [c if j <= smallRegion[i] else False
-                 for j, c in enumerate(g_masked < threshold)])[
-                     np.newaxis, :, np.newaxis]))
+                 for j, c in enumerate(g_masked < threshold)])[:, np.newaxis]))
 sdCorr_masked = np.ma.masked_array(sdCorr_masked)
 
 # ====== Determine the overall data range and color map ========
