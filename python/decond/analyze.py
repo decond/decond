@@ -1051,7 +1051,7 @@ def get_ec(decname):
 
 
 def _symmetrize_array(arr, decBins, center=0, axis=-1):
-    center_idx = np.where(decBins==0)[0][0]
+    center_idx = np.where(decBins==center)[0][0]
     num_left = center_idx
     num_right = decBins.size - num_left - 1
     bw = decBins[1] - decBins[0]
