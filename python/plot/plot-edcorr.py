@@ -55,13 +55,12 @@ with h5py.File(args.corrData, 'r') as f:
     numIonTypes = numMol.size
     numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2
     decgrp = f[da.DecType.energy.value]
-    eBins = decgrp['decBins'][...]  # nm
-    eBins *= da.const.nano / da.const.angstrom  # AA
+    eBins = decgrp['decBins'][...]  # kcal / mol
     edCorr = decgrp['decCorr'][...]  # nm^2 / ps^2
     edCorr *= (da.const.nano / da.const.angstrom)**2  # AA^2 / ps^2
 
 edf = da.get_edf(args.corrData)[0]
-edf *= da.const.angstrom**3
+edf *= da.const.angstrom**3 * da.const.calorie  # AA^-3 kcal^-1 mol
 
 # validate arguments
 if (args.custom):
@@ -147,7 +146,7 @@ for i, (ax, ed) in enumerate(zip(axs.flat, edCorr_masked)):
     if (args.custom and xticks is not None):
         plt.xticks(xticks)
     if (i == 0):
-        ax.set_ylabel(r'$\epsilon$\ \ (kJ mol$^{-1}$)', labelpad=ylabelpad)
+        ax.set_ylabel(r'$\epsilon$\ \ (kcal mol$^{-1}$)', labelpad=ylabelpad)
         if (args.custom and yticks is not None):
             ax.set_yticks(yticks)
 
@@ -182,7 +181,7 @@ if (not args.custom):
         #       colors='black')
         ax = plt.gca()
         ax.set_xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
-        ax.set_ylabel(r'$\epsilon$\ \ (kJ mol$^{-1}$)', labelpad=ylabelpad)
+        ax.set_ylabel(r'$\epsilon$\ \ (kcal mol$^{-1}$)', labelpad=ylabelpad)
         ax.set_title(label[numIonTypes + i])
         cb = plt.colorbar(c)
         cb.set_label(r'$c_{IL}^{(2)}(t;r)$\ \ (\AA$^2$ ps$^{-2}$)')

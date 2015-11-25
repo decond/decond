@@ -28,15 +28,16 @@ if args.custom:
     label = ['cation', 'anion']
     color = ['b', 'g', 'b', 'r', 'g']
 
-    threshold_D = 1e-6
-    edf_top = 0.04
+    threshold_D = 1e-5
+    edf_top = 0.20
     D_top = 0.004
     D_bottom = -0.0005
     sig_top = 0.5
     sig_bottom = -0.1
 
     # set to None for auto-ticks
-    xticks = [-200, -100, 0, 100, 200]
+    xticks = [-40, -20, 0, 20, 40]
+    xticks_minor = 2
     yticks_edf = [1e-10, 1e-8, 1e-6, 1e-4, 1e-2]
     yticks_D = np.arange(0, 0.0041, 0.001)
     edf_legend_loc = 'lower left'
@@ -112,8 +113,11 @@ edD, _, _, eBins_edD = da.get_decD(decond_D, da.DecType.energy)[0:4]
 edf_edD = da.get_edf(decond_D)[0]
 sigI, _, eBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.energy, sep_nonlocal=False)[0:3]
 
-edf *= da.const.angstrom**3
-edf_edD *= da.const.angstrom**3
+eBins /= da.const.calorie
+eBins_edD /= da.const.calorie
+eBins_sigI /= da.const.calorie
+edf *= da.const.angstrom**3 * da.const.calorie
+edf_edD *= da.const.angstrom**3 * da.const.calorie
 DI /= da.const.angstrom**2 / da.const.pico
 edD /= da.const.angstrom**2 / da.const.pico
 
@@ -132,9 +136,9 @@ for i, iedf in enumerate(edf):
     axs[0].plot(eBins, edf_masked, label=label[numIonTypes + i])
 axs[0].legend(loc=edf_legend_loc)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
-axs[0].set_xlabel(r"$\epsilon$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
+axs[0].set_xlabel(r"$\epsilon$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
 # axs[0].set_ylabel(r"$\rho_{IL}(\epsilon)$\ \ (nm$^{-3}$ J$^{-1}$ mol$^{1}$)", labelpad=labelpad)
-axs[0].set_ylabel(r"$\rho_{IL}^{(2)}(\epsilon)$\ \ ($\AA^{-3}$ kJ$^{-1}$ mol)", labelpad=labelpad)
+axs[0].set_ylabel(r"$\rho_{IL}^{(2)}(\epsilon)$\ \ ($\AA^{-3}$ kcal$^{-1}$ mol)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='top')
 axs[0].set_yscale('log')
@@ -150,7 +154,7 @@ for i, D in enumerate(edD[fitKey]):
     axs[1].plot(eBins_edD, D_masked, label=label[numIonTypes + i],
                 linestyle=lineStyle[numIonTypes + i])
 
-axs[1].set_xlabel(r"$\epsilon$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
+axs[1].set_xlabel(r"$\epsilon$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(\epsilon)$\ \ (\AA$^2$ ps$^{-1}$)", labelpad=labelpad)
 axs[1].legend(loc=D_legend_loc)
 # axs[1].legend(loc=(0.515, 0.245), labelspacing=0.2)
@@ -161,7 +165,7 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 for i, sig in enumerate(sigI[fitKey]):
     axs[2].plot(eBins_sigI, sig, label=label[i])
     axs[2].legend(loc=sig_legend_loc)
-axs[2].set_xlabel(r"$\lambda$\ \ (kJ mol$^{-1}$)", labelpad=labelpad)
+axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
@@ -178,7 +182,8 @@ if args.custom:
 for i, ax in enumerate(axs):
     if (args.custom and xticks is not None):
         ax.set_xticks(xticks)
-        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+        if xticks_minor is not None:
+            ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(xticks_minor))
     if i == 2:
         ax.set_xlim(xmin=eBins_sigI[0], xmax=eBins_sigI[-1])
     else:
