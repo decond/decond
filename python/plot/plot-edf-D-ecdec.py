@@ -32,8 +32,8 @@ if args.custom:
     edf_top = 0.20
     D_top = 0.004
     D_bottom = -0.0005
-    sig_top = 0.5
-    sig_bottom = -0.1
+    sig_top = 1.0
+    sig_bottom = -1.0
 
     # set to None for auto-ticks
     xticks = [-40, -20, 0, 20, 40]
@@ -42,7 +42,7 @@ if args.custom:
     yticks_D = np.arange(0, 0.0041, 0.001)
     edf_legend_loc = 'lower left'
     D_legend_loc = 'upper center'
-    sig_legend_loc = 'upper center'
+    sig_legend_loc = 'upper right'
 # ======================================
 else:
     threshold_D = 0
@@ -54,7 +54,7 @@ rc = {'font': {'size': 36,
                'family': 'serif',
                'serif': 'Times'},
       'text': {'usetex': True},
-      'legend': {'fontsize': 30},
+      'legend': {'fontsize': 24},
       'axes': {'labelsize': 36},
       'xtick': {'labelsize': 36,
                 'major.pad': 10,
@@ -111,11 +111,11 @@ edf, _, eBins = da.get_edf(args.decond)[0:3]
 DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
 edD, _, _, eBins_edD = da.get_decD(decond_D, da.DecType.energy)[0:4]
 edf_edD = da.get_edf(decond_D)[0]
-sigI, _, eBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.energy, sep_nonlocal=False)[0:3]
+sig_IL, _, eBins_sig = da.get_ec_dec_cross(decond_ecdec, da.DecType.energy)[0:3]
 
 eBins /= da.const.calorie
 eBins_edD /= da.const.calorie
-eBins_sigI /= da.const.calorie
+eBins_sig /= da.const.calorie
 edf *= da.const.angstrom**3 * da.const.calorie
 edf_edD *= da.const.angstrom**3 * da.const.calorie
 DI /= da.const.angstrom**2 / da.const.pico
@@ -162,11 +162,23 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot sig
-for i, sig in enumerate(sigI[fitKey]):
-    axs[2].plot(eBins_sigI, sig, label=label[i])
+# for i, sig in enumerate(sigI[fitKey]):
+    # axs[2].plot(eBins_sigI, sig, label=label[i])
+    # axs[2].legend(loc=sig_legend_loc)
+# axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
+# axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
+# plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
+         # horizontalalignment='left', verticalalignment='top')
+
+# sig_IL
+if args.custom:
+    axs[2].set_color_cycle(color[numIonTypes:])
+for i, sig in enumerate(sig_IL[fitKey]):
+    axs[2].plot(eBins_sig, sig, label=label[numIonTypes+i])
     axs[2].legend(loc=sig_legend_loc)
+    print(sig[-1])
 axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
-axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
+axs[2].set_ylabel(r"$\sigma_{IL}^{(2)}(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
@@ -184,10 +196,11 @@ for i, ax in enumerate(axs):
         ax.set_xticks(xticks)
         if xticks_minor is not None:
             ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(xticks_minor))
-    if i == 2:
-        ax.set_xlim(xmin=eBins_sigI[0], xmax=eBins_sigI[-1])
-    else:
-        ax.set_xlim(xmin=eBins[0], xmax=eBins[-1])
+    # if i == 2:
+        # ax.set_xlim(xmin=eBins_sig[0], xmax=eBins_sig[-1])
+    # else:
+        # ax.set_xlim(xmin=eBins[0], xmax=eBins[-1])
+    ax.set_xlim(xmin=eBins[0], xmax=eBins[-1])
     ax.xaxis.labelpad = 1
     ax.yaxis.set_label_coords(-0.18, 0.5)
     for sp in ax.spines.values():

@@ -969,8 +969,8 @@ def get_edf(decname):
     """
     with h5py.File(decname, 'r') as f:
         gid = f[DecType.energy.value]
-        ebins = gid['decBins'][...] * const.calorie
-        volume = f['volume'][...] * const.nano**3
+        ebins = gid['decBins'][...] * const.calorie  # kJ mol^-1
+        volume = f['volume'][...] * const.nano**3  # m^3
         edf = _paircount_to_edf(gid['decPairCount'][...], ebins, volume)
         edf_unit = "m$^{-3}$ kJ$^{-1} mol"
         ebins_unit = "kJ mol$^{-1}$"
@@ -1162,6 +1162,54 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
 
     fit, fit_unit = get_fit(decname)
     return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
+
+
+def get_ec_dec_cross(decname, dectype):
+    """
+    Return ec_dec_cross, ec_dec_cross_unit, decBins, decBins_unit, fit, fit_unit
+    """
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
+        nummol = f['numMol'][...]
+        charge = f['charge'][...]
+        volume = f['volume'][...]
+        temperature = f['temperature'][...]
+        decD = gid['decD'][...]  # L^2 T^-1
+        decBins = gid['decBins'][...]
+        paircount = gid['decPairCount'][...]
+
+    beta = 1 / (const.k * temperature)
+    zz = _zz(charge, nummol)
+    num_moltype, _, _ = _numtype(nummol)
+    ec_dec_cross = (
+        paircount / volume * decD * zz[num_moltype:, np.newaxis] * beta)
+
+    if dectype is DecType.energy:
+        ec_dec_cross, decBins = _symmetrize_array(ec_dec_cross, decBins)
+        # reverse the integrate direction for zz > 0 component
+        for i, czz in enumerate(zz[num_moltype:]):
+            if czz > 0:
+                ec_dec_cross[:, i, :] = ec_dec_cross[:, i, ::-1]
+
+    ec_dec_cross[np.isnan(ec_dec_cross)] = 0
+    ec_dec_cross = integrate.cumtrapz(ec_dec_cross, initial=0)
+
+    cc = (1 / const.nano**3 *
+          const.nano**2 / const.pico *
+          const.e**2)
+    ec_dec_cross *= cc
+    ec_dec_cross_unit = "S m$^{-1}$"
+
+    if dectype is DecType.spatial:
+        decBins *= const.nano
+        decBins_unit = "m"
+    elif dectype is DecType.energy:
+        decBins *= const.calorie
+        decBins_unit = "kJ mol$^{-1}$"
+
+    fit, fit_unit = get_fit(decname)
+
+    return ec_dec_cross, ec_dec_cross_unit, decBins, decBins_unit, fit, fit_unit
 
 
 def new_decond(outname, samples, fit, report=True):
