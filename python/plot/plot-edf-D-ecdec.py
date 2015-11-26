@@ -32,8 +32,8 @@ if args.custom:
     edf_top = 0.20
     D_top = 0.004
     D_bottom = -0.0005
-    sig_top = 1.0
-    sig_bottom = -1.0
+    sig_top = 3.0
+    sig_bottom = -3.0
 
     # set to None for auto-ticks
     xticks = [-40, -20, 0, 20, 40]
@@ -111,7 +111,7 @@ edf, _, eBins = da.get_edf(args.decond)[0:3]
 DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
 edD, _, _, eBins_edD = da.get_decD(decond_D, da.DecType.energy)[0:4]
 edf_edD = da.get_edf(decond_D)[0]
-sig_IL, _, eBins_sig = da.get_ec_dec_cross(decond_ecdec, da.DecType.energy)[0:3]
+sig_IL, _, eBins_sig = da.get_ec_dec_energy(decond_ecdec)[0:3]
 
 eBins /= da.const.calorie
 eBins_edD /= da.const.calorie
@@ -176,7 +176,6 @@ if args.custom:
 for i, sig in enumerate(sig_IL[fitKey]):
     axs[2].plot(eBins_sig, sig, label=label[numIonTypes+i])
     axs[2].legend(loc=sig_legend_loc)
-    print(sig[-1])
 axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_{IL}^{(2)}(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,

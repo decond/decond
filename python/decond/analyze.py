@@ -1164,12 +1164,12 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
     return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
 
 
-def get_ec_dec_cross(decname, dectype):
+def get_ec_dec_energy(decname):
     """
     Return ec_dec_cross, ec_dec_cross_unit, decBins, decBins_unit, fit, fit_unit
     """
     with h5py.File(decname, 'r') as f:
-        gid = f[dectype.value]
+        gid = f[DecType.energy.value]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
         volume = f['volume'][...]
@@ -1180,32 +1180,44 @@ def get_ec_dec_cross(decname, dectype):
 
     beta = 1 / (const.k * temperature)
     zz = _zz(charge, nummol)
-    num_moltype, _, _ = _numtype(nummol)
-    ec_dec_cross = (
-        paircount / volume * decD * zz[num_moltype:, np.newaxis] * beta)
+    num_moltype, num_pairtype, _ = _numtype(nummol)
+    # nonlocal_idx = np.argmax(paircount, axis=-1)
+    nonlocal_idx = np.empty(decD.shape[:-1])
+    for f in range(nonlocal_idx.shape[0]):
+        for t in range(nonlocal_idx.shape[1]):
+            if zz[num_moltype + t] > 0:
+                nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][0]
+            else:
+                nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][-1]
+    decD_nonlocal = np.empty(decD.shape[:-1])
+    for f in range(nonlocal_idx.shape[0]):
+        for t in range(nonlocal_idx.shape[1]):
+            decD_nonlocal[f, t] = decD[f, t, nonlocal_idx[f, t]]
+    ec_nonlocal = (
+            integrate.trapz(paircount) / volume * decD_nonlocal *
+            zz[np.newaxis, num_moltype:] * beta)
+    ec_local = (
+            paircount / volume * (decD - decD_nonlocal[:, :, np.newaxis]) *
+            zz[num_moltype:, np.newaxis] * beta)
 
-    if dectype is DecType.energy:
-        ec_dec_cross, decBins = _symmetrize_array(ec_dec_cross, decBins)
-        # reverse the integrate direction for zz > 0 component
-        for i, czz in enumerate(zz[num_moltype:]):
-            if czz > 0:
-                ec_dec_cross[:, i, :] = ec_dec_cross[:, i, ::-1]
+    ec_local, decBins = _symmetrize_array(ec_local, decBins)
+    # reverse the integrate direction for zz > 0 component
+    for i, czz in enumerate(zz[num_moltype:]):
+        if czz > 0:
+            ec_local[:, i, :] = ec_local[:, i, ::-1]
 
-    ec_dec_cross[np.isnan(ec_dec_cross)] = 0
-    ec_dec_cross = integrate.cumtrapz(ec_dec_cross, initial=0)
+    ec_local[np.isnan(ec_local)] = 0
+    ec_local = integrate.cumtrapz(ec_local, initial=0)
 
+    ec_dec_cross = ec_local + ec_nonlocal[:, :, np.newaxis]
     cc = (1 / const.nano**3 *
           const.nano**2 / const.pico *
           const.e**2)
     ec_dec_cross *= cc
     ec_dec_cross_unit = "S m$^{-1}$"
 
-    if dectype is DecType.spatial:
-        decBins *= const.nano
-        decBins_unit = "m"
-    elif dectype is DecType.energy:
-        decBins *= const.calorie
-        decBins_unit = "kJ mol$^{-1}$"
+    decBins *= const.calorie
+    decBins_unit = "kJ mol$^{-1}$"
 
     fit, fit_unit = get_fit(decname)
 
