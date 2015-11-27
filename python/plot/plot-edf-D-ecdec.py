@@ -111,7 +111,7 @@ edf, _, eBins = da.get_edf(args.decond)[0:3]
 DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
 edD, _, _, eBins_edD = da.get_decD(decond_D, da.DecType.energy)[0:4]
 edf_edD = da.get_edf(decond_D)[0]
-sig_IL, _, eBins_sig = da.get_ec_dec_energy(decond_ecdec)[0:3]
+sig_I, _, sig_IL, _, eBins_sig = da.get_ec_dec_energy(decond_ecdec, threshold=1e-4)[0:5]
 
 eBins /= da.const.calorie
 eBins_edD /= da.const.calorie
@@ -173,8 +173,8 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 # sig_IL
 if args.custom:
     axs[2].set_color_cycle(color[numIonTypes:])
-for i, sig in enumerate(sig_IL[fitKey]):
-    axs[2].plot(eBins_sig, sig, label=label[numIonTypes+i])
+for i, sig in enumerate(sig_I[fitKey]):
+    axs[2].plot(eBins_sig, sig, label=label[i])
     axs[2].legend(loc=sig_legend_loc)
 axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_{IL}^{(2)}(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
