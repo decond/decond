@@ -30,10 +30,10 @@ if args.custom:
 
     threshold_D = 1e-5
     edf_top = 0.20
-    D_top = 0.004
+    D_top = 0.004 #0.006
     D_bottom = -0.0005
-    sig_top = 3.0
-    sig_bottom = -3.0
+    sig_top = 0.3
+    sig_bottom = -0.4 #-1.2
 
     # set to None for auto-ticks
     xticks = [-40, -20, 0, 20, 40]
@@ -46,15 +46,15 @@ if args.custom:
 # ======================================
 else:
     threshold_D = 0
-    edf_legend_loc = 'upper right'
-    D_legend_loc = 'upper right'
+    edf_legend_loc = 'lower left'
+    D_legend_loc = 'upper center'
     sig_legend_loc = 'upper right'
 
 rc = {'font': {'size': 36,
                'family': 'serif',
                'serif': 'Times'},
       'text': {'usetex': True},
-      'legend': {'fontsize': 24},
+      'legend': {'fontsize': 30},
       'axes': {'labelsize': 36},
       'xtick': {'labelsize': 36,
                 'major.pad': 10,
@@ -111,7 +111,7 @@ edf, _, eBins = da.get_edf(args.decond)[0:3]
 DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
 edD, _, _, eBins_edD = da.get_decD(decond_D, da.DecType.energy)[0:4]
 edf_edD = da.get_edf(decond_D)[0]
-sig_I, _, sig_IL, _, eBins_sig = da.get_ec_dec_energy(decond_ecdec, threshold=1e-4)[0:5]
+sig_I, _, sig_IL, _, eBins_sig = da.get_ec_dec_energy(decond_ecdec, sep_nonlocal=True, threshold=0)[0:5]
 
 eBins /= da.const.calorie
 eBins_edD /= da.const.calorie
@@ -170,14 +170,13 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
 # plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          # horizontalalignment='left', verticalalignment='top')
 
-# sig_IL
-if args.custom:
-    axs[2].set_color_cycle(color[numIonTypes:])
+# if args.custom:
+    # axs[2].set_color_cycle(color[numIonTypes:])
 for i, sig in enumerate(sig_I[fitKey]):
     axs[2].plot(eBins_sig, sig, label=label[i])
     axs[2].legend(loc=sig_legend_loc)
 axs[2].set_xlabel(r"$\lambda$\ \ (kcal mol$^{-1}$)", labelpad=labelpad)
-axs[2].set_ylabel(r"$\sigma_{IL}^{(2)}(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
+axs[2].set_ylabel(r"$\sigma_{I}^{(2)}(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 

@@ -1246,7 +1246,6 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
     # ec_local_masked = np.ma.masked_where(
             # np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
             # ec_local)
-
     np.place(ec_local,
              np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
              0)
