@@ -551,29 +551,39 @@ class DecondFile(CorrFile):
             decbuf = getattr(buf, dectype.value)
             binw = window[dectype]
 
-            # removes trailing undividable bins
-            decbuf.decBins = decbuf.decBins[:decbuf.decBins.size // binw * binw]
+            # determine appropriate data range
+            if dectype is DecType.spatial:
+                begin_idx = 0
+            elif dectype is DecType.energy:
+                # window must be an odd number since the bin center is fixed to zero for energy
+                if binw % 2 == 0:
+                    raise Error("window must be an odd number for {}".format(dectype.value))
+                center_idx = np.where(decbuf.decBins==0)[0][0]
+                begin_idx = (center_idx - (binw - 1) / 2) % binw
+            end_idx = (decbuf.decBins.size - 1) - (decbuf.decBins.size - begin_idx) % binw
+
+            # decBins
+            decbuf.decBins = decbuf.decBins[begin_idx:end_idx+1]
             decbuf.decBins = np.concatenate(np.mean(np.split(
                 decbuf.decBins, decbuf.decBins.size // binw, axis=0), axis=1, keepdims=True), axis=0)
-            initsize = decbuf.decBins.size * binw
 
             # decPairCount: [type, bins]
-            decbuf.decPairCount = decbuf.decPairCount[:, :initsize]  # [type, decBins*binw]
+            decbuf.decPairCount = decbuf.decPairCount[:, begin_idx:end_idx+1]  # [type, decBins*binw]
 
             # decD: [fit, type, bins]  # L^2 T^-1
-            decbuf.decD = decbuf.decD[:, :, :initsize]  # [fit, type, decBins*binw]
+            decbuf.decD = decbuf.decD[:, :, begin_idx:end_idx+1]  # [fit, type, decBins*binw]
             decbuf.decD *= decbuf.decPairCount[np.newaxis, :, :]  # [fit, type, decBins*binw]
             decbuf.decD = np.array(np.split(decbuf.decD, decbuf.decBins.size, axis=2))  # [decBins, fit, type, binw]
             decbuf.decD = np.rollaxis(np.sum(decbuf.decD, axis=3), 0, 3)  # [fit, type, decBins]
 
             # decCorr: [type, bins, time]
-            decbuf.decCorr = decbuf.decCorr[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decCorr = decbuf.decCorr[:, begin_idx:end_idx+1, :]  # [type, decBins*binw, time]
             decbuf.decCorr *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
             decbuf.decCorr = np.array(np.split(decbuf.decCorr, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
             decbuf.decCorr = np.rollaxis(np.sum(decbuf.decCorr, axis=2), 0, 2)  # [type, decBins, time]
 
             # decDCesaro: [type, bins, time]
-            decbuf.decDCesaro = decbuf.decDCesaro[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decDCesaro = decbuf.decDCesaro[:, begin_idx:end_idx+1, :]  # [type, decBins*binw, time]
             decbuf.decDCesaro *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
             decbuf.decDCesaro = np.array(np.split(decbuf.decDCesaro, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
             decbuf.decDCesaro = np.rollaxis(np.sum(decbuf.decDCesaro, axis=2), 0, 2)  # [type, decBins, time]
