@@ -1,36 +1,40 @@
-# Defining variables ===============================
+# ===== Essential modification =====
 FC = ifort
-H5FC = h5fc
 H5PFC = h5pfc
 FCMPI = mpif90
 MODFLAG = -module
 
+## XTC Library
+XDRFILEDIR = $(HOME)/local
+XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
+
+## HDF5 Library
+HDF5_INCLUDE_DIR = $(HOME)/local/include
+
+## FFTW3 Library
+FFTWDIR = $(HOME)/local
+FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
+## For dynamic linking
+# FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+
+
+# ===== Advanced modification =====
 SRCDIR = ./src/
 MODDIR = ./mod/
 OUTDIR = ./out/
 BINDIR = ../bin/
 
 FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
-### for debug ###
-#FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
-
-FFTWDIR = $(HOME)/local/fftw-3.3.4
-FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
-### for dynamic linking ###
-#FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
-
-XDRFILEDIR = $(HOME)/local/xdrfile-1.1.4-d
-XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
-
-HDF5_INCLUDE_DIR = /home/kmtu/local/hdf5-1.8.15/include
+## For debug
+# FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
 
 
-#========== Basically NO modification is needed below this line ===========#
+# ===== Basically NO modification is needed below this line =====
 PROGRAM = decond trjconv2com
 DIR = $(MODDIR) $(OUTDIR)
 vpath %.f90 $(SRCDIR)
 
-# Program ==================================
+# ===== Program =====
 .PHONY : all dir
 all : dir $(PROGRAM)
 	ln -sf ../fortran/$(OUTDIR)* $(BINDIR)
@@ -51,7 +55,7 @@ decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.
 decond.o : decond.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-# Library ===================================
+# ===== Library =====
 spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
