@@ -551,29 +551,39 @@ class DecondFile(CorrFile):
             decbuf = getattr(buf, dectype.value)
             binw = window[dectype]
 
-            # removes trailing undividable bins
-            decbuf.decBins = decbuf.decBins[:decbuf.decBins.size // binw * binw]
+            # determine appropriate data range
+            if dectype is DecType.spatial:
+                begin_idx = 0
+            elif dectype is DecType.energy:
+                # window must be an odd number since the bin center is fixed to zero for energy
+                if binw % 2 == 0:
+                    raise Error("window must be an odd number for {}".format(dectype.value))
+                center_idx = np.where(decbuf.decBins==0)[0][0]
+                begin_idx = (center_idx - (binw - 1) / 2) % binw
+            end_idx = (decbuf.decBins.size - 1) - (decbuf.decBins.size - begin_idx) % binw
+
+            # decBins
+            decbuf.decBins = decbuf.decBins[begin_idx:end_idx+1]
             decbuf.decBins = np.concatenate(np.mean(np.split(
                 decbuf.decBins, decbuf.decBins.size // binw, axis=0), axis=1, keepdims=True), axis=0)
-            initsize = decbuf.decBins.size * binw
 
             # decPairCount: [type, bins]
-            decbuf.decPairCount = decbuf.decPairCount[:, :initsize]  # [type, decBins*binw]
+            decbuf.decPairCount = decbuf.decPairCount[:, begin_idx:end_idx+1]  # [type, decBins*binw]
 
             # decD: [fit, type, bins]  # L^2 T^-1
-            decbuf.decD = decbuf.decD[:, :, :initsize]  # [fit, type, decBins*binw]
+            decbuf.decD = decbuf.decD[:, :, begin_idx:end_idx+1]  # [fit, type, decBins*binw]
             decbuf.decD *= decbuf.decPairCount[np.newaxis, :, :]  # [fit, type, decBins*binw]
             decbuf.decD = np.array(np.split(decbuf.decD, decbuf.decBins.size, axis=2))  # [decBins, fit, type, binw]
             decbuf.decD = np.rollaxis(np.sum(decbuf.decD, axis=3), 0, 3)  # [fit, type, decBins]
 
             # decCorr: [type, bins, time]
-            decbuf.decCorr = decbuf.decCorr[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decCorr = decbuf.decCorr[:, begin_idx:end_idx+1, :]  # [type, decBins*binw, time]
             decbuf.decCorr *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
             decbuf.decCorr = np.array(np.split(decbuf.decCorr, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
             decbuf.decCorr = np.rollaxis(np.sum(decbuf.decCorr, axis=2), 0, 2)  # [type, decBins, time]
 
             # decDCesaro: [type, bins, time]
-            decbuf.decDCesaro = decbuf.decDCesaro[:, :initsize, :]  # [type, decBins*binw, time]
+            decbuf.decDCesaro = decbuf.decDCesaro[:, begin_idx:end_idx+1, :]  # [type, decBins*binw, time]
             decbuf.decDCesaro *= decbuf.decPairCount[:, :, np.newaxis]  # [type, decBins*binw, time]
             decbuf.decDCesaro = np.array(np.split(decbuf.decDCesaro, decbuf.decBins.size, axis=1))  # [decBins, type, binw, time]
             decbuf.decDCesaro = np.rollaxis(np.sum(decbuf.decDCesaro, axis=2), 0, 2)  # [type, decBins, time]
@@ -1164,15 +1174,24 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
     return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
 
 
-def get_ec_dec_energy(decname):
-    """
-    Return ec_dec_cross, ec_dec_cross_unit, decBins, decBins_unit, fit, fit_unit
-    """
+def get_normalize_paircount(decname, dectype):
     with h5py.File(decname, 'r') as f:
-        gid = f[DecType.energy.value]
+        gid = f[dectype.value]
+        paircount = gid['decPairCount'][...]
+    return paircount / integrate.trapz(paircount)[..., np.newaxis]
+
+
+def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
+    """
+    Return ec_dec_cross_IL, ec_dec_cross_IL_unit, decBins, decBins_unit, fit, fit_unit
+    """
+    dectype = DecType.energy
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
         volume = f['volume'][...]
+        fit = f['fit'][...]
         temperature = f['temperature'][...]
         decD = gid['decD'][...]  # L^2 T^-1
         decBins = gid['decBins'][...]
@@ -1181,18 +1200,36 @@ def get_ec_dec_energy(decname):
     beta = 1 / (const.k * temperature)
     zz = _zz(charge, nummol)
     num_moltype, num_pairtype, _ = _numtype(nummol)
-    # nonlocal_idx = np.argmax(paircount, axis=-1)
-    nonlocal_idx = np.empty(decD.shape[:-1])
-    for f in range(nonlocal_idx.shape[0]):
-        for t in range(nonlocal_idx.shape[1]):
-            if zz[num_moltype + t] > 0:
-                nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][0]
-            else:
-                nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][-1]
+
+    def sep_at_end():
+        nonlocal_idx = np.empty(decD.shape[:-1])
+        for f in range(nonlocal_idx.shape[0]):
+            for t in range(nonlocal_idx.shape[1]):
+                if zz[num_moltype + t] > 0:
+                    nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][0]
+                else:
+                    nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][-1]
+        for f in range(nonlocal_idx.shape[0]):
+            for t in range(nonlocal_idx.shape[1]):
+                decD_nonlocal[f, t] = decD[f, t, nonlocal_idx[f, t]]
+        return decD_nonlocal
+
+    def sep_at_edf_max():
+        nonlocal_idx = np.empty(decD.shape[:-1])
+        for f in range(nonlocal_idx.shape[0]):
+            nonlocal_idx[f, :] = np.argmax(paircount, axis=-1)
+        for f in range(nonlocal_idx.shape[0]):
+            for t in range(nonlocal_idx.shape[1]):
+                decD_nonlocal[f, t] = decD[f, t, nonlocal_idx[f, t]]
+        return decD_nonlocal
+
     decD_nonlocal = np.empty(decD.shape[:-1])
-    for f in range(nonlocal_idx.shape[0]):
-        for t in range(nonlocal_idx.shape[1]):
-            decD_nonlocal[f, t] = decD[f, t, nonlocal_idx[f, t]]
+    if sep_nonlocal:
+        #decD_nonlocal = sep_at_end()
+        decD_nonlocal = sep_at_edf_max()
+    else:
+        decD_nonlocal = np.zeros(decD.shape[:-1])
+
     ec_nonlocal = (
             integrate.trapz(paircount) / volume * decD_nonlocal *
             zz[np.newaxis, num_moltype:] * beta)
@@ -1200,28 +1237,52 @@ def get_ec_dec_energy(decname):
             paircount / volume * (decD - decD_nonlocal[:, :, np.newaxis]) *
             zz[num_moltype:, np.newaxis] * beta)
 
+    norm_paircount = get_normalize_paircount(decname, dectype)
+    norm_paircount, _ = _symmetrize_array(norm_paircount, decBins)
     ec_local, decBins = _symmetrize_array(ec_local, decBins)
+
+    ec_local[np.isnan(ec_local)] = 0
+    # filter with threshold
+    # ec_local_masked = np.ma.masked_where(
+            # np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
+            # ec_local)
+    np.place(ec_local,
+             np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
+             0)
+
     # reverse the integrate direction for zz > 0 component
     for i, czz in enumerate(zz[num_moltype:]):
         if czz > 0:
             ec_local[:, i, :] = ec_local[:, i, ::-1]
 
-    ec_local[np.isnan(ec_local)] = 0
     ec_local = integrate.cumtrapz(ec_local, initial=0)
 
-    ec_dec_cross = ec_local + ec_nonlocal[:, :, np.newaxis]
+    ec_dec_cross_IL = ec_local + ec_nonlocal[:, :, np.newaxis]
+    ec_dec_cross_I = np.zeros((fit.shape[0], num_moltype, ec_dec_cross_IL.shape[-1]))
+    for r in range(num_moltype):
+        for c in range(r, num_moltype):
+            idx = _pairtype_index(r, c, num_moltype)
+            ec_dec_cross_I[:, r] += ec_dec_cross_IL[:, idx]
+            if c > r:
+                ec_dec_cross_I[:, c] += ec_dec_cross_IL[:, idx]
+
     cc = (1 / const.nano**3 *
           const.nano**2 / const.pico *
           const.e**2)
-    ec_dec_cross *= cc
-    ec_dec_cross_unit = "S m$^{-1}$"
+    ec_dec_cross_IL *= cc
+    ec_dec_cross_IL_unit = "S m$^{-1}$"
+    ec_dec_cross_I *= cc
+    ec_dec_cross_I_unit = "S m$^{-1}$"
 
     decBins *= const.calorie
     decBins_unit = "kJ mol$^{-1}$"
 
     fit, fit_unit = get_fit(decname)
 
-    return ec_dec_cross, ec_dec_cross_unit, decBins, decBins_unit, fit, fit_unit
+    return (ec_dec_cross_I, ec_dec_cross_I_unit,
+            ec_dec_cross_IL, ec_dec_cross_IL_unit,
+            decBins, decBins_unit,
+            fit, fit_unit)
 
 
 def new_decond(outname, samples, fit, report=True):
