@@ -517,9 +517,22 @@ class DecondFile(CorrFile):
 
             if num_sample > 1:
                 for i, sel in enumerate(fit_sel):
-                    _, data_fit[i], _, data_std[i], _, _ = fitlinear(
-                            timeLags[sel], data_cesaro[..., sel],
-                            data_cesaro_std[..., sel])
+                    try:
+                        _, data_fit[i], _, data_std[i], _, _ = fitlinear(
+                                timeLags[sel], data_cesaro[..., sel],
+                                data_cesaro_std[..., sel])
+                    except ZeroStdError:
+                        errname = data_name + 'Cesaro_err'
+                        print("\nWarning!!")
+                        print(errname +
+                              " contains zero within the fitting range "
+                              "indexes {} to {}".format(sel.start, sel.stop))
+                        print("Below lists the indexs where " + errname +
+                              " is zero: ")
+                        print(list(zip(
+                            *np.where(data_cesaro_err[..., sel] == 0))))
+                        print("Probably you are fitting from the beginning?\n"
+                              "It may be better to avoid doing so.")
             else:
                 for i, sel in enumerate(fit_sel):
                     _, data_fit[i], _, data_std[i], _, _ = fitlinear(
@@ -657,6 +670,11 @@ class Error(Exception):
 
 class FitRangeError(Error):
     pass
+
+
+class ZeroStdError(Error):
+    def __init__(self, std):
+        self.std = std
 
 
 class NotImplementedError(Error):
@@ -839,8 +857,9 @@ def fitlinear(x, y, sig=None):
         raise Error("lengths of the last dimension of x and y do not match\n"
                     "x.size={0}, y.shape[-1]={1}".format(x.size, y.shape[-1]))
     if sig is not None:
+        if np.any(sig == 0):
+            raise ZeroStdError(list(zip(*np.where(sig == 0))))
         sig2 = sig**2
-        sig2[sig2 == 0] = np.nan  # TODO: not sure if it is a good solution
         wt = 1 / sig2  # y.shape
         ss = np.sum(wt, axis=-1)  # y.shape[:-1]
         sx = np.sum(x * wt, axis=-1)  # y.shape[:-1]
