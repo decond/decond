@@ -560,6 +560,7 @@ class DecondFile(CorrFile):
 
     def _change_window(self, window):
         buf = self.buffer
+
         def window_data(dectype):
             decbuf = getattr(buf, dectype.value)
             binw = window[dectype]
@@ -1080,7 +1081,7 @@ def get_ec(decname):
 
 
 def _symmetrize_array(arr, decBins, center=0, axis=-1):
-    center_idx = np.where(decBins==center)[0][0]
+    center_idx = np.where(decBins == center)[0][0]
     num_left = center_idx
     num_right = decBins.size - num_left - 1
     bw = decBins[1] - decBins[0]
@@ -1088,12 +1089,14 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
         # postpad zero
         numpad = num_left - num_right
         arr = np.append(arr, np.zeros(arr.shape[:-1]+(numpad,)), axis=axis)
-        decBins = np.hstack((decBins, [decBins[-1] + (i+1) * bw for i in range(numpad)]))
+        decBins = np.hstack((decBins, [decBins[-1] + (i+1) * bw
+                             for i in range(numpad)]))
     elif num_left < num_right:
         # prepad zero
         numpad = num_right - num_left
         arr = np.insert(arr, [0]*numpad, 0., axis=axis)
-        decBins = np.hstack((list(reversed([decBins[0] - (i+1) * bw for i in range(numpad)])), decBins))
+        decBins = np.hstack((list(reversed([decBins[0] - (i+1) * bw
+                                           for i in range(numpad)])), decBins))
 
     return arr, decBins
 
@@ -1155,8 +1158,10 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
         ec_local[np.isnan(ec_local)] = 0
 
         if dectype is DecType.energy:
-            ec_local = (integrate.cumtrapz(ec_local[..., :(decBins.size+1)/2], initial=0) +
-                        integrate.cumtrapz(ec_local[..., -1:(decBins.size-1)/2-1:-1], initial=0))
+            ec_local = (integrate.cumtrapz(
+                ec_local[..., :(decBins.size+1)/2], initial=0) +
+                        integrate.cumtrapz(
+                ec_local[..., -1:(decBins.size-1)/2-1:-1], initial=0))
             ec_nonlocal = np.zeros(ec_local.shape[:-1])
             decBins = decBins[:(decBins.size+1)/2]
         else:
@@ -1202,7 +1207,8 @@ def get_normalize_paircount(decname, dectype):
 
 def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
     """
-    Return ec_dec_cross_IL, ec_dec_cross_IL_unit, decBins, decBins_unit, fit, fit_unit
+    Return ec_dec_cross_IL, ec_dec_cross_IL_unit, decBins, decBins_unit,
+           fit, fit_unit
     """
     dectype = DecType.energy
     with h5py.File(decname, 'r') as f:
@@ -1225,9 +1231,11 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
         for f in range(nonlocal_idx.shape[0]):
             for t in range(nonlocal_idx.shape[1]):
                 if zz[num_moltype + t] > 0:
-                    nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][0]
+                    nonlocal_idx[f, t] = np.nonzero(
+                            np.invert(np.isnan(decD[f, t, :])))[0][0]
                 else:
-                    nonlocal_idx[f, t] = np.nonzero(np.invert(np.isnan(decD[f, t, :])))[0][-1]
+                    nonlocal_idx[f, t] = np.nonzero(
+                            np.invert(np.isnan(decD[f, t, :])))[0][-1]
         for f in range(nonlocal_idx.shape[0]):
             for t in range(nonlocal_idx.shape[1]):
                 decD_nonlocal[f, t] = decD[f, t, nonlocal_idx[f, t]]
@@ -1244,7 +1252,7 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
 
     decD_nonlocal = np.empty(decD.shape[:-1])
     if sep_nonlocal:
-        #decD_nonlocal = sep_at_end()
+        # decD_nonlocal = sep_at_end()
         decD_nonlocal = sep_at_edf_max()
     else:
         decD_nonlocal = np.zeros(decD.shape[:-1])
@@ -1263,10 +1271,12 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
     ec_local[np.isnan(ec_local)] = 0
     # filter with threshold
     # ec_local_masked = np.ma.masked_where(
-            # np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
-            # ec_local)
+    #        np.ones_like(ec_local) *
+    #        norm_paircount[np.newaxis, ...] < threshold,
+    #        ec_local)
     np.place(ec_local,
-             np.ones_like(ec_local) * norm_paircount[np.newaxis, ...] < threshold,
+             np.ones_like(ec_local) *
+             norm_paircount[np.newaxis, ...] < threshold,
              0)
 
     # reverse the integrate direction for zz > 0 component
@@ -1277,7 +1287,8 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
     ec_local = integrate.cumtrapz(ec_local, initial=0)
 
     ec_dec_cross_IL = ec_local + ec_nonlocal[:, :, np.newaxis]
-    ec_dec_cross_I = np.zeros((fit.shape[0], num_moltype, ec_dec_cross_IL.shape[-1]))
+    ec_dec_cross_I = np.zeros(
+            (fit.shape[0], num_moltype, ec_dec_cross_IL.shape[-1]))
     for r in range(num_moltype):
         for c in range(r, num_moltype):
             idx = _pairtype_index(r, c, num_moltype)
