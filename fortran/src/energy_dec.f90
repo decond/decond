@@ -54,7 +54,6 @@ contains
   subroutine check_version()
     use utility, only: parse_version
     implicit none
-    integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
     integer(hsize_t), parameter :: VERSION_LEN = 11
     integer(hid_t) :: file_id, attr_id, type_id
     integer(hsize_t) :: dims(1)
