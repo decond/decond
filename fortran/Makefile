@@ -1,8 +1,8 @@
 # ===== Essential modification =====
 FC = ifort
-H5PFC = h5pfc
-FCMPI = mpif90
-MODFLAG = -module
+H5PFC = h5pfc      # if h5pfc is not in the PATH, use full path is fine
+FCMPI = mpiifort   # FCMPI must be the same compiler as what was used to compile h5pfc
+MODFLAG = -module  # -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
 
 ## XTC Library
 XDRFILEDIR = $(HOME)/local

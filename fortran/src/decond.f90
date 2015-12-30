@@ -18,7 +18,7 @@ program decond
                        &ed_prep_engfiles
 
   implicit none
-  character(len=*), parameter :: DECOND_VERSION = "0.4.3"
+  character(len=*), parameter :: DECOND_VERSION = "0.4.4"
   integer, parameter :: NUM_POSITIONAL_ARG = 3, LEAST_REQUIRED_NUM_ARG = 7
   integer :: num_arg, num_subArg, num_argPerMolType
   integer :: i, j, k, n, totNumMol, t, sysNumAtom
