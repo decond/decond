@@ -35,6 +35,10 @@ if args.custom:
     sig_top = 0.75
     sig_bottom = 0
 
+    # set to None for auto-ranges
+    xmin = None
+    xmax = None
+
     # set to None for auto-ticks
     xticks = np.arange(0, 21, 5)
 
@@ -181,10 +185,15 @@ if args.custom:
     axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
 
 for ax in axs:
-    if (args.custom and xticks is not None):
-        ax.set_xticks(xticks)
+    if args.custom:
+        if xticks is not None:
+            ax.set_xticks(xticks)
+        if xmax is None:
+            xmax = halfCellLength
+        ax.set_xlim(left=xmin, right=xmax)
+    else:
+        ax.set_xlim(right=halfCellLength)
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-    ax.set_xlim(xmax=halfCellLength)
     ax.xaxis.labelpad = 1
     ax.yaxis.set_label_coords(-0.18, 0.5)
     for sp in ax.spines.values():
