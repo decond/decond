@@ -45,12 +45,27 @@ if args.custom:
     rdf_legend_loc = 'upper right'
     D_legend_loc = 'upper right'
     sig_legend_loc = 'upper right'
+
+    # set to None to plot all components
+    # or set to a list to select certain indexes
+    # such as:
+    # rdf_plot_list = [0, 2]
+    # which plots the 0th and 2nd compondent of rdf
+    rdf_plot_list = None
+    DI_plot_list = None
+    sdD_plot_list = None
+    sig_plot_list = None
 # ======================================
 else:
     threshold = 0
+    color = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
     rdf_legend_loc = 'upper right'
     D_legend_loc = 'upper right'
     sig_legend_loc = 'upper right'
+    rdf_plot_list = None
+    DI_plot_list = None
+    sdD_plot_list = None
+    sig_plot_list = None
 
 rc = {'font': {'size': 36,
                'family': 'serif',
@@ -93,9 +108,6 @@ if (not args.custom):
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
-if (args.custom):
-    mpl.rcParams['axes.color_cycle'] = color
-
 fitKey = 0
 
 if (args.decond_D is None):
@@ -136,9 +148,17 @@ abcPos = (0.03, 0.965)
 # plot rdf
 if args.custom:
     axs[0].set_color_cycle(color[numIonTypes:])
+
+if rdf_plot_list is None:
+    rdf_plot_list = list(range(numIonTypePairs))
+
 axs[0].axhline(1, linestyle=':', color='black', linewidth=reflinewidth)
+
 for i, rdf in enumerate(g):
-    axs[0].plot(rBins, rdf, label=label[numIonTypes + i])
+    if i in rdf_plot_list:
+        axs[0].plot(rBins, rdf, label=label[numIonTypes + i],
+                    color=color[numIonTypes + i])
+
 axs[0].legend(loc=rdf_legend_loc)
 #    axs[0].set_title("Fit {} ps".format(fitKey))
 axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
@@ -148,17 +168,27 @@ plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
 
 # plot D
 axs[1].axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
+
+if DI_plot_list is None:
+    DI_plot_list = list(range(numIonTypes))
+
 for i, D in enumerate(DI[fitKey]):
-    axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i],
-                linestyle=lineStyle[i])
+    if i in DI_plot_list:
+        axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i],
+                    linestyle=lineStyle[i], color=color[i])
+
+if sdD_plot_list is None:
+    sdD_plot_list = list(range(numIonTypePairs))
 
 for i, D in enumerate(sdD[fitKey]):
-    g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
-    D_masked = np.ma.masked_where(
-            [c if j <= smallRegion[i] else False
-             for j, c in enumerate(g_masked < threshold)], D)
-    axs[1].plot(rBins_sdD, D_masked, label=label[numIonTypes + i],
-                linestyle=lineStyle[numIonTypes + i])
+    if i in sdD_plot_list:
+        g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
+        D_masked = np.ma.masked_where(
+                [c if j <= smallRegion[i] else False
+                 for j, c in enumerate(g_masked < threshold)], D)
+        axs[1].plot(rBins_sdD, D_masked, label=label[numIonTypes + i],
+                    linestyle=lineStyle[numIonTypes + i],
+                    color=color[numIonTypes + i])
 
 axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)",
@@ -170,9 +200,13 @@ plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot sig
+if sig_plot_list is None:
+    sig_plot_list = list(range(numIonTypes))
+
 for i, sig in enumerate(sigI[fitKey]):
-    axs[2].plot(rBins_sigI, sig, label=label[i])
-    axs[2].legend(loc=sig_legend_loc)
+    if i in sig_plot_list:
+        axs[2].plot(rBins_sigI, sig, label=label[i], color=color[i])
+        axs[2].legend(loc=sig_legend_loc)
 axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
 axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
 plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
