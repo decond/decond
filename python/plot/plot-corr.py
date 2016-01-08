@@ -13,41 +13,49 @@ parser.add_argument('corrData', help="correlation data file <c5 or d5>")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
-parser.add_argument('-c', '--custom', action='store_true',
-                    help="Read the customized parameters in the script")
 args = parser.parse_args()
 
-# ======= basic customization ==========
-if (args.custom):
-    label = ['cation', 'anion']
-    color = ['b', 'g', 'b', 'r', 'g']
-    xmax = 3
-# ======================================
-else:
-    xmax = 1
+# ===================== customization =======================
+# set usetex to False
+# if UnicodeDecodeError occurs or the output eps is blank
+usetex = True
 
-with h5py.File(args.corrData, 'r') as f:
-    timeLags = f['timeLags'][...]
-    nCorr = f['nCorr'][...]  # nm^2 / ps^2
-    nCorr *= (da.const.nano / da.const.angstrom)**2  # AA^2 / ps^2
-    numMol = f['numMol'][...]
-    numIonTypes = numMol.size
-    numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2
+# e.g. label = ['cation', 'anion']
+label = None
 
-# validate arguments
-if (args.custom):
-    assert(len(color) == numIonTypes + numIonTypePairs)
-    mpl.rcParams['axes.color_cycle'] = color
-    assert(len(label) == numIonTypes)
-else:
-    label = ['{}'.format(i+1) for i in range(numIonTypes)]
-label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
+# the oder of color is
+# [ auto-1, ..., auto-N,
+#   cross-11, cross-12, cross-13, ..., cross-1N,
+#             cross-22, cross-23, ..., cross-2N,
+#                       ... ... ... ... ... ...
+#                                      cross-NN ]
+#
+# e.g. color = ['b', 'g', 'b', 'r', 'g']
+#
+# if the provided number of colors is not enough,
+# the pattern will be repeated for the rest of terms
+#
+# set to None for default color list (may be ugly)
+# see available colors: http://matplotlib.org/api/colors_api.html
+color = None
 
-# plot nCorr
+xmax = None
+
+# distance between axis and axis label
+xlabelpad = 5
+ylabelpad = 0.5
+
+spineLineWidth = 1.6  # line widith of bouding box
+reflinewidth = 1.0  # line width of zero-reference line
+
+figsize1 = (10, 8.3)  # figure size (width, height)
+format = 'eps'
+
+# other adjustment
 rc = {'font': {'size': 34,
                'family': 'serif',
                'serif': 'Times'},
-      'text': {'usetex': True},
+      'text': {'usetex': usetex},
       'legend': {'fontsize': 34},
       'axes': {'labelsize': 34,
                'titlesize': 34},
@@ -61,22 +69,41 @@ rc = {'font': {'size': 34,
                 'major.width': 1.5},
       'lines': {'linewidth': 3},
       'savefig': {'transparent': True}}
+# ===========================================================
+
+with h5py.File(args.corrData, 'r') as f:
+    timeLags = f['timeLags'][...]
+    nCorr = f['nCorr'][...]  # nm^2 / ps^2
+    nCorr *= (da.const.nano / da.const.angstrom)**2  # AA^2 / ps^2
+    numMol = f['numMol'][...]
+    numIonTypes = numMol.size
+    numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2
+
+if color is None:
+    color = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+while len(color) < numIonTypes + numIonTypePairs:
+    color += color
+
+assert(len(color) >= numIonTypes + numIonTypePairs)
+
+if label is None:
+    label = ['{}'.format(i+1) for i in range(numIonTypes)]
+
+assert(len(label) == numIonTypes)
+
+label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
+
+lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 
 for key in rc:
     mpl.rc(key, **rc[key])
 
-xlabelpad = 5
-ylabelpad = 0.5
-spineLineWidth = 1.6
-
-figsize1 = (10, 8.3)
-format = 'eps'
-
-lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 plt.figure(figsize=figsize1)
-plt.gca().axhline(0, linestyle=':', color='black', linewidth=1.0)
+plt.gca().axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, corr in enumerate(nCorr):
-    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i])
+    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i],
+             color=color[i])
 
 leg = plt.legend()
 plt.xlim(xmax=xmax)

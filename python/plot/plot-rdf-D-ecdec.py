@@ -15,62 +15,87 @@ parser.add_argument('decond', help="decond analysis file. <decond.d5>")
 parser.add_argument('--decond_D', metavar='DECOND',
                     help="decond analysis file for plotting D. <decond.d5>")
 parser.add_argument('--decond_ecdec', metavar='DECOND',
-                    help="decond analysis file for plotting ecdec. <decond.d5>")
+                    help="decond analysis file for plotting ecdec."
+                         " <decond.d5>")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
-parser.add_argument('-c', '--custom', action='store_true',
-                    help="Read the customized parameters in the script")
 args = parser.parse_args()
 
-# ======= basic customization ==========
-if args.custom:
-    label = ['cation', 'anion']
-    color = ['b', 'g', 'b', 'r', 'g']
-    threshold = 0.1
+# ===================== customization =======================
+# set usetex to False
+# if UnicodeDecodeError occurs or the output eps is blank
+usetex = True
 
-    rdf_top = 2.5
-    D_top = 0.004
-    D_bottom = -0.001
-    sig_top = 0.75
-    sig_bottom = 0
+# set which fitting results to plot
+# only meaningful when multiple fit ranges are included in decond.d5
+fitkey = 0
 
-    # set to None for auto-ranges
-    xmin = None
-    xmax = None
+# e.g. label = ['cation', 'anion']
+label = None
 
-    # set to None for auto-ticks
-    xticks = np.arange(0, 21, 5)
+# the oder of color is
+# [ auto-1, ..., auto-N,
+#   cross-11, cross-12, cross-13, ..., cross-1N,
+#             cross-22, cross-23, ..., cross-2N,
+#                       ... ... ... ... ... ...
+#                                      cross-NN ]
+#
+# e.g. color = ['b', 'g', 'b', 'r', 'g']
+#
+# if the provided number of colors is not enough,
+# the pattern will be repeated for the rest of terms
+#
+# set to None for default color list (may be ugly)
+# see available colors: http://matplotlib.org/api/colors_api.html
+color = None
 
-    rdf_legend_loc = 'upper right'
-    D_legend_loc = 'upper right'
-    sig_legend_loc = 'upper right'
+# data(r) will not be plotted if g(r) < threshold
+threshold = 0  # e.g. threshold = 0.1
 
-    # set to None to plot all components
-    # or set to a list to select certain indexes
-    # such as:
-    # rdf_plot_list = [0, 2]
-    # which plots the 0th and 2nd compondent of rdf
-    rdf_plot_list = None
-    DI_plot_list = None
-    sdD_plot_list = None
-    sig_plot_list = None
-# ======================================
-else:
-    threshold = 0
-    color = ['b', 'r', 'g', 'c', 'm', 'y', 'k']
-    rdf_legend_loc = 'upper right'
-    D_legend_loc = 'upper right'
-    sig_legend_loc = 'upper right'
-    rdf_plot_list = None
-    DI_plot_list = None
-    sdD_plot_list = None
-    sig_plot_list = None
+# the plotting range of x-axis, None for auto
+xmin = None  # e.g. xmin = 0
+xmax = None  # e.g. xmax = 3
 
+rdf_top = None     # rdf_top = 2.5
+D_top = None       # D_top = 0.004
+D_bottom = None    # D_bottom = -0.001
+sig_top = None     # sig_top = 0.75
+sig_bottom = None  # sig_bottom = 0
+
+# ticks for x-axis
+xticks = None  # xticks = np.arange(0, 21, 5)
+
+rdf_legend_loc = None  # rdf_legend_loc = 'upper right'
+D_legend_loc = None    # D_legend_loc = 'upper right'
+sig_legend_loc = None  # sig_legend_loc = 'upper right'
+
+# set to None to plot all components
+# or set to a list to select certain indexes
+# such as: rdf_plot_list = [0, 2]
+# which plots the 0th and 2nd compondent of rdf
+rdf_plot_list = None
+DI_plot_list = None
+sdD_plot_list = None
+sig_plot_list = None
+
+xlabelpad = 1  # controls the distance between x-axis and x-axis label
+ylabel_coord = (-0.18, 0.5)  # relative position of ylabel
+
+spineLineWidth = 1.6  # line widith of bouding box
+reflinewidth = 1.5  # line width of zero-reference line
+
+figsize3 = (10, 28)  # figure size (width, height)
+format = 'eps'
+
+# relative position of (a) (b) (c) labels within each sub-figure
+abc_pos = (0.03, 0.965)
+
+# other adjustment
 rc = {'font': {'size': 36,
                'family': 'serif',
                'serif': 'Times'},
-      'text': {'usetex': True},
+      'text': {'usetex': usetex},
       'legend': {'fontsize': 34},
       'axes': {'labelsize': 36},
       'xtick': {'labelsize': 36,
@@ -85,17 +110,12 @@ rc = {'font': {'size': 36,
                 'major.width': 1.5,
                 'minor.size': 4,
                 'minor.width': 1.5},
-      'lines': {'linewidth': 3}}
+      'lines': {'linewidth': 3},
+      'savefig': {'transparent': True}}
+# ===========================================================
 
 for key in rc:
     mpl.rc(key, **rc[key])
-
-labelpad = 10
-spineLineWidth = 1.6
-reflinewidth = 1.5
-
-figsize3 = (10, 28)
-format = 'eps'
 
 with h5py.File(args.decond, 'r') as f:
     numMol = f['numMol'][...]
@@ -103,12 +123,22 @@ with h5py.File(args.decond, 'r') as f:
 
 numIonTypePairs = numIonTypes * (numIonTypes+1) // 2
 
-if (not args.custom):
+if color is None:
+    color = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+
+while len(color) < numIonTypes + numIonTypePairs:
+    color += color
+
+assert(len(color) >= numIonTypes + numIonTypePairs)
+
+if label is None:
     label = ['{}'.format(i+1) for i in range(numIonTypes)]
-lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
+
+assert(len(label) == numIonTypes)
+
 label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 
-fitKey = 0
+lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 
 if (args.decond_D is None):
     decond_D = args.decond
@@ -143,12 +173,7 @@ for rdf in g_sdD:
 
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)
 
-abcPos = (0.03, 0.965)
-
 # plot rdf
-if args.custom:
-    axs[0].set_color_cycle(color[numIonTypes:])
-
 if rdf_plot_list is None:
     rdf_plot_list = list(range(numIonTypePairs))
 
@@ -160,10 +185,10 @@ for i, rdf in enumerate(g):
                     color=color[numIonTypes + i])
 
 axs[0].legend(loc=rdf_legend_loc)
-#    axs[0].set_title("Fit {} ps".format(fitKey))
-axs[0].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
-axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$", labelpad=labelpad)
-plt.text(abcPos[0], abcPos[1], '(a)', transform=axs[0].transAxes,
+#    axs[0].set_title("Fit {} ps".format(fitkey))
+axs[0].set_xlabel(r"$r$\ \ (\AA)")
+axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$")
+plt.text(abc_pos[0], abc_pos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot D
@@ -172,7 +197,7 @@ axs[1].axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 if DI_plot_list is None:
     DI_plot_list = list(range(numIonTypes))
 
-for i, D in enumerate(DI[fitKey]):
+for i, D in enumerate(DI[fitkey]):
     if i in DI_plot_list:
         axs[1].plot(rBins, np.ones_like(rBins)*D, label=label[i],
                     linestyle=lineStyle[i], color=color[i])
@@ -180,7 +205,7 @@ for i, D in enumerate(DI[fitKey]):
 if sdD_plot_list is None:
     sdD_plot_list = list(range(numIonTypePairs))
 
-for i, D in enumerate(sdD[fitKey]):
+for i, D in enumerate(sdD[fitkey]):
     if i in sdD_plot_list:
         g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
         D_masked = np.ma.masked_where(
@@ -190,46 +215,41 @@ for i, D in enumerate(sdD[fitKey]):
                     linestyle=lineStyle[numIonTypes + i],
                     color=color[numIonTypes + i])
 
-axs[1].set_xlabel(r"$r$\ \ (\AA)", labelpad=labelpad)
-axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)",
-                  labelpad=labelpad)
+axs[1].set_xlabel(r"$r$\ \ (\AA)")
+axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)")
 axs[1].legend(loc=D_legend_loc)
 # axs[1].legend(loc=(0.515, 0.245), labelspacing=0.2)
 # axs[1].set_title("threshold {}".format(threshold))
-plt.text(abcPos[0], abcPos[1], '(b)', transform=axs[1].transAxes,
+plt.text(abc_pos[0], abc_pos[1], '(b)', transform=axs[1].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 # plot sig
 if sig_plot_list is None:
     sig_plot_list = list(range(numIonTypes))
 
-for i, sig in enumerate(sigI[fitKey]):
+for i, sig in enumerate(sigI[fitkey]):
     if i in sig_plot_list:
         axs[2].plot(rBins_sigI, sig, label=label[i], color=color[i])
         axs[2].legend(loc=sig_legend_loc)
-axs[2].set_xlabel(r"$\lambda$\ \ (\AA)", labelpad=labelpad)
-axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)", labelpad=labelpad)
-plt.text(abcPos[0], abcPos[1], '(c)', transform=axs[2].transAxes,
+axs[2].set_xlabel(r"$\lambda$\ \ (\AA)")
+axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)")
+plt.text(abc_pos[0], abc_pos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
-if args.custom:
-    axs[0].set_ylim(top=rdf_top)
-    axs[1].set_ylim(bottom=D_bottom, top=D_top)
-    # axs[1].set_yticks(np.arange(0, 2.5, 0.5))
-    axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
+axs[0].set_ylim(top=rdf_top)
+axs[1].set_ylim(bottom=D_bottom, top=D_top)
+# axs[1].set_yticks(np.arange(0, 2.5, 0.5))
+axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
 
+if xmax is None:
+    xmax = halfCellLength
 for ax in axs:
-    if args.custom:
-        if xticks is not None:
-            ax.set_xticks(xticks)
-        if xmax is None:
-            xmax = halfCellLength
-        ax.set_xlim(left=xmin, right=xmax)
-    else:
-        ax.set_xlim(right=halfCellLength)
+    if xticks is not None:
+        ax.set_xticks(xticks)
+    ax.set_xlim(left=xmin, right=xmax)
     ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
-    ax.xaxis.labelpad = 1
-    ax.yaxis.set_label_coords(-0.18, 0.5)
+    ax.xaxis.labelpad = xlabelpad
+    ax.yaxis.set_label_coords(ylabel_coord[0], ylabel_coord[1])
     for sp in ax.spines.values():
         sp.set_linewidth(spineLineWidth)
 
