@@ -51,6 +51,12 @@ reflinewidth = 1.0  # line width of zero-reference line
 figsize1 = (10, 8.3)  # figure size (width, height)
 format = 'eps'
 
+# set to None to plot all components
+# or set to a list to select certain indexes
+# such as: plot_list = [0, 2]
+# which plots the 0th and 2nd compondents
+plot_list = None
+
 # other adjustment
 rc = {'font': {'size': 34,
                'family': 'serif',
@@ -99,11 +105,15 @@ lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 for key in rc:
     mpl.rc(key, **rc[key])
 
+if plot_list is None:
+    plot_list = list(range(numIonTypes + numIonTypePairs))
+
 plt.figure(figsize=figsize1)
 plt.gca().axhline(0, linestyle=':', color='black', linewidth=reflinewidth)
 for i, corr in enumerate(nCorr):
-    plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i],
-             color=color[i])
+    if i in plot_list:
+        plt.plot(timeLags, corr, label=label[i], linestyle=lineStyle[i],
+                 color=color[i])
 
 leg = plt.legend()
 plt.xlim(xmax=xmax)
