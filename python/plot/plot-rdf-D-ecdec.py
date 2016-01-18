@@ -8,6 +8,7 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
+from scipy import interpolate
 
 default_outbasename = "g-D-ecdec"
 parser = argparse.ArgumentParser(description="Plot rdf-D-ecdec")
@@ -17,6 +18,8 @@ parser.add_argument('--decond_D', metavar='DECOND',
 parser.add_argument('--decond_ecdec', metavar='DECOND',
                     help="decond analysis file for plotting ecdec."
                          " <decond.d5>")
+parser.add_argument('--smooth', action='store_true',
+                    help="smooth the data")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
@@ -90,6 +93,12 @@ format = 'eps'
 
 # relative position of (a) (b) (c) labels within each sub-figure
 abc_pos = (0.03, 0.965)
+
+# smoothing method
+# http://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.interpolate.interp1d.html
+# ‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic, ‘cubic’
+smooth = 'cubic'
+num_smooth_point = 500
 
 # other adjustment
 rc = {'font': {'size': 36,
@@ -167,10 +176,6 @@ numPlots = 3
 halfCellIndex = rBins.size / np.sqrt(3)
 halfCellLength = rBins[halfCellIndex]
 
-smallRegion = []
-for rdf in g_sdD:
-    smallRegion.append(next(i for i, v in enumerate(rdf) if v >= 1))
-
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)
 
 # plot rdf
@@ -208,10 +213,21 @@ if sdD_plot_list is None:
 for i, D in enumerate(sdD[fitkey]):
     if i in sdD_plot_list:
         g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
-        D_masked = np.ma.masked_where(
-                [c if j <= smallRegion[i] else False
-                 for j, c in enumerate(g_masked < threshold)], D)
-        axs[1].plot(rBins_sdD, D_masked, label=label[numIonTypes + i],
+        idx_threshold = next(i for i, g in enumerate(g_masked) if g >= threshold)
+
+        _rBins_sdD = rBins_sdD[idx_threshold:]
+        D = D[idx_threshold:]
+
+        not_nan_D = np.logical_not(np.isnan(D))
+        _rBins_sdD = _rBins_sdD[not_nan_D]
+        D = D[not_nan_D]
+
+        if args.smooth:
+            D_interp = interpolate.interp1d(_rBins_sdD, D, kind=smooth)
+            _rBins_sdD = np.linspace(_rBins_sdD[0], _rBins_sdD[-1], num_smooth_point)
+            D = D_interp(_rBins_sdD)
+
+        axs[1].plot(_rBins_sdD, D, label=label[numIonTypes + i],
                     linestyle=lineStyle[numIonTypes + i],
                     color=color[numIonTypes + i])
 
