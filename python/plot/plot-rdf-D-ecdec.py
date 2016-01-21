@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from scipy import interpolate
 
-default_outbasename = "g-D-ecdec"
+default_outbasename = "rdf-D-ecdec"
 parser = argparse.ArgumentParser(description="Plot rdf-D-ecdec")
 parser.add_argument('decond', help="decond analysis file. <decond.d5>")
 parser.add_argument('--decond_D', metavar='DECOND',
