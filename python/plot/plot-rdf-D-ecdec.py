@@ -68,6 +68,7 @@ sig_bottom = None  # sig_bottom = 0
 
 # ticks for x-axis
 xticks = None  # xticks = np.arange(0, 21, 5)
+xticks_minor = None
 
 rdf_legend_loc = None  # rdf_legend_loc = 'upper right'
 D_legend_loc = None    # D_legend_loc = 'upper right'
@@ -263,7 +264,8 @@ for ax in axs:
     if xticks is not None:
         ax.set_xticks(xticks)
     ax.set_xlim(left=xmin, right=xmax)
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(5))
+    if xticks_minor is not None:
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator(xticks_minor))
     ax.xaxis.labelpad = xlabelpad
     ax.yaxis.set_label_coords(ylabel_coord[0], ylabel_coord[1])
     for sp in ax.spines.values():
