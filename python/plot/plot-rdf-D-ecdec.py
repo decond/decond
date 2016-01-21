@@ -70,6 +70,11 @@ sig_bottom = None  # sig_bottom = 0
 xticks = None  # xticks = np.arange(0, 21, 5)
 xticks_minor = None
 
+# ticks for y-axis
+rdf_yticks = None
+D_yticks = None  # D_yticks = np.arange(0, 2.5, 0.5)
+sig_yticks = None
+
 rdf_legend_loc = None  # rdf_legend_loc = 'upper right'
 D_legend_loc = None    # D_legend_loc = 'upper right'
 sig_legend_loc = None  # sig_legend_loc = 'upper right'
@@ -254,9 +259,16 @@ plt.text(abc_pos[0], abc_pos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
 axs[0].set_ylim(top=rdf_top)
+if rdf_yticks is not None:
+    axs[0].set_yticks(rdf_yticks)
+
 axs[1].set_ylim(bottom=D_bottom, top=D_top)
-# axs[1].set_yticks(np.arange(0, 2.5, 0.5))
+if D_yticks is not None:
+    axs[1].set_yticks(D_yticks)
+
 axs[2].set_ylim(bottom=sig_bottom, top=sig_top)
+if sig_yticks is not None:
+    axs[2].set_yticks(sig_yticks)
 
 if xmax is None:
     xmax = halfCellLength
