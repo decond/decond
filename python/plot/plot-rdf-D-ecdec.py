@@ -18,8 +18,8 @@ parser.add_argument('--decond_D', metavar='DECOND',
 parser.add_argument('--decond_ecdec', metavar='DECOND',
                     help="decond analysis file for plotting ecdec."
                          " <decond.d5>")
-parser.add_argument('--smooth', action='store_true',
-                    help="smooth the data")
+parser.add_argument('--smooth_D', action='store_true',
+                    help="smooth D")
 parser.add_argument('-o', '--out', default=default_outbasename,
                     help="output plot file, default <{0}>".format(
                         default_outbasename))
