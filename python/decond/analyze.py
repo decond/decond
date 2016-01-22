@@ -618,11 +618,11 @@ class DecondFile(CorrFile):
             decbuf.decPairCount_err = np.full(decbuf.decPairCount.shape, np.nan)
 
         for dectype in window:
-            if getattr(buf, dectype.value) is None:
-                raise Error("{} does not have {} data".format(
-                    self.filename, dectype.value))
-            else:
-                if window[dectype] > 1:
+            if window[dectype] > 1:
+                if getattr(buf, dectype.value) is None:
+                    raise Error("{} does not have {} data".format(
+                        self.filename, dectype.value))
+                else:
                     window_data(dectype)
 
     def _write_buffer(self):
