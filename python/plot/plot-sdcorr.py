@@ -28,7 +28,7 @@ usetex = True
 # e.g. label = ['cation', 'anion']
 label = None
 
-# data(r) will not be plotted if g(r) < threshold
+# sdCorr(r) will not be plotted if g(r) < threshold at small r region
 threshold = 0  # e.g. threshold = 0.1
 
 # set to None to plot the whole data (CAUTION: may take a lot of time!)

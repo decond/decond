@@ -53,7 +53,7 @@ label = None
 # see available colors: http://matplotlib.org/api/colors_api.html
 color = None
 
-# data(r) will not be plotted if g(r) < threshold
+# D(r) will not be plotted if g(r) < threshold at small r region
 threshold = 0  # e.g. threshold = 0.1
 
 # the plotting range of x-axis, None for auto
