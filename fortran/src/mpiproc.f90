@@ -2,21 +2,26 @@ module mpiproc
   ! MPI
   use mpi
   implicit none
+  private
 
-  ! mpi common variables
-  integer :: ierr
-  integer :: myrank, nprocs       ! rank number and total number of processes
-  integer, parameter :: root = 0
-
-  integer:: numDomain_r, numDomain_c, numMolPerDomain_r, numMolPerDomain_c
-  integer :: r_start, r_end, c_start, c_end
-  real(8) :: starttime, endtime, starttime2, prog_starttime
+  integer :: numMolPerDomain_r, numMolPerDomain_c
   integer :: r_start_offset, c_start_offset
-  integer :: residueMol_r, residueMol_c, num_r, num_c
-  integer :: row_comm, col_comm, r_group_idx, c_group_idx, offset
-  integer, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
+  integer :: residueMol_r, residueMol_c
+  integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
+  integer, public, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
 
-  real(8) :: dummy_null
+  ! public
+  integer, public :: ierr
+  integer, public :: myrank, nprocs       ! rank number and total number of processes
+  integer, public, parameter :: root = 0
+  public :: mpi_comm_world, mpi_in_place, mpi_sum, mpi_double_precision
+  public :: mpi_integer, mpi_character, mpi_min, mpi_max, mpi_info_null
+  public :: mpi_wtime
+  real(8), public :: starttime, endtime, starttime2, prog_starttime
+  integer, public :: r_start, r_end, c_start, c_end
+  real(8), public :: dummy_null
+  integer, public :: numDomain_r, numDomain_c, num_r, num_c
+  public :: mpi_setup, domain_dec
 
 contains
   subroutine mpi_setup(type)
@@ -25,15 +30,15 @@ contains
 
     if(type == 'init') then
       call mpi_init(ierr)
-      call mpi_comm_size(MPI_COMM_WORLD, nprocs, ierr)
-      call mpi_comm_rank(MPI_COMM_WORLD, myrank, ierr)
+      call mpi_comm_size(mpi_comm_world, nprocs, ierr)
+      call mpi_comm_rank(mpi_comm_world, myrank, ierr)
     else if(type == 'stop') then
       call mpi_finalize(ierr)
     endif
   end subroutine mpi_setup
 
   subroutine mpi_abend()
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+    call mpi_abort(mpi_comm_world, 1, ierr);
     call exit(1)
   end subroutine mpi_abend
 
@@ -49,7 +54,7 @@ contains
     call mpi_abend()
   end subroutine halt_with_message
 
-  subroutine domainDecomposition(totNumMol, numFrame)
+  subroutine domain_dec(totNumMol, numFrame)
     !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
     !numMolPerDomain_r * numDomain_r ~= totNumMol
     implicit none
@@ -68,13 +73,13 @@ contains
       numDomain_c = nprocs / numDomain_r
     else
       write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call mpi_abort(mpi_comm_world, 1, ierr);
       call exit(1)
     end if
 
     if (numDomain_r * numDomain_c /= nprocs) then
       write(*,*) "Domain decomposition failed: ", numDomain_r, " x ", numDomain_c, " /= ", nprocs
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+      call mpi_abort(mpi_comm_world, 1, ierr);
       call exit(1)
     end if
 
@@ -83,9 +88,9 @@ contains
     c_group_idx = myrank / numDomain_r
 
     !Split comm into row and column comms
-    call mpi_comm_split(MPI_COMM_WORLD, c_group_idx, r_group_idx, col_comm, ierr)
+    call mpi_comm_split(mpi_comm_world, c_group_idx, r_group_idx, col_comm, ierr)
     !color by row, rank by column
-    call mpi_comm_split(MPI_COMM_WORLD, r_group_idx, c_group_idx, row_comm, ierr)
+    call mpi_comm_split(mpi_comm_world, r_group_idx, c_group_idx, row_comm, ierr)
     !color by column, rank by row
 
     numMolPerDomain_r = totNumMol / numDomain_r
@@ -158,14 +163,14 @@ contains
     if (r_group_idx == numDomain_r - 1) then
       if (r_end /= totNumMol) then
         write(*,*) "Error: r_end /= totNumMol, r_end =", r_end
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call mpi_abort(mpi_comm_world, 1, ierr);
         call exit(1)
       end if
     end if
     if (c_group_idx == numDomain_c - 1) then
       if (c_end /= totNumMol) then
         write(*,*) "Error: c_end /= totNumMol"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call mpi_abort(mpi_comm_world, 1, ierr);
         call exit(1)
       end if
     end if
@@ -176,6 +181,6 @@ contains
   !  write(*,*) "r_start, r_end =", r_start, r_end
   !  write(*,*) "c_start, c_end =", c_start, c_end
   !  write(*,*)
-  end subroutine domainDecomposition
+  end subroutine domain_dec
 
 end module mpiproc

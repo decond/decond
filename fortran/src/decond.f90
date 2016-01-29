@@ -316,7 +316,7 @@ program decond
     end if
   end if
 
-  call domainDecomposition(totNumMol, numFrame) ! determine r_start, c_start ...etc.
+  call domain_dec(totNumMol, numFrame) ! determine r_start, c_start ...etc.
 
   ! prepare eBinIndex for each rank
   if (is_ed) then
