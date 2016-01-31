@@ -26,8 +26,12 @@
 module utility
   use, intrinsic :: iso_c_binding
   implicit none
+  private
 
-  integer, parameter :: LINE_LEN = 128
+  integer, public, parameter :: LINE_LEN = 128
+  public handle, newunit, count_record_in_string, &
+         get_pairindex_upper_diag, parse_version, swap, &
+         get_pairindex_upper_nodiag, f2c_string
 
   type handle
      integer :: iohandle

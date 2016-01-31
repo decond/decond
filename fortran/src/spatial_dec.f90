@@ -1,17 +1,22 @@
 module spatial_dec
   use mpiproc
   implicit none
+  private
 
-  integer :: num_rBin
-  integer, allocatable :: sd_binIndex(:)
-  real(8) :: rBinWidth
-  real(8), allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :), rBins(:)
-  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
-  !sdPairCount: (num_rBin, molTypePairIndex)
   integer :: stat
 
+  public sd_init, com_pos, sd_prepCorrMemory, sd_getBinIndex, &
+         sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
+         sd_collectCorr, sd_average, sd_make_rBins, sd_finish
+  real(8), public :: rBinWidth
+  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
+  !sdPairCount: (num_rBin, molTypePairIndex)
+  real(8), public, allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :)
+  integer, public :: num_rBin
+  integer, public, allocatable :: sd_binIndex(:)
+  real(8), public, allocatable :: rBins(:)
   !MPI variables
-  real(8), allocatable :: pos_r(:, :, :), pos_c(:, :, :)
+  real(8), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
 
 contains
   subroutine sd_init()

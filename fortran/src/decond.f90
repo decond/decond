@@ -11,8 +11,8 @@ program decond
                         &sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
                         &sd_collectCorr, sd_average, sd_make_rBins, sd_finish
   use energy_dec, only: engfiles, ed_readEng, ed_getBinIndex, &
-                       &ed_binIndex, num_eBin, ed_binIndex, ed_prepCorrMemory, &
-                       &ed_getBinIndex, skipEng, ed_collectCorr, ed_average, &
+                       &num_eBin, ed_binIndex, ed_prepCorrMemory, &
+                       &skipEng, ed_collectCorr, ed_average, &
                        &edPairCount, edCorr, eBinWidth, ed_init, &
                        &ed_make_eBins, ed_finish, num_engfiles, &
                        &ed_prep_engfiles

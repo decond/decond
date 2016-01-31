@@ -3,27 +3,33 @@ module energy_dec
   use hdf5
   use utility, only: LINE_LEN
   implicit none
-  integer :: num_eBin, skipEng
+  private
+
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
   character(len=*), parameter :: ENGDSET_NAME = "energy"
-  character(len=LINE_LEN), allocatable :: engfiles(:)
   integer(hid_t), allocatable :: engfileids(:)
-  integer :: num_engfiles
   real(8), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numFrame,
                                               !             uniqueNumMolPair)
-  real(8), allocatable :: ed_binIndex(:)  !ed_binIndex(numFrame)
-  real(8), allocatable :: edCorr(:, :, :)  !edCorr(maxLag+1, num_eBin,
-                                           !       numMolType*numMolType)
-  real(8), allocatable :: edPairCount(:, :)  !edPairCount(num_eBin,
-                                             !            numMolType*numMolType)
-  real(8), allocatable :: eBins(:)  !eBins(num_eBin)
-  real(8) :: engMin_global, engMax_global
+  real(8) :: engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
-  real(8) :: eBinWidth
   integer :: eBinIndex_absolute_max, eBinIndex_absolute_min
   integer, allocatable :: sltspec_list(:), sltfirsttag_list(:), &
                          &nummol_list(:), numpair_list(:), &
                          &numframe_list(:), numslt_list(:)
+
+  public ed_readEng, ed_getBinIndex, ed_prepCorrMemory, ed_collectCorr, &
+         ed_average, ed_init, ed_make_eBins, ed_finish, ed_prep_engfiles
+
+  character(len=LINE_LEN), public, allocatable :: engfiles(:)
+  real(8), public, allocatable :: ed_binIndex(:)  !ed_binIndex(numFrame)
+  integer, public :: num_eBin, skipEng
+  real(8), public, allocatable :: edPairCount(:, :)
+  !edPairCount(num_eBin, numMolType*numMolType)
+  real(8), public, allocatable :: edCorr(:, :, :)
+  real(8), public :: eBinWidth
+  integer, public :: num_engfiles
+  real(8), public, allocatable :: eBins(:)  !eBins(num_eBin)
+  real(8), public :: engMin_global
 
 contains
   subroutine ed_init()
