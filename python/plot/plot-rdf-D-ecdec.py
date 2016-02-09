@@ -13,8 +13,8 @@ from scipy import interpolate
 default_outbasename = "rdf-D-ecdec"
 parser = argparse.ArgumentParser(description="Plot rdf-D-ecdec")
 parser.add_argument('decond', help="decond analysis file. <decond.d5>")
-parser.add_argument('--decond_D', metavar='DECOND',
-                    help="decond analysis file for plotting D. <decond.d5>")
+parser.add_argument('--decond_D', metavar='DECOND', nargs='+',
+                    help="decond analysis file(s) for plotting D. <decond.d5>")
 parser.add_argument('--decond_ecdec', metavar='DECOND',
                     help="decond analysis file for plotting ecdec."
                          " <decond.d5>")
@@ -83,6 +83,7 @@ sig_legend_loc = None  # sig_legend_loc = 'upper right'
 # or set to a list to select certain indexes
 # such as: rdf_plot_list = [0, 2]
 # which plots the 0th and 2nd compondent of rdf
+# NOTE: sdD_plot_list should be a list of list
 rdf_plot_list = None
 DI_plot_list = None
 sdD_plot_list = None
@@ -156,9 +157,12 @@ label += ['-'.join(l) for l in it.combinations_with_replacement(label, 2)]
 lineStyle = ['--'] * numIonTypes + ['-'] * numIonTypePairs
 
 if (args.decond_D is None):
-    decond_D = args.decond
+    decond_D = [args.decond]
 else:
     decond_D = args.decond_D
+    if len(decond_D) > 1:
+        assert(sdD_plot_list is not None)
+        assert(len(sdD_plot_list) == len(decond_D))
 
 if (args.decond_ecdec is None):
     decond_ecdec = args.decond
@@ -166,16 +170,24 @@ else:
     decond_ecdec = args.decond_ecdec
 
 g, rBins = da.get_rdf(args.decond)[0:2]
-DI, _, _, fit = da.get_diffusion(decond_D)[0:4]
-sdD, _, _, rBins_sdD = da.get_decD(decond_D, da.DecType.spatial)[0:4]
-g_sdD = da.get_rdf(decond_D)[0]
+DI, _, _, fit = da.get_diffusion(decond_D[0])[0:4]
+sdD_list = []
+rBins_sdD_list = []
+g_sdD_list = []
+for file in decond_D:
+    _sdD, _, _, _rBins_sdD = da.get_decD(file, da.DecType.spatial)[0:4]
+    sdD_list.append(_sdD)
+    rBins_sdD_list.append(_rBins_sdD)
+    g_sdD_list.append(da.get_rdf(file)[0])
 sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial)[0:3]
 
 rBins /= da.const.angstrom
-rBins_sdD /= da.const.angstrom
+for rBins_sdD in rBins_sdD_list:
+    rBins_sdD /= da.const.angstrom
 rBins_sigI /= da.const.angstrom
 DI /= da.const.angstrom**2 / da.const.pico
-sdD /= da.const.angstrom**2 / da.const.pico
+for sdD in sdD_list:
+    sdD /= da.const.angstrom**2 / da.const.pico
 
 numPlots = 3
 
@@ -216,26 +228,30 @@ for i, D in enumerate(DI[fitkey]):
 if sdD_plot_list is None:
     sdD_plot_list = list(range(numIonTypePairs))
 
-for i, D in enumerate(sdD[fitkey]):
-    if i in sdD_plot_list:
-        g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
-        idx_threshold = next(i for i, g in enumerate(g_masked) if g >= threshold)
+for n, (sdD, rBins_sdD, g_sdD) in enumerate(
+        zip(sdD_list, rBins_sdD_list, g_sdD_list)):
+    for i, D in enumerate(sdD[fitkey]):
+        if i in sdD_plot_list[n]:
+            g_masked = np.where(np.isnan(g_sdD[i]), -1, g_sdD[i])
+            idx_threshold = next(
+                    i for i, g in enumerate(g_masked) if g >= threshold)
 
-        _rBins_sdD = rBins_sdD[idx_threshold:]
-        D = D[idx_threshold:]
+            _rBins_sdD = rBins_sdD[idx_threshold:]
+            D = D[idx_threshold:]
 
-        not_nan_D = np.logical_not(np.isnan(D))
-        _rBins_sdD = _rBins_sdD[not_nan_D]
-        D = D[not_nan_D]
+            not_nan_D = np.logical_not(np.isnan(D))
+            _rBins_sdD = _rBins_sdD[not_nan_D]
+            D = D[not_nan_D]
 
-        if args.smooth:
-            D_interp = interpolate.interp1d(_rBins_sdD, D, kind=smooth)
-            _rBins_sdD = np.linspace(_rBins_sdD[0], _rBins_sdD[-1], num_smooth_point)
-            D = D_interp(_rBins_sdD)
+            if args.smooth_D:
+                D_interp = interpolate.interp1d(_rBins_sdD, D, kind=smooth)
+                _rBins_sdD = np.linspace(
+                        _rBins_sdD[0], _rBins_sdD[-1], num_smooth_point)
+                D = D_interp(_rBins_sdD)
 
-        axs[1].plot(_rBins_sdD, D, label=label[numIonTypes + i],
-                    linestyle=lineStyle[numIonTypes + i],
-                    color=color[numIonTypes + i])
+            axs[1].plot(_rBins_sdD, D, label=label[numIonTypes + i],
+                        linestyle=lineStyle[numIonTypes + i],
+                        color=color[numIonTypes + i])
 
 axs[1].set_xlabel(r"$r$\ \ (\AA)")
 axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)")
