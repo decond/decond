@@ -226,7 +226,7 @@ for i, D in enumerate(DI[fitkey]):
                     linestyle=lineStyle[i], color=color[i])
 
 if sdD_plot_list is None:
-    sdD_plot_list = list(range(numIonTypePairs))
+    sdD_plot_list = [list(range(numIonTypePairs))]
 
 for n, (sdD, rBins_sdD, g_sdD) in enumerate(
         zip(sdD_list, rBins_sdD_list, g_sdD_list)):
