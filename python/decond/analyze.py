@@ -1104,7 +1104,8 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
 def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                avewidth=None):
     """
-    Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
+    Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
+           ec_local, ec_nonlocal
     """
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
@@ -1195,7 +1196,8 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
                                      ec_nonlocal[:, idx, np.newaxis])
 
     fit, fit_unit = get_fit(decname)
-    return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit
+    return (ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
+            ec_local[:, :, -1], ec_nonlocal)
 
 
 def get_normalize_paircount(decname, dectype):

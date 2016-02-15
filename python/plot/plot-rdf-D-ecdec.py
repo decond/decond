@@ -188,10 +188,16 @@ for file in decond_D:
     rBins_sdD_list.append(_rBins_sdD)
     g_sdD_list.append(da.get_rdf(file)[0])
 
-sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial,
-                                    sep_nonlocal=sep_nonlocal,
-                                    nonlocal_ref=nonlocal_ref,
-                                    avewidth=avewidth)[0:3]
+sigI, sig_unit, rBins_sigI, _, _, _, sig_local, sig_nonlocal = da.get_ec_dec(
+        decond_ecdec, da.DecType.spatial, sep_nonlocal=sep_nonlocal,
+        nonlocal_ref=nonlocal_ref, avewidth=avewidth)
+
+print()
+print("Electrical conductivity from cross terms ({})".format(sig_unit))
+print("=======================================")
+print("{:<10} {:<}".format('local', str(sig_local[fitkey])))
+print("{:<10} {:<}".format('nonlocal', str(sig_nonlocal[fitkey])))
+print()
 
 rBins /= da.const.angstrom
 for rBins_sdD in rBins_sdD_list:
