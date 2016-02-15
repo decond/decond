@@ -107,6 +107,13 @@ abc_pos = (0.03, 0.965)
 smooth = 'cubic'
 num_smooth_point = 500
 
+# set sep_nonlocal = False to turn off the local-nonlocal separation of sig_I
+# D(\infty) = average of D(r) over nonlocal_ref - avewidth < r < nonlocal_ref + avewidth
+# note that nonlocal_ref and avewidth are in the unit of nm
+sep_nonlocal = True
+nonlocal_ref = None  # default to cell-length / np.sqrt(3)
+avewidth = 0.25
+
 # other adjustment
 rc = {'font': {'size': 36,
                'family': 'serif',
@@ -174,12 +181,17 @@ DI, _, _, fit = da.get_diffusion(decond_D[0])[0:4]
 sdD_list = []
 rBins_sdD_list = []
 g_sdD_list = []
+
 for file in decond_D:
     _sdD, _, _, _rBins_sdD = da.get_decD(file, da.DecType.spatial)[0:4]
     sdD_list.append(_sdD)
     rBins_sdD_list.append(_rBins_sdD)
     g_sdD_list.append(da.get_rdf(file)[0])
-sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial)[0:3]
+
+sigI, _, rBins_sigI = da.get_ec_dec(decond_ecdec, da.DecType.spatial,
+                                    sep_nonlocal=sep_nonlocal,
+                                    nonlocal_ref=nonlocal_ref,
+                                    avewidth=avewidth)[0:3]
 
 rBins /= da.const.angstrom
 for rBins_sdD in rBins_sdD_list:
