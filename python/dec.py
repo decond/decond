@@ -34,6 +34,8 @@ def report(args):
 # create the top-level parser
 parser = argparse.ArgumentParser(
         description="Decond analysis tool, use subcommands to perform tasks")
+parser.add_argument('-v', '--version', action='version',
+                    version=da.__version__)
 subparsers = parser.add_subparsers(
         description="dec subcommand -h for more specific help. "
                     "Note that all the subcommands will create new output "
