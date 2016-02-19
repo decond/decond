@@ -1,11 +1,11 @@
 module top
-  use utility, only : handle, newunit, LINE_LEN, count_record_in_string
+  use varpars, only : line_len, line_len_str
+  use utility, only : handle, newunit, count_record_in_string
   implicit none
 
   private
   public :: open_top, close_top, read_top, system, print_sys
   
-  character(len=*), parameter :: LINE_LEN_STR = "128"
   character(len=1), dimension(2), parameter :: COMMENT_CHAR = [";", "#"]
   
   character(len=LINE_LEN) :: current_directive = ''
@@ -333,7 +333,7 @@ contains
     
     status = 0
     do while(.true.)
-      read(htop%iohandle, "(A"//LINE_LEN_STR//")", iostat=stat) line
+      read(htop%iohandle, "(A"//line_len_str//")", iostat=stat) line
       if (stat > 0) then
         write(*,*) "Error reading line"
         call exit(1)

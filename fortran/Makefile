@@ -49,17 +49,17 @@ trjconv2com : utility.o xdr.o top.o trjconv2com.o
 trjconv2com.o : trjconv2com.f90
 	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
-decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decond.o
+decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decond.o varpars.o
 	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
 
 decond.o : decond.f90
 	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
 
 # ===== Library =====
-spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o
+spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o varpars.o
 	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
-energy_dec.o : energy_dec.f90 mpiproc.o utility.o
+energy_dec.o : energy_dec.f90 mpiproc.o utility.o varpars.o
 	$(FCMPI) $(FCFLAGS) -I$(HDF5_INCLUDE_DIR) -o $(SRCDIR)$(@F) -c $<
 
 mpiproc.o : mpiproc.f90
@@ -71,8 +71,11 @@ top.o : top.f90 utility.o
 xdr.o : xdr.f90 utility.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
-utility.o : utility.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+utility.o : utility.f90 varpars.o
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+
+varpars.o : varpars.f90
+	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
 
 correlation.o : correlation.f90 fftw.o
 	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 

@@ -9,8 +9,8 @@ module spatial_dec
          sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
          sd_collectCorr, sd_average, sd_make_rBins, sd_finish
   real(8), public :: rBinWidth
-  !sdCorr: spatially decomposed correlation (lag, rBin, molTypePairIndex)
-  !sdPairCount: (num_rBin, molTypePairIndex)
+  !sdCorr: spatially decomposed correlation (lag, rBin, moltypepair_idx)
+  !sdPairCount: (num_rBin, moltypepair_idx)
   real(8), public, allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :)
   integer, public :: num_rBin
   integer, public, allocatable :: sd_binIndex(:)
@@ -24,18 +24,18 @@ contains
     rBinWidth = 0.01
   end subroutine sd_init
 
-  subroutine sd_prepPosMemory(numFrame, totNumMol, num_r, num_c)
+  subroutine sd_prepPosMemory(numframe, totnummol, num_r, num_c)
     implicit none
-    integer, intent(in) :: numFrame, totNumMol, num_r, num_c
+    integer, intent(in) :: numframe, totnummol, num_r, num_c
 
-    allocate(pos_r(3, numFrame, num_r), stat=stat)
+    allocate(pos_r(3, numframe, num_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_r"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
 
-    allocate(pos_c(3, numFrame, num_c), stat=stat)
+    allocate(pos_c(3, numframe, num_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_c"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -43,7 +43,7 @@ contains
     end if 
 
     if (myrank == root) then
-      allocate(pos(3, numFrame, totNumMol), stat=stat)
+      allocate(pos(3, numframe, totnummol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos"
         call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -134,13 +134,13 @@ contains
     if (myrank == root) write(*,*) "num_rBin = ", num_rBin
   end subroutine sd_cal_num_rBin
 
-  subroutine sd_prepCorrMemory(maxLag, numMolType, numFrame)
+  subroutine sd_prepCorrMemory(maxlag, nummoltype, numframe)
     implicit none
-    integer, intent(in) :: maxLag, numMolType, numFrame
-    integer :: numMolTypePair
+    integer, intent(in) :: maxlag, nummoltype, numframe
+    integer :: num_moltypepair
 
-    numMolTypePair = numMolType * (numMolType + 1) / 2
-    allocate(sdCorr(maxLag+1, num_rBin, numMolTypePair), stat=stat)
+    num_moltypepair = nummoltype * (nummoltype + 1) / 2
+    allocate(sdCorr(maxlag+1, num_rBin, num_moltypepair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdCorr"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -148,7 +148,7 @@ contains
     end if
     sdCorr = 0d0
 
-    allocate(sdPairCount(num_rBin, numMolTypePair), stat=stat)
+    allocate(sdPairCount(num_rBin, num_moltypepair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdPairCount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -156,7 +156,7 @@ contains
     end if
     sdPairCount = 0d0
 
-    allocate(sd_binIndex(numFrame), stat=stat)
+    allocate(sd_binIndex(numframe), stat=stat)
     if (stat /= 0) then
       write(*,*) "Allocation failed: sd_binIndex"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
@@ -205,24 +205,24 @@ contains
     call mpi_barrier(MPI_COMM_WORLD, ierr)
   end subroutine sd_collectCorr
 
-  subroutine sd_average(numFrame, numMolType, frameCount)
+  subroutine sd_average(numframe, nummoltype, framecount)
     use utility, only: get_pairindex_upper_diag
     implicit none
-    integer, intent(in) :: numFrame, numMolType, frameCount(:)
-    integer :: i, t1, t2, n, molTypePairIndex
+    integer, intent(in) :: numframe, nummoltype, framecount(:)
+    integer :: i, t1, t2, n, moltypepair_idx
 
-    sdPairCount = sdPairCount / numFrame
-    do n = 1, numMolType * (numMolType + 1) / 2
+    sdPairCount = sdPairCount / numframe
+    do n = 1, nummoltype * (nummoltype + 1) / 2
       do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / frameCount / sdPairCount(i, n)
+        sdCorr(:,i,n) = sdCorr(:,i,n) / framecount / sdPairCount(i, n)
       end do
     end do
 
-    do t2 = 1, numMolType
-      do t1 = t2, numMolType
+    do t2 = 1, nummoltype
+      do t1 = t2, nummoltype
         if (t1 /= t2) then
-          molTypePairIndex = get_pairindex_upper_diag(t1, t2, numMolType)
-          sdPairCount(:, molTypePairIndex) = sdPairCount(:, molTypePairIndex) / 2d0
+          moltypepair_idx = get_pairindex_upper_diag(t1, t2, nummoltype)
+          sdPairCount(:, moltypepair_idx) = sdPairCount(:, moltypepair_idx) / 2d0
         end if
       end do
     end do

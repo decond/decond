@@ -54,11 +54,11 @@ contains
     call mpi_abend()
   end subroutine halt_with_message
 
-  subroutine domain_dec(totNumMol, numFrame)
+  subroutine domain_dec(totnummol, numFrame)
     !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
-    !numMolPerDomain_r * numDomain_r ~= totNumMol
+    !numMolPerDomain_r * numDomain_r ~= totnummol
     implicit none
-    integer, intent(in) :: totNumMol, numFrame
+    integer, intent(in) :: totnummol, numFrame
     integer :: i, stat
 
     if (numDomain_r == 0 .and. numDomain_c == 0) then
@@ -93,10 +93,10 @@ contains
     call mpi_comm_split(mpi_comm_world, r_group_idx, c_group_idx, row_comm, ierr)
     !color by column, rank by row
 
-    numMolPerDomain_r = totNumMol / numDomain_r
-    numMolPerDomain_c = totNumMol / numDomain_c
-    residueMol_r = mod(totNumMol, numDomain_r)
-    residueMol_c = mod(totNumMol, numDomain_c)
+    numMolPerDomain_r = totnummol / numDomain_r
+    numMolPerDomain_c = totnummol / numDomain_c
+    residueMol_r = mod(totnummol, numDomain_r)
+    residueMol_c = mod(totnummol, numDomain_c)
 
     allocate(displs_r(numDomain_r), stat=stat)
     if (stat /=0) then
@@ -161,15 +161,15 @@ contains
 
     !check if myrank is at the ending boundary and if indexes are coincident
     if (r_group_idx == numDomain_r - 1) then
-      if (r_end /= totNumMol) then
-        write(*,*) "Error: r_end /= totNumMol, r_end =", r_end
+      if (r_end /= totnummol) then
+        write(*,*) "Error: r_end /= totnummol, r_end =", r_end
         call mpi_abort(mpi_comm_world, 1, ierr);
         call exit(1)
       end if
     end if
     if (c_group_idx == numDomain_c - 1) then
-      if (c_end /= totNumMol) then
-        write(*,*) "Error: c_end /= totNumMol"
+      if (c_end /= totnummol) then
+        write(*,*) "Error: c_end /= totnummol"
         call mpi_abort(mpi_comm_world, 1, ierr);
         call exit(1)
       end if

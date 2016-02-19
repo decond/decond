@@ -25,18 +25,18 @@
 
 module utility
   use, intrinsic :: iso_c_binding
+  use varpars, only: line_len
   implicit none
   private
 
-  integer, public, parameter :: LINE_LEN = 128
+  type handle
+     integer :: iohandle
+     character(len=line_len) :: filename
+  end type handle
+
   public handle, newunit, count_record_in_string, &
          get_pairindex_upper_diag, parse_version, swap, &
          get_pairindex_upper_nodiag, f2c_string
-
-  type handle
-     integer :: iohandle
-     character(len=LINE_LEN) :: filename
-  end type handle
 
   interface swap
     module procedure swap_int, swap_char
@@ -198,9 +198,9 @@ contains
 
   subroutine swap_char(list, i, j)
     implicit none
-    character(len=LINE_LEN), intent(inout) :: list(:)
+    character(len=line_len), intent(inout) :: list(:)
     integer, intent(in) :: i, j
-    character(len=LINE_LEN) :: tmp
+    character(len=line_len) :: tmp
 
     tmp = list(i)
     list(i) = list(j)
