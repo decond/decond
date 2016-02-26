@@ -1,16 +1,30 @@
-# use h5pfc if available
+# ===== Basic modification =====
+# Hopefully it will be enough by just modifying this block
+
+# MPI Fortran compiler, use h5pfc if available
 FC = h5pfc
 
 # -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
 MODFLAG = -module
 
-# XTC Library
+# XTC Library directory (where lib/ and include/ are located inside)
 XDRFILE_DIR = $(HOME)/local
+
+# HDF5 Library directory (where lib/ and include/ are located inside)
+HDF5_DIR = $(HOME)/local
+
+# FFTW3 Library directory (where lib/ and include/ are located inside)
+FFTW_DIR = $(HOME)/local
+
+
+# ===== Advanced modification =====
+# Modify this block if the above modification only is not enough
+
+# XTC Library
 XDRFILE_LINK = $(XDRFILE_DIR)/lib/libxdrfile.a
 # XDRFILE_LINK = -L$(XDRFILE_DIR)/lib -lxdrfile
 
 # HDF5 Library
-HDF5_DIR = $(HOME)/local
 HDF5_INCL = -I$(HDF5_DIR)/include
 # Manually setup HDF5_LINK if FC is not h5pfc
 ifneq ($(FC), h5pfc)
@@ -22,7 +36,6 @@ ifneq ($(FC), h5pfc)
 endif
 
 # FFTW3 Library
-FFTW_DIR = $(HOME)/local
 FFTW_INCL = -I$(FFTW_DIR)/include
 FFTW_LINK = $(FFTW_DIR)/lib/libfftw3.a
 # FFTWLINK = -L$(FFTW_DIR)/lib -lfftw3
