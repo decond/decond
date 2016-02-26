@@ -1,5 +1,3 @@
-# ===== Essential modification =====
-
 # use h5pfc if available
 FC = h5pfc
 
@@ -46,7 +44,7 @@ PROGRAM = trjconv2com decond
 TRJCONV_DEPS = xdr.o top.o utility.o
 TRJCONV_OBJS = trjconv2com.o $(TRJCONV_DEPS)
 
-DECOND_DEPS = mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o
+DECOND_DEPS = mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o fftw.o
 DECOND_OBJS = decond.o $(DECOND_DEPS)
 
 # ---------------------------

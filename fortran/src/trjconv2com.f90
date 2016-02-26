@@ -27,7 +27,7 @@ program trjconv2com
   is_periodic = .true.
   if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
     write(*,*) "usage: $trjconv2com <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
-                <skip> <molecule1> <start_index1> [<molecule2> <start_index2>...]"
+               &<skip> <molecule1> <start_index1> [<molecule2> <start_index2>...]"
     write(*,*) "Note: skip=1 means no frames are skipped. skip=2 means reading every 2nd frame."
     call exit(1)
   end if
