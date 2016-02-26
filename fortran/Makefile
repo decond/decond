@@ -1,89 +1,91 @@
 # ===== Essential modification =====
-FC = ifort
-H5PFC = h5pfc      # if h5pfc is not in the PATH, use full path is fine
-FCMPI = mpiifort   # FCMPI must be the same compiler as what was used to compile h5pfc
-MODFLAG = -module  # -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
 
-## XTC Library
-XDRFILEDIR = $(HOME)/local
-XDRFILELINK = -L$(XDRFILEDIR)/lib -lxdrfile
+# use h5pfc if available
+FC = h5pfc
 
-## HDF5 Library
-HDF5_INCLUDE_DIR = $(HOME)/local/include
+# -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
+MODFLAG = -module
 
-## FFTW3 Library
-FFTWDIR = $(HOME)/local
-FFTWLINK = $(FFTWDIR)/lib/libfftw3.a
-## For dynamic linking
-# FFTWLINK = -L$(FFTWDIR)/lib -lfftw3 -lm
+# XTC Library
+XDRFILE_DIR = $(HOME)/local
+XDRFILE_LINK = $(XDRFILE_DIR)/lib/libxdrfile.a
+# XDRFILE_LINK = -L$(XDRFILE_DIR)/lib -lxdrfile
 
+# HDF5 Library
+HDF5_DIR = $(HOME)/local
+HDF5_INCL = -I$(HDF5_DIR)/include
+# Manually setup HDF5_LINK if FC is not h5pfc
+ifneq ($(FC), h5pfc)
+    HDF5_LINK = $(HDF5_DIR)/lib/libhdf5hl_fortran.a \
+                $(HDF5_DIR)/lib/libhdf5_fortran.a \
+                $(HDF5_DIR)/lib/libhdf5_hl.a \
+                $(HDF5_DIR)/lib/libhdf5.a \
+                -lz -ldl -lm -Wl,-rpath -Wl,$(HDF5_DIR)/lib
+endif
 
-# ===== Advanced modification =====
-SRCDIR = ./src/
-MODDIR = ./mod/
-OUTDIR = ./out/
-BINDIR = ../bin/
-
-FCFLAGS = $(MODFLAG) $(MODDIR) -O2 -heap-arrays 32768
-## For debug
-# FCFLAGS = $(MODFLAG) $(MODDIR) -g -check all -traceback
+# FFTW3 Library
+FFTW_DIR = $(HOME)/local
+FFTW_INCL = -I$(FFTW_DIR)/include
+FFTW_LINK = $(FFTW_DIR)/lib/libfftw3.a
+# FFTWLINK = -L$(FFTW_DIR)/lib -lfftw3
 
 
 # ===== Basically NO modification is needed below this line =====
-PROGRAM = decond trjconv2com
-DIR = $(MODDIR) $(OUTDIR)
-vpath %.f90 $(SRCDIR)
+SRCDIR = ./src
+BINDIR = ../bin
+
+FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL)
+# FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) -g -check all -traceback
+
+FLFLAGS = $(HDF5_LINK) $(FFTW_LINK) $(XDRFILE_LINK)
+
 
 # ===== Program =====
-.PHONY : all dir
-all : dir $(PROGRAM)
-	ln -sf ../fortran/$(OUTDIR)* $(BINDIR)
+PROGRAM = trjconv2com decond
 
-dir :
-	mkdir -p $(DIR)
+TRJCONV_DEPS = xdr.o top.o utility.o
+TRJCONV_OBJS = trjconv2com.o $(TRJCONV_DEPS)
+
+DECOND_DEPS = mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o
+DECOND_OBJS = decond.o $(DECOND_DEPS)
 
 # ---------------------------
-trjconv2com : utility.o xdr.o top.o trjconv2com.o
-	$(FC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(XDRFILELINK)
+.PHONY : all
+all : $(addprefix $(BINDIR)/, $(PROGRAM))
 
-trjconv2com.o : trjconv2com.f90
-	$(FC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+$(BINDIR)/trjconv2com : $(addprefix $(SRCDIR)/, $(TRJCONV_OBJS))
+	$(FC) $^ $(FLFLAGS) -o $@ 
 
-decond : mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o decond.o
-	$(H5PFC) -o $(OUTDIR)$(@F) $(addprefix $(SRCDIR), $(^F)) $(FFTWLINK) $(XDRFILELINK)
+$(BINDIR)/decond : $(addprefix $(SRCDIR)/, $(DECOND_OBJS))
+	$(FC) $^ $(FLFLAGS) -o $@
 
-decond.o : decond.f90
-	$(H5PFC) $(FCFLAGS) -c $< -o $(SRCDIR)$(@F)
+
+# ---------------------------
+$(SRCDIR)/trjconv2com.o : $(addprefix $(SRCDIR)/, $(TRJCONV_DEPS))
+
+$(SRCDIR)/decond.o : $(addprefix $(SRCDIR)/, $(DECOND_DEPS))
+
 
 # ===== Library =====
-spatial_dec.o : spatial_dec.f90 mpiproc.o top.o utility.o
-	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+$(SRCDIR)/spatial_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o top.o utility.o)
 
-energy_dec.o : energy_dec.f90 mpiproc.o utility.o
-	$(FCMPI) $(FCFLAGS) -I$(HDF5_INCLUDE_DIR) -o $(SRCDIR)$(@F) -c $<
+$(SRCDIR)/energy_dec.o : $(addprefix $(SRCDIR)/,  mpiproc.o utility.o)
 
-mpiproc.o : mpiproc.f90
-	$(FCMPI) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+$(SRCDIR)/top.o : $(SRCDIR)/utility.o
 
-top.o : top.f90 utility.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+$(SRCDIR)/xdr.o : $(SRCDIR)/utility.o
 
-xdr.o : xdr.f90 utility.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $<
+$(SRCDIR)/correlation.o : $(SRCDIR)/fftw.o
 
-utility.o : utility.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
 
-correlation.o : correlation.f90 fftw.o
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< 
+# ===================
+$(SRCDIR)/%.o : $(SRCDIR)/%.f90
+	$(FC) -c $(FCFLAGS) $< -o $@
 
-fftw.o : fftw.f90
-	$(FC) $(FCFLAGS) -o $(SRCDIR)$(@F) -c $< -I$(FFTWDIR)/include
+
 #==================================================
 .PHONY: clean
 clean :
-	rm -f $(SRCDIR)*.o $(MODDIR)*.mod
-	rm -f $(addprefix $(OUTDIR), $(PROGRAM) )
-	rm -f *~ $(SRCDIR)*~
-	rm -f $(addprefix $(BINDIR), $(PROGRAM) )
+	rm -f $(SRCDIR)/*.o $(SRCDIR)/*.mod
+	rm -f $(addprefix $(BINDIR)/, $(PROGRAM) )
 
