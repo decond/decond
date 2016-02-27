@@ -20,7 +20,7 @@ program decond
                      least_required_num_arg, num_arg, num_subarg, &
                      num_arg_per_moltype, totnummol, sysnumatom, &
                      corrfile, datafile, logfile, topfile, arg, &
-                     handle, line_len_str, numframe, maxlag, nummoltype, &
+                     line_len_str, numframe, maxlag, nummoltype, &
                      skiptrr, num_moltypepair_all, charge, framecount, &
                      start_index, cell, timestep, temperature, &
                      is_periodic, is_pa_mode, is_pm_mode, is_sd, is_ed
