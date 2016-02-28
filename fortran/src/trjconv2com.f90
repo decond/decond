@@ -19,12 +19,10 @@ program trjconv2com
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
   real(8), allocatable :: time(:), dummy_null
 
-  logical :: is_periodic
   type(system) :: sys
 
   num_dataArg = command_argument_count() - num_parArg
 
-  is_periodic = .true.
   if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
     write(*,*) "usage: $trjconv2com <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
                &<skip> <molecule1> <start_index1> [<molecule2> <start_index2>...]"
@@ -128,7 +126,7 @@ program trjconv2com
   percent = numFrame / 100
   do i = 1, numFrame
     if (mod(i, percent) == 0) write(*,*) "progress: ", i / percent, "%"
-    call read_trajectory(dataFileHandle, sysnumatom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+    call read_trajectory(dataFileHandle, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
     if (stat /= 0) then
       write(*,*) "Reading trajectory error"
       call exit(1)
@@ -136,9 +134,9 @@ program trjconv2com
     numFrameRead = numFrameRead + 1
     call com_pos(pos_com, pos_tmp, start_index, sys, cell)
     call com_vel(vel_com, vel_tmp, start_index, sys)
-    call write_trajectory(outFileHandle, totnummol, is_periodic, pos_com, vel_com, cell, i-1, time(i), stat)
+    call write_trajectory(outFileHandle, totnummol, pos_com, vel_com, cell, i-1, time(i), stat)
     do j = 1, skip-1
-      call read_trajectory(dataFileHandle, sysnumatom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+      call read_trajectory(dataFileHandle, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
         write(*,*) "Reading trajectory error"
         call exit(1)

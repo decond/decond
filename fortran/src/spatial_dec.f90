@@ -1,33 +1,29 @@
 module spatial_dec
   use mpiproc
+  use varpars, only: numframe, totnummol
   implicit none
   private
-
-  integer :: stat
-
-  public sd_init, com_pos, sd_prepCorrMemory, sd_getBinIndex, &
-         sd_cal_num_rBin, sd_broadcastPos, sd_prepPosMemory, &
-         sd_collectCorr, sd_average, sd_make_rBins, sd_finish
-  real(8), public :: rBinWidth
-  !sdCorr: spatially decomposed correlation (lag, rBin, moltypepair_idx)
-  !sdPairCount: (num_rBin, moltypepair_idx)
-  real(8), public, allocatable :: sdPairCount(:, :), sdCorr(:, :, :), pos(:, :, :)
-  integer, public :: num_rBin
+  public sd_init, com_pos, sd_prep_corrmemory, sd_getbinindex, &
+         sd_cal_num_rbin, sd_broadcastpos, sd_prep, &
+         sd_collectcorr, sd_average, sd_make_rbins, sd_finish
+  real(8), public :: rbinwidth
+  !sdcorr: spatially decomposed correlation (lag, rBin, moltypepair_idx)
+  !sdpaircount: (num_rbin, moltypepair_idx)
+  real(8), public, allocatable :: sdpaircount(:, :), sdcorr(:, :, :), pos(:, :, :)
+  integer, public :: num_rbin
   integer, public, allocatable :: sd_binIndex(:)
   real(8), public, allocatable :: rBins(:)
   !MPI variables
   real(8), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
 
+  integer :: stat
+
 contains
   subroutine sd_init()
-    implicit none
-    rBinWidth = 0.01
+    rbinwidth = 0.01
   end subroutine sd_init
 
-  subroutine sd_prepPosMemory(numframe, totnummol, num_r, num_c)
-    implicit none
-    integer, intent(in) :: numframe, totnummol, num_r, num_c
-
+  subroutine sd_prep()
     allocate(pos_r(3, numframe, num_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_r"
@@ -58,7 +54,7 @@ contains
         call exit(1)
       end if
     end if
-  end subroutine sd_prepPosMemory
+  end subroutine sd_prep
 
   subroutine com_pos(com_p, pos, start_index, sys, cell)
     use top, only : system
@@ -110,7 +106,7 @@ contains
     end do
   end subroutine gatherMolPos
 
-  subroutine sd_broadcastPos()
+  subroutine sd_broadcastpos()
     if (r_group_idx == 0) then
       call mpi_scatterv(pos, scounts_c, displs_c, mpi_double_precision, pos_c,&
                         scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
@@ -123,38 +119,38 @@ contains
     end if
     call mpi_bcast(pos_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
     deallocate(pos)
-  end subroutine sd_broadcastPos
+  end subroutine sd_broadcastpos
 
-  subroutine sd_cal_num_rBin(cell)
+  subroutine sd_cal_num_rbin(cell)
     implicit none
     real(8), intent(in) :: cell(3)
 
-    num_rBin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rBinWidth)
+    num_rbin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rbinwidth)
     ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
-    if (myrank == root) write(*,*) "num_rBin = ", num_rBin
-  end subroutine sd_cal_num_rBin
+    if (myrank == root) write(*,*) "num_rbin = ", num_rbin
+  end subroutine sd_cal_num_rbin
 
-  subroutine sd_prepCorrMemory(maxlag, nummoltype, numframe)
+  subroutine sd_prep_corrmemory(maxlag, nummoltype, numframe)
     implicit none
     integer, intent(in) :: maxlag, nummoltype, numframe
     integer :: num_moltypepair
 
     num_moltypepair = nummoltype * (nummoltype + 1) / 2
-    allocate(sdCorr(maxlag+1, num_rBin, num_moltypepair), stat=stat)
+    allocate(sdcorr(maxlag+1, num_rbin, num_moltypepair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: sdCorr"
+      write(*,*) "Allocation failed: sdcorr"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    sdCorr = 0d0
+    sdcorr = 0d0
 
-    allocate(sdPairCount(num_rBin, num_moltypepair), stat=stat)
+    allocate(sdpaircount(num_rbin, num_moltypepair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: sdPairCount"
+      write(*,*) "Allocation failed: sdpaircount"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-    sdPairCount = 0d0
+    sdpaircount = 0d0
 
     allocate(sd_binIndex(numframe), stat=stat)
     if (stat /= 0) then
@@ -162,9 +158,9 @@ contains
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if
-  end subroutine sd_prepCorrMemory
+  end subroutine sd_prep_corrmemory
 
-  subroutine sd_getBinIndex(r, c, cell, sd_binIndex)
+  subroutine sd_getbinindex(r, c, cell, sd_binIndex)
     implicit none
     integer, intent(in) :: r, c
     real(8), intent(in) :: cell(3)
@@ -176,34 +172,34 @@ contains
     do d = 1, 3
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
-    sd_binIndex = ceiling(sqrt(sum(pp*pp, 1)) / rBinWidth)
+    sd_binIndex = ceiling(sqrt(sum(pp*pp, 1)) / rbinwidth)
     where (sd_binIndex == 0)
       sd_binIndex = 1
     end where
-!    where (sd_binIndex >= ceiling(cellLength / 2.d0 / rBinWidth))
-!    where (sd_binIndex > num_rBin)
+!    where (sd_binIndex >= ceiling(cellLength / 2.d0 / rbinwidth))
+!    where (sd_binIndex > num_rbin)
 !      sd_binIndex = -1
 !    end where
-  end subroutine sd_getBinIndex
+  end subroutine sd_getbinindex
 
-  subroutine sd_collectCorr()
+  subroutine sd_collectcorr()
     implicit none
     if (myrank == root) then
-      write(*,*) "collecting sdCorr"
-      call mpi_reduce(MPI_IN_PLACE, sdCorr, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      write(*,*) "collecting sdcorr"
+      call mpi_reduce(MPI_IN_PLACE, sdcorr, size(sdcorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
-      call mpi_reduce(sdCorr, dummy_null, size(sdCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdcorr, dummy_null, size(sdcorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
     call mpi_barrier(MPI_COMM_WORLD, ierr)
 
     if (myrank == root) then
-      write(*,*) "collecting sdPairCount"
-      call mpi_reduce(MPI_IN_PLACE, sdPairCount, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      write(*,*) "collecting sdpaircount"
+      call mpi_reduce(MPI_IN_PLACE, sdpaircount, size(sdpaircount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     else
-      call mpi_reduce(sdPairCount, dummy_null, size(sdPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdpaircount, dummy_null, size(sdpaircount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
     end if
     call mpi_barrier(MPI_COMM_WORLD, ierr)
-  end subroutine sd_collectCorr
+  end subroutine sd_collectcorr
 
   subroutine sd_average(numframe, nummoltype, framecount)
     use utility, only: get_pairindex_upper_diag
@@ -211,10 +207,10 @@ contains
     integer, intent(in) :: numframe, nummoltype, framecount(:)
     integer :: i, t1, t2, n, moltypepair_idx
 
-    sdPairCount = sdPairCount / numframe
+    sdpaircount = sdpaircount / numframe
     do n = 1, nummoltype * (nummoltype + 1) / 2
-      do i = 1, num_rBin
-        sdCorr(:,i,n) = sdCorr(:,i,n) / framecount / sdPairCount(i, n)
+      do i = 1, num_rbin
+        sdcorr(:,i,n) = sdcorr(:,i,n) / framecount / sdpaircount(i, n)
       end do
     end do
 
@@ -222,27 +218,27 @@ contains
       do t1 = t2, nummoltype
         if (t1 /= t2) then
           moltypepair_idx = get_pairindex_upper_diag(t1, t2, nummoltype)
-          sdPairCount(:, moltypepair_idx) = sdPairCount(:, moltypepair_idx) / 2d0
+          sdpaircount(:, moltypepair_idx) = sdpaircount(:, moltypepair_idx) / 2d0
         end if
       end do
     end do
   end subroutine sd_average
 
-  subroutine sd_make_rBins()
+  subroutine sd_make_rbins()
     implicit none
     integer :: i, stat
-    allocate(rBins(num_rBin), stat=stat)
+    allocate(rBins(num_rbin), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: rBins"
       call mpi_abort(MPI_COMM_WORLD, 1, ierr);
       call exit(1)
     end if 
-    rBins = [ (i - 0.5d0, i = 1, num_rBin) ] * rBinWidth
-  end subroutine sd_make_rBins
+    rBins = [ (i - 0.5d0, i = 1, num_rbin) ] * rbinwidth
+  end subroutine sd_make_rbins
 
   subroutine sd_finish()
     implicit none
-    deallocate(pos_r, pos_c, sdCorr, sdPairCount)
+    deallocate(pos_r, pos_c, sdcorr, sdpaircount)
     ! sd_binIndex has been deallocated in the main program
   end subroutine sd_finish
 end module spatial_dec

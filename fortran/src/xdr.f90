@@ -1,11 +1,11 @@
 module xdr
   use, intrinsic::iso_c_binding
   use utility, only : handle, f2c_string
-
+  implicit none
   private 
   public :: open_trajectory, close_trajectory, read_trajectory, write_trajectory, get_natom
 
-  integer, parameter :: line_len = 128, XDRFILE_MAX = 100
+  integer, parameter :: line_len = 1024, XDRFILE_MAX = 100
   type(C_PTR), dimension(XDRFILE_MAX) :: xdr_iohandle = c_null_ptr
   
   interface
@@ -103,12 +103,11 @@ contains
   ! [cell] may be an arbitrary value if the trajectory does not contain
   ! cell information.
   ! The coordinate is not guaranteed to be within a unit cell.
-  subroutine read_trajectory(htraj, natoms, is_periodic, crd, vel, cell, time, status)
+  subroutine read_trajectory(htraj, natoms, crd, vel, cell, time, status)
     use, intrinsic :: iso_c_binding
     implicit none
     type(handle), intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
-    logical, intent(in) :: is_periodic
     real(C_DOUBLE), intent(out) :: crd(3,natoms), vel(3,natoms)
     real(8), intent(out) :: cell(3)
     real(C_DOUBLE), intent(out) :: time
@@ -138,12 +137,11 @@ contains
     call read_trr_natoms(f2c_string(fname), get_natom)
   end function get_natom
 
-  subroutine write_trajectory(htraj, natoms, is_periodic, crd, vel, cell, step, time, status)
+  subroutine write_trajectory(htraj, natoms, crd, vel, cell, step, time, status)
     use, intrinsic :: iso_c_binding
     implicit none
     type(handle), intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
-    logical, intent(in) :: is_periodic
     real(C_DOUBLE), intent(in) :: crd(3,natoms), vel(3,natoms)
     real(8), intent(in) :: cell(3)
     integer(C_INT) :: step

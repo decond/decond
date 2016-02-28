@@ -1,16 +1,8 @@
 module mpiproc
-  ! MPI
   use mpi
   implicit none
   private
-
-  integer :: numMolPerDomain_r, numMolPerDomain_c
-  integer :: r_start_offset, c_start_offset
-  integer :: residueMol_r, residueMol_c
-  integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
-  integer, public, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
-
-  ! public
+  public :: mpi_setup, domain_dec
   integer, public :: ierr
   integer, public :: myrank, nprocs       ! rank number and total number of processes
   integer, public, parameter :: root = 0
@@ -21,7 +13,12 @@ module mpiproc
   integer, public :: r_start, r_end, c_start, c_end
   real(8), public :: dummy_null
   integer, public :: numDomain_r, numDomain_c, num_r, num_c
-  public :: mpi_setup, domain_dec
+  integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
+  integer, public, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
+
+  integer :: numMolPerDomain_r, numMolPerDomain_c
+  integer :: r_start_offset, c_start_offset
+  integer :: residueMol_r, residueMol_c
 
 contains
   subroutine mpi_setup(type)
@@ -54,11 +51,11 @@ contains
     call mpi_abend()
   end subroutine halt_with_message
 
-  subroutine domain_dec(totnummol, numFrame)
+  subroutine domain_dec(totnummol, numframe)
     !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
     !numMolPerDomain_r * numDomain_r ~= totnummol
     implicit none
-    integer, intent(in) :: totnummol, numFrame
+    integer, intent(in) :: totnummol, numframe
     integer :: i, stat
 
     if (numDomain_r == 0 .and. numDomain_c == 0) then
@@ -154,10 +151,10 @@ contains
     c_end = c_start + num_c - 1
 
     ! in view of memory, for distributing array in parallel
-    displs_r = displs_r * 3 * numFrame
-    displs_c = displs_c * 3 * numFrame
-    scounts_r = scounts_r * 3 * numFrame
-    scounts_c = scounts_c * 3 * numFrame
+    displs_r = displs_r * 3 * numframe
+    displs_c = displs_c * 3 * numframe
+    scounts_r = scounts_r * 3 * numframe
+    scounts_c = scounts_c * 3 * numframe
 
     !check if myrank is at the ending boundary and if indexes are coincident
     if (r_group_idx == numDomain_r - 1) then

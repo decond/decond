@@ -1,23 +1,23 @@
 module top
-  use varpars, only : line_len, line_len_str
   use utility, only : handle, newunit, count_record_in_string
   implicit none
 
   private
   public :: open_top, close_top, read_top, system, print_sys
   
-  character(len=1), dimension(2), parameter :: COMMENT_CHAR = [";", "#"]
-  
-  character(len=LINE_LEN) :: current_directive = ''
+  integer, parameter :: line_len = 1024
+  character(len=*), parameter :: line_len_str = "1024"
+  character(len=1), dimension(2), parameter :: comment_char = [";", "#"]
+  character(len=line_len) :: current_directive = ''
 
   type atom
-    character(len=LINE_LEN) :: type
+    character(len=line_len) :: type
     real(8) :: mass
     real(8) :: charge
   end type atom
 
   type molecule
-    character(len=LINE_LEN) :: type
+    character(len=line_len) :: type
     integer :: num  ! number of molecules of the same type
     type(atom), dimension(:), allocatable :: atom
   end type molecule
@@ -65,7 +65,7 @@ contains
     type(handle), intent(in) :: htop
     type(system), intent(out) :: sys
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     integer :: num_moltype, i
 
     num_moltype = count_moltype(htop)
@@ -94,7 +94,7 @@ contains
     type(handle), intent(in) :: htop
     type(molecule), dimension(:), intent(inout) :: mol
     integer :: stat
-    character(len=LINE_LEN) :: line, dum_s
+    character(len=line_len) :: line, dum_s
     integer :: i, j, num_atom, num_rec, dum_i
 
     do i = 1, size(mol)
@@ -149,7 +149,7 @@ contains
     type(handle), intent(in) :: htop
     type(atom), intent(inout) :: at
     integer :: stat
-    character(len=LINE_LEN) :: line, atype, dum_s
+    character(len=line_len) :: line, atype, dum_s
     integer :: i, j, num_atom, num_rec, dum_i
     real(8) :: dum_r, mass, charge
     logical :: is_read
@@ -208,7 +208,7 @@ contains
     type(handle), intent(in) :: htop
     type(molecule), intent(inout) :: mol
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
 
     rewind(htop%iohandle)
     count_molatom = 0
@@ -243,7 +243,7 @@ contains
     type(handle), intent(in) :: htop
     type(molecule), intent(in) :: mol
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line, name
+    character(len=line_len) :: line, name
     
     rewind(htop%iohandle)
     do while(.true.)
@@ -270,7 +270,7 @@ contains
     type(handle), intent(in) :: htop
     character(len=*), intent(in) :: directive
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     do while(.true.)
       call read_line(htop, line, status=status)
       if (status < 0) then
@@ -287,7 +287,7 @@ contains
     implicit none
     type(handle), intent(in) :: htop
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     do while(.true.)
       call read_line(htop, line, status=status)
       if (status < 0) then
@@ -303,7 +303,7 @@ contains
     implicit none
     type(handle), intent(in) :: htop
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
 
     count_moltype = 0
     stat = 0
@@ -328,7 +328,7 @@ contains
     character(len=*), intent(out) :: line
     integer, intent(out) :: status
     integer :: stat
-    character(len=LINE_LEN) :: directive
+    character(len=line_len) :: directive
     character(len=1) :: dum_c
     
     status = 0
@@ -366,8 +366,8 @@ contains
     character(len=*), intent(inout) :: line
     integer :: idx, i
 
-    do i = 1, size(COMMENT_CHAR)
-      idx = index(line, COMMENT_CHAR(i))
+    do i = 1, size(comment_char)
+      idx = index(line, comment_char(i))
       if (idx > 0) then
         line = line(:idx - 1)
       end if
@@ -398,8 +398,8 @@ end module top
 !  use utility, only : handle
 !  use top, only: open_top, close_top, read_top, system
 !  implicit none
-!  integer, parameter :: LINE_LEN = 128
-!  character(len=LINE_LEN) :: top_filename
+!  integer, parameter :: line_len = 128
+!  character(len=line_len) :: top_filename
 !  type(handle) :: htop
 !  type(system) :: sys
 !

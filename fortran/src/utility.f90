@@ -25,18 +25,18 @@
 
 module utility
   use, intrinsic :: iso_c_binding
-  use varpars, only: line_len
   implicit none
   private
+  integer, parameter :: line_len = 1024
+
+  public handle, newunit, count_record_in_string, &
+         get_pairindex_upper_diag, parse_version, swap, &
+         get_pairindex_upper_nodiag, f2c_string
 
   type handle
      integer :: iohandle
      character(len=line_len) :: filename
   end type handle
-
-  public handle, newunit, count_record_in_string, &
-         get_pairindex_upper_diag, parse_version, swap, &
-         get_pairindex_upper_nodiag, f2c_string
 
   interface swap
     module procedure swap_int, swap_char
