@@ -24,10 +24,10 @@ module manager
   implicit none
   private
   public init_config, read_config, prepare, decompose, output, finish
-  logical, public :: is_pa_mode, is_pm_mode
 
   integer, parameter :: num_positional_arg = 3, least_required_num_arg = 7
   integer :: num_arg, num_subarg, num_arg_per_moltype
+  logical :: is_pa_mode, is_pm_mode
   character(len=line_len) :: arg
   integer, allocatable :: start_index(:)
   type(handle) :: topfileio
@@ -58,8 +58,8 @@ contains
     maxlag = -1
     is_sd = .false.
     is_ed = .false.
-    numDomain_r = 0
-    numDomain_c = 0
+    num_domain_r = 0
+    num_domain_c = 0
     call sd_init()
     call ed_init()
   end subroutine init_config
@@ -68,8 +68,7 @@ contains
     !root checks the number of the input arguments
     if (num_arg < least_required_num_arg) then
       if (myrank == root) call print_usage()
-      call mpi_abort(mpi_comm_world, 1, ierr)
-      call exit(1)
+      call mpi_abend()
     end if
 
     !read parameters for all ranks
@@ -92,8 +91,7 @@ contains
           if (myrank == root) then
             write(*,*) "Something is wrong in the codes; maybe num_positional_arg is not set correctly."
           end if
-          call mpi_abort(mpi_comm_world, 1, ierr)
-          call exit(1)
+          call mpi_abend()
         end select
       else
         i = i + 1
@@ -104,8 +102,7 @@ contains
               write(*,*) "-pa and -pm cannot be given at the same time!"
               call print_usage()
             end if
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
           is_pa_mode = .true.
           call get_command_argument(i, topfile)
@@ -117,8 +114,7 @@ contains
               write(*,*) "Wrong number of arguments for -pm: ", num_subarg + 1
               call print_usage()
             end if
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           nummoltype = num_subarg / num_arg_per_moltype
@@ -126,15 +122,13 @@ contains
           allocate(sys%mol(nummoltype), stat=stat)
           if (stat /=0) then
             write(*,*) "Allocation failed: sys%mol"
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           allocate(charge(nummoltype), stat=stat)
           if (stat /=0) then
             write(*,*) "Allocation failed: charge"
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           allocate(start_index(nummoltype), stat=stat)
@@ -174,8 +168,7 @@ contains
               write(*,*) "-pa and -pm cannot be given at the same time!"
               call print_usage()
             end if
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
           is_pm_mode = .true.
           num_subarg = count_arg(i, num_arg)
@@ -185,8 +178,7 @@ contains
               write(*,*) "Wrong number of arguments for -pm: ", num_subarg
               call print_usage()
             end if
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           nummoltype = num_subarg / num_arg_per_moltype
@@ -194,15 +186,13 @@ contains
           allocate(sys%mol(nummoltype), stat=stat)
           if (stat /=0) then
             write(*,*) "Allocation failed: sys%mol"
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           allocate(charge(nummoltype), stat=stat)
           if (stat /=0) then
             write(*,*) "Allocation failed: charge"
-            call mpi_abort(mpi_comm_world, 1, ierr)
-            call exit(1)
+            call mpi_abend()
           end if
 
           do n = 1, nummoltype
@@ -268,16 +258,15 @@ contains
           num_subarg = 2
           call get_command_argument(i, arg)
           i = i + 1
-          read(arg, *) numDomain_r
+          read(arg, *) num_domain_r
 
           call get_command_argument(i, arg)
           i = i + 1
-          read(arg, *) numDomain_c
+          read(arg, *) num_domain_c
 
         case default
           if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
-          call mpi_abort(mpi_comm_world, 1, ierr)
-          call exit(1)
+          call mpi_abend()
         end select
       end if
     end do
@@ -293,31 +282,30 @@ contains
 
     !rank root output parameters read
     if (myrank == root) then
-      write(*,*) "outFile = ", corrfile
-      write(*,*) "inFile.trr = ", datafile
-      write(*,*) "logFile = ", logfile
+      write(*,*) "outFile = ", trim(corrfile)
+      write(*,*) "inFile.trr = ", trim(datafile)
+      write(*,*) "logFile = ", trim(logfile)
       write(*,*) "temperature = ", temperature
-      if (is_pa_mode) write(*,*) "topFile.top = ", topfile
+      if (is_pa_mode) write(*,*) "topFile.top = ", trim(topfile)
       write(*,*) "numframe= ", numframe
       write(*,*) "maxlag = ", maxlag
       if (is_sd) write(*,*) "rbinwidth = ", rbinwidth
       if (is_ed) write(*,*) "ebinwidth = ", ebinwidth
       write(*,*) "nummoltype = ", nummoltype
-      write(*,*) "numDomain_r = ", numDomain_r
-      write(*,*) "numDomain_c = ", numDomain_c
+      write(*,*) "num_domain_r = ", num_domain_r
+      write(*,*) "num_domain_c = ", num_domain_c
     end if
   end subroutine read_config
 
   subroutine prepare()
     if (myrank == root) then
       ! create an HDF5 file
-      call H5open_f(ierr)
-      call H5Fcreate_f(corrfile, H5F_ACC_EXCL_F, corrfileio, ierr)
+      call h5open_f(ierr)
+      call h5fcreate_f(corrfile, h5f_acc_excl_f, corrfileio, ierr)
       if (ierr /= 0) then
         write(*,*) "Failed to create HDF5 file: ", trim(adjustl(corrfile))
         write(*,*) "Probably the file already exists?"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end if
 
@@ -335,52 +323,45 @@ contains
     allocate(vel_r(3, numframe, num_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: vel_r"
-      call mpi_abort(mpi_comm_world, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
     allocate(vel_c(3, numframe, num_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: vel_r"
-      call mpi_abort(mpi_comm_world, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     !read trajectory at root
     if (myrank == root) then
       write(*,*) "start reading trajectory..."
-      starttime = MPI_Wtime()
+      starttime = mpi_wtime()
       sysnumatom = get_natom(datafile)
       if (is_pm_mode .and. sysnumatom /= totnummol) then
         write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
         write(*,*) "In COM mode, sysnumatom should equal to totnummol!"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
       write(*,*) "sysnumatom=", sysnumatom
 
       allocate(vel(3, numframe, totnummol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: vel"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
       allocate(pos_tmp(3, sysnumatom), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos_tmp"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
       allocate(vel_tmp(3, sysnumatom), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: vel_tmp"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
       allocate(time(numframe), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: time"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
 
       numframe_read = 0
@@ -390,8 +371,7 @@ contains
           call read_trajectory(datafileio, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
           if (stat > 0) then
             write(*,*) "Reading trajectory error"
-            call mpi_abort(mpi_comm_world, 1, ierr);
-            call exit(1)
+            call mpi_abend()
           else if (stat < 0) then
             !end of file
             exit
@@ -400,8 +380,7 @@ contains
         call read_trajectory(datafileio, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
         if (stat /= 0) then
           write(*,*) "Reading trajectory error"
-          call mpi_abort(mpi_comm_world, 1, ierr);
-          call exit(1)
+          call mpi_abend()
         end if
         numframe_read = numframe_read + 1
         if (is_pm_mode) then
@@ -420,15 +399,14 @@ contains
       if (myrank == root) write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
         write(*,*) "Number of frames expected to read is not the same as actually read!"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
 
       timestep = time(2) - time(1)
       deallocate(pos_tmp)
       deallocate(vel_tmp)
       deallocate(time)
-      endtime = MPI_Wtime()
+      endtime = mpi_wtime()
       write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
       write(*,*) "timestep = ", timestep
       write(*,*) "cell = ", cell
@@ -437,14 +415,13 @@ contains
       allocate(vel(1, 1, 1), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: dummy vel on rank", myrank
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end if
 
     !distribute trajectory data collectively
     if (myrank == root) write(*,*) "start broadcasting trajectory"
-    starttime = MPI_Wtime()
+    starttime = mpi_wtime()
     if (r_group_idx == 0) then
       call mpi_scatterv(vel, scounts_c, displs_c, mpi_double_precision, vel_c,&
                         scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
@@ -462,7 +439,7 @@ contains
     call mpi_bcast(cell, 3, mpi_double_precision, root, mpi_comm_world, ierr)
 
     if (is_sd) call sd_broadcastpos()
-    endtime = MPI_Wtime()
+    endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
   end subroutine prepare
 
@@ -473,20 +450,18 @@ contains
       if (is_sd) write(*,*) "start spatial decomposition"
       if (is_ed) write(*,*) "start energy decomposition"
     end if
-    starttime = MPI_Wtime()
+    starttime = mpi_wtime()
 
     allocate(vv(numframe))
     if (stat /=0) then
       write(*,*) "Allocation failed: vv"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     allocate(ncorr(maxlag+1, num_moltypepair_all), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: ncorr"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
     ncorr = 0d0
 
@@ -505,14 +480,14 @@ contains
       corr_tmp = 0d0
     end if
 
-    if (myrank == root) write(*,*) "time for allocation (sec):", MPI_Wtime() - starttime
+    if (myrank == root) write(*,*) "time for allocation (sec):", mpi_wtime() - starttime
 
     do j = c_start, c_end
       do i = r_start, r_end
         if (i == j) then
           if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                             ", c =", j-c_start+1, " of ", num_c
-          starttime2 = MPI_Wtime()
+          starttime2 = mpi_wtime()
           moltypepair_allidx = getMolTypeIndex(i, sys%mol(:)%num, nummoltype)
           if (is_sd .or. is_ed) then
             do k = 1, maxlag+1
@@ -529,7 +504,7 @@ contains
         else
           if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
                                             ", c =", j-c_start+1, " of ", num_c
-          starttime2 = MPI_Wtime()
+          starttime2 = mpi_wtime()
           moltypepair_idx = getMolTypePairIndex(i, j, sys%mol(:)%num, nummoltype)
           moltypepair_allidx = moltypepair_idx + nummoltype
           if (is_sd .or. is_ed) then
@@ -580,29 +555,29 @@ contains
             end do
           end if
         end if
-        if (myrank == root) write(*,*) "time for this loop (sec):", MPI_Wtime() - starttime2
+        if (myrank == root) write(*,*) "time for this loop (sec):", mpi_wtime() - starttime2
         if (myrank == root) write(*,*)
       end do
     end do
     if (is_sd) deallocate(sd_binIndex)
     if (is_ed) deallocate(ed_binIndex)
 
-    endtime = MPI_Wtime()
+    endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished decomposition. It took ", endtime - starttime, " seconds"
 
     !collect ncorr
     if (myrank == root) write(*,*) "start collecting results"
-    starttime = MPI_Wtime()
+    starttime = mpi_wtime()
     if (myrank == root) then
       write(*,*) "collecting ncorr"
-      call mpi_reduce(MPI_IN_PLACE, ncorr, size(ncorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, ncorr, size(ncorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     else
-      call mpi_reduce(ncorr, dummy_null, size(ncorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(ncorr, dummy_null, size(ncorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
-    call mpi_barrier(MPI_COMM_WORLD, ierr)
+    call mpi_barrier(mpi_comm_world, ierr)
     if (is_sd) call sd_collectcorr()
     if (is_ed) call ed_collectcorr()
-    endtime = MPI_Wtime()
+    endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
 
     !average at root
@@ -610,8 +585,7 @@ contains
       allocate(framecount(maxlag+1), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: framecount"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
 
       do j = 1, nummoltype
@@ -640,9 +614,9 @@ contains
     if (myrank == root) then
       !output results
       write(*,*) "start writing outputs"
-      starttime = MPI_Wtime()
+      starttime = mpi_wtime()
       call output_corr()
-      endtime = MPI_Wtime()
+      endtime = mpi_wtime()
       write(*,*) "finished writing outputs. It took ", endtime - starttime, " seconds"
     end if
   end subroutine output
@@ -687,8 +661,7 @@ contains
     allocate(timeLags(maxlag+1), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: timeLags"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
     timeLags = [ (dble(i), i = 0, maxlag) ] * timestep
 
@@ -833,10 +806,9 @@ contains
       call get_command_argument(number=j, value=arg, status=stat)
       if (stat /= 0) then
         if (myrank == root) then
-          call mpi_abort(mpi_comm_world, 1, ierr)
           write(*,*) "Error: unable to count the number of arguments for the ", i-1, "-th option"
           call print_usage()
-          call exit(1)
+          call mpi_abend()
         end if
       else if (arg(1:1) == '-' ) then
         is_numeric = verify(arg(2:2), '0123456789') .eq. 0
@@ -977,7 +949,7 @@ contains
     write(*, *) "  -ebwidth <ebinwidth(kcal/mol)>: energy-decomposition bin width. default = 0.1"
     write(*, *) "                                  only meaningful when -ed is given."
     write(*, *)
-    write(*, *) "  -d <numDomain_r> <numDomain_c>:"
+    write(*, *) "  -d <num_domain_r> <num_domain_c>:"
     write(*, *) "   manually assign the MPI decomposition pattern"
   end subroutine print_usage
 end module manager

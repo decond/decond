@@ -2,21 +2,21 @@ module mpiproc
   use mpi
   implicit none
   private
-  public :: mpi_setup, domain_dec
+  public :: mpi_setup, domain_dec, mpi_abend
   integer, public :: ierr
   integer, public :: myrank, nprocs       ! rank number and total number of processes
   integer, public, parameter :: root = 0
   public :: mpi_comm_world, mpi_in_place, mpi_sum, mpi_double_precision
   public :: mpi_integer, mpi_character, mpi_min, mpi_max, mpi_info_null
   public :: mpi_wtime
-  real(8), public :: starttime, endtime, starttime2, prog_starttime
+  real(8), public :: starttime, endtime, starttime2
   integer, public :: r_start, r_end, c_start, c_end
   real(8), public :: dummy_null
-  integer, public :: numDomain_r, numDomain_c, num_r, num_c
+  integer, public :: num_domain_r, num_domain_c, num_r, num_c
   integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
   integer, public, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
 
-  integer :: numMolPerDomain_r, numMolPerDomain_c
+  integer :: nummol_per_domain_r, nummol_per_domain_c
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c
 
@@ -36,7 +36,7 @@ contains
 
   subroutine mpi_abend()
     call mpi_abort(mpi_comm_world, 1, ierr);
-    call exit(1)
+    stop 1
   end subroutine mpi_abend
 
   subroutine halt_with_message(message, rank)
@@ -52,37 +52,35 @@ contains
   end subroutine halt_with_message
 
   subroutine domain_dec(totnummol, numframe)
-    !domain decomposition for atom pairs (numDomain_r * numDomain_c = nprocs)
-    !numMolPerDomain_r * numDomain_r ~= totnummol
+    !domain decomposition for atom pairs (num_domain_r * num_domain_c = nprocs)
+    !nummol_per_domain_r * num_domain_r ~= totnummol
     implicit none
     integer, intent(in) :: totnummol, numframe
     integer :: i, stat
 
-    if (numDomain_r == 0 .and. numDomain_c == 0) then
-      numDomain_c = nint(sqrt(dble(nprocs)))
-      do while(mod(nprocs, numDomain_c) /= 0)
-        numDomain_c = numDomain_c - 1
+    if (num_domain_r == 0 .and. num_domain_c == 0) then
+      num_domain_c = nint(sqrt(dble(nprocs)))
+      do while(mod(nprocs, num_domain_c) /= 0)
+        num_domain_c = num_domain_c - 1
       end do
-      numDomain_r = nprocs / numDomain_c
-    else if (numDomain_r > 0) then
-      numDomain_c = nprocs / numDomain_r
-    else if (numDomain_c > 0) then
-      numDomain_c = nprocs / numDomain_r
+      num_domain_r = nprocs / num_domain_c
+    else if (num_domain_r > 0) then
+      num_domain_c = nprocs / num_domain_r
+    else if (num_domain_c > 0) then
+      num_domain_c = nprocs / num_domain_r
     else
-      write(*,*) "Invalid domain decomposition: ", numDomain_r, " x ", numDomain_c
-      call mpi_abort(mpi_comm_world, 1, ierr);
-      call exit(1)
+      write(*,*) "Invalid domain decomposition: ", num_domain_r, " x ", num_domain_c
+      call mpi_abend()
     end if
 
-    if (numDomain_r * numDomain_c /= nprocs) then
-      write(*,*) "Domain decomposition failed: ", numDomain_r, " x ", numDomain_c, " /= ", nprocs
-      call mpi_abort(mpi_comm_world, 1, ierr);
-      call exit(1)
+    if (num_domain_r * num_domain_c /= nprocs) then
+      write(*,*) "Domain decomposition failed: ", num_domain_r, " x ", num_domain_c, " /= ", nprocs
+      call mpi_abend()
     end if
 
     !Determine row and column position for the node
-    r_group_idx = mod(myrank, numDomain_r) !column-major mapping
-    c_group_idx = myrank / numDomain_r
+    r_group_idx = mod(myrank, num_domain_r) !column-major mapping
+    c_group_idx = myrank / num_domain_r
 
     !Split comm into row and column comms
     call mpi_comm_split(mpi_comm_world, c_group_idx, r_group_idx, col_comm, ierr)
@@ -90,52 +88,52 @@ contains
     call mpi_comm_split(mpi_comm_world, r_group_idx, c_group_idx, row_comm, ierr)
     !color by column, rank by row
 
-    numMolPerDomain_r = totnummol / numDomain_r
-    numMolPerDomain_c = totnummol / numDomain_c
-    residueMol_r = mod(totnummol, numDomain_r)
-    residueMol_c = mod(totnummol, numDomain_c)
+    nummol_per_domain_r = totnummol / num_domain_r
+    nummol_per_domain_c = totnummol / num_domain_c
+    residueMol_r = mod(totnummol, num_domain_r)
+    residueMol_c = mod(totnummol, num_domain_c)
 
-    allocate(displs_r(numDomain_r), stat=stat)
+    allocate(displs_r(num_domain_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: displs_r"
       call exit(1)
     end if
-    allocate(displs_c(numDomain_c), stat=stat)
+    allocate(displs_c(num_domain_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: displs_c"
       call exit(1)
     end if
-    allocate(scounts_r(numDomain_r), stat=stat)
+    allocate(scounts_r(num_domain_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: scounts_r"
       call exit(1)
     end if
-    allocate(scounts_c(numDomain_c), stat=stat)
+    allocate(scounts_c(num_domain_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: scounts_c"
       call exit(1)
     end if
 
     offset = 0
-    do i = 1, numDomain_r
+    do i = 1, num_domain_r
       displs_r(i) = offset
       ! distribute the residue molecules one by one from the first node
       if (i-1 < residueMol_r) then
-        scounts_r(i) = numMolPerDomain_r + 1
+        scounts_r(i) = nummol_per_domain_r + 1
       else
-        scounts_r(i) = numMolPerDomain_r
+        scounts_r(i) = nummol_per_domain_r
       end if
       offset = offset + scounts_r(i)
     end do
 
     offset = 0
-    do i = 1, numDomain_c
+    do i = 1, num_domain_c
       displs_c(i) = offset
       ! distribute the residue molecules one by one from the first node
       if (i-1 < residueMol_c) then
-        scounts_c(i) = numMolPerDomain_c + 1
+        scounts_c(i) = nummol_per_domain_c + 1
       else
-        scounts_c(i) = numMolPerDomain_c
+        scounts_c(i) = nummol_per_domain_c
       end if
       offset = offset + scounts_c(i)
     end do
@@ -157,22 +155,20 @@ contains
     scounts_c = scounts_c * 3 * numframe
 
     !check if myrank is at the ending boundary and if indexes are coincident
-    if (r_group_idx == numDomain_r - 1) then
+    if (r_group_idx == num_domain_r - 1) then
       if (r_end /= totnummol) then
         write(*,*) "Error: r_end /= totnummol, r_end =", r_end
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end if
-    if (c_group_idx == numDomain_c - 1) then
+    if (c_group_idx == num_domain_c - 1) then
       if (c_end /= totnummol) then
         write(*,*) "Error: c_end /= totnummol"
-        call mpi_abort(mpi_comm_world, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end if
     if (myrank == root) then
-      write(*,*) "numDomain_r x numDomain_c = ", numDomain_r, " x ", numDomain_c
+      write(*,*) "num_domain_r x num_domain_c = ", num_domain_r, " x ", num_domain_c
     end if
   !  write(*,*) "my rank =", myrank
   !  write(*,*) "r_start, r_end =", r_start, r_end

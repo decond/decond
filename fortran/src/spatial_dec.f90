@@ -27,31 +27,27 @@ contains
     allocate(pos_r(3, numframe, num_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_r"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if 
 
     allocate(pos_c(3, numframe, num_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_c"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if 
 
     if (myrank == root) then
       allocate(pos(3, numframe, totnummol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if 
     else
       !not root, allocate dummy pos to inhibit error messages
       allocate(pos(1, 1, 1), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: dummy pos on rank", myrank
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end if
   end subroutine sd_prep
@@ -73,8 +69,7 @@ contains
       allocate(pos_gathered(3, num_atom), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos_gathered"
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
       do j = 1, sys%mol(i)%num
         idx_begin = start_index(i) + (j-1) * num_atom
@@ -139,24 +134,21 @@ contains
     allocate(sdcorr(maxlag+1, num_rbin, num_moltypepair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdcorr"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
     sdcorr = 0d0
 
     allocate(sdpaircount(num_rbin, num_moltypepair), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: sdpaircount"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
     sdpaircount = 0d0
 
     allocate(sd_binIndex(numframe), stat=stat)
     if (stat /= 0) then
       write(*,*) "Allocation failed: sd_binIndex"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
   end subroutine sd_prep_corrmemory
 
@@ -186,19 +178,19 @@ contains
     implicit none
     if (myrank == root) then
       write(*,*) "collecting sdcorr"
-      call mpi_reduce(MPI_IN_PLACE, sdcorr, size(sdcorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, sdcorr, size(sdcorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     else
-      call mpi_reduce(sdcorr, dummy_null, size(sdcorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdcorr, dummy_null, size(sdcorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
-    call mpi_barrier(MPI_COMM_WORLD, ierr)
+    call mpi_barrier(mpi_comm_world, ierr)
 
     if (myrank == root) then
       write(*,*) "collecting sdpaircount"
-      call mpi_reduce(MPI_IN_PLACE, sdpaircount, size(sdpaircount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, sdpaircount, size(sdpaircount), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     else
-      call mpi_reduce(sdpaircount, dummy_null, size(sdpaircount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(sdpaircount, dummy_null, size(sdpaircount), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
-    call mpi_barrier(MPI_COMM_WORLD, ierr)
+    call mpi_barrier(mpi_comm_world, ierr)
   end subroutine sd_collectcorr
 
   subroutine sd_average(numframe, nummoltype, framecount)
@@ -230,8 +222,7 @@ contains
     allocate(rBins(num_rbin), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: rBins"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if 
     rBins = [ (i - 0.5d0, i = 1, num_rbin) ] * rbinwidth
   end subroutine sd_make_rbins
