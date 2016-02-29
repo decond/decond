@@ -377,6 +377,8 @@ contains
     implicit none
     type(system) :: sys
     integer :: i, j
+
+    write(*,*)
     write(*,*) "[ molecules ]"
     do i = 1, size(sys%mol)
       write(*, *) adjustl(trim(sys%mol(i)%type)), sys%mol(i)%num
@@ -390,6 +392,7 @@ contains
         write(*,*) trim(sys%mol(i)%atom(j)%type), " ", sys%mol(i)%atom(j)%mass, sys%mol(i)%atom(j)%charge
       end do
     end do
+    write(*,*)
   end subroutine print_sys
 end module top
 

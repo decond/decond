@@ -125,7 +125,7 @@ contains
         end do
 
         if (myrank == root) then
-          write(*, "(A)") "sys%mol%type = "
+          write(*, "(A)", advance='no') "sys%mol%type = "
           do n = 1, nummoltype
             write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
           end do
