@@ -12,7 +12,7 @@ module spatial_dec
   real(8), public, allocatable :: sdpaircount(:, :), sdcorr(:, :, :), pos(:, :, :)
   integer, public :: num_rbin
   integer, public, allocatable :: sd_binIndex(:)
-  real(8), public, allocatable :: rBins(:)
+  real(8), public, allocatable :: rbins(:)
   !MPI variables
   real(8), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
 
@@ -219,12 +219,12 @@ contains
   subroutine sd_make_rbins()
     implicit none
     integer :: i, stat
-    allocate(rBins(num_rbin), stat=stat)
+    allocate(rbins(num_rbin), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: rBins"
+      write(*,*) "Allocation failed: rbins"
       call mpi_abend()
     end if 
-    rBins = [ (i - 0.5d0, i = 1, num_rbin) ] * rbinwidth
+    rbins = [ (i - 0.5d0, i = 1, num_rbin) ] * rbinwidth
   end subroutine sd_make_rbins
 
   subroutine sd_finish()

@@ -3,10 +3,11 @@ module manager
   use hdf5
   use utility, only: handle, get_pairindex_upper_diag
   use varpars, only: line_len, line_len_str, dp, decond_version, &
-                     datafile, corrfile, &
+                     trjfile, corrfile, dec_mode, &
+                     dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
-                     maxlag, skiptrr, is_sd, is_ed, sysnumatom, cell, &
+                     maxlag, skiptrj, is_sd, is_ed, sysnumatom, cell, &
                      timestep
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
@@ -16,7 +17,7 @@ module manager
                          com_pos, sd_prep_corrmemory, sd_collectcorr, &
                          sd_average, sd_getbinindex, sd_cal_num_rbin, &
                          sd_make_rbins, sd_finish
-  use energy_dec, only: ed_init, skipEng, num_engfiles, engfiles, ebinwidth, &
+  use energy_dec, only: ed_init, skipeng, num_engfiles, engfiles, ebinwidth, &
                         ed_binIndex, edcorr, num_ebin, edpaircount, ed_prep, &
                         ed_prep_corrmemory, ed_collectcorr, ed_average, &
                         ed_getbinindex, ed_make_ebins, ed_finish
@@ -25,9 +26,7 @@ module manager
   private
   public init_config, read_config, prepare, decompose, output, finish
 
-  integer, parameter :: num_positional_arg = 3, least_required_num_arg = 7
   integer :: num_arg, num_subarg, num_arg_per_moltype
-  logical :: is_pa_mode, is_pm_mode
   character(len=line_len) :: arg
   integer, allocatable :: start_index(:)
   type(handle) :: topfileio
@@ -36,7 +35,7 @@ module manager
   integer :: i, j, k, n, t, stat, numframe_k, numframe_read, tmp_i
   integer :: moltypepair_idx, moltypepair_allidx
   real(dp) :: tmp_r
-  type(handle) :: datafileio
+  type(handle) :: trjfileio
   integer, allocatable :: framecount(:)
   real(dp), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
   !one frame data (dim=3, atom)
@@ -49,12 +48,14 @@ module manager
 contains
   subroutine init_config()
     num_arg = command_argument_count()
-    is_pa_mode = .false.
-    is_pm_mode = .false.
 
-    !set default values
+    ! necessary arguments
+    dec_mode = 'undefined'
+    temperature = -1.0
+    numframe = -1
+
     corrfile = 'corr.c5'
-    skiptrr = 1
+    skiptrj = 1
     maxlag = -1
     is_sd = .false.
     is_ed = .false.
@@ -65,210 +66,211 @@ contains
   end subroutine init_config
 
   subroutine read_config()
-    !root checks the number of the input arguments
-    if (num_arg < least_required_num_arg) then
-      if (myrank == root) call print_usage()
-      call mpi_abend()
-    end if
-
     !read parameters for all ranks
     i = 1
     do while (i <= num_arg)
       call get_command_argument(number=i, value=arg, status=stat)
-      if (i <= num_positional_arg) then
-        select case (i)
-        case (1)
-          datafile = arg
-          i = i + 1
-        case (2)
-          logfile = arg
-          i = i + 1
-          temperature = getTfromLog(logfile)
-        case (3)
-          read(arg, *) numframe ! in the unit of frame number
-          i = i + 1
-        case default
-          if (myrank == root) then
-            write(*,*) "Something is wrong in the codes; maybe num_positional_arg is not set correctly."
-          end if
+      i = i + 1
+      select case (arg)
+      case ('-' // dec_mode_ec0)
+        if (myrank == root .and. dec_mode /= 'undefined') then
+          write(*,*) "Only one mode can be given!"
+          call print_usage()
           call mpi_abend()
-        end select
-      else
+        end if
+        dec_mode = dec_mode_ec0
+        call get_command_argument(i, trjfile)
         i = i + 1
-        select case (arg)
-        case ('-pa', '--pa')
-          if (is_pm_mode) then
-            if (myrank == root) then
-              write(*,*) "-pa and -pm cannot be given at the same time!"
-              call print_usage()
-            end if
-            call mpi_abend()
-          end if
-          is_pa_mode = .true.
-          call get_command_argument(i, topfile)
-          i = i + 1
-          num_subarg = count_arg(i, num_arg)
-          num_arg_per_moltype = 2
-          if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
-            if (myrank == root) then
-              write(*,*) "Wrong number of arguments for -pm: ", num_subarg + 1
-              call print_usage()
-            end if
-            call mpi_abend()
-          end if
-
-          nummoltype = num_subarg / num_arg_per_moltype
-
-          allocate(sys%mol(nummoltype), stat=stat)
-          if (stat /=0) then
-            write(*,*) "Allocation failed: sys%mol"
-            call mpi_abend()
-          end if
-
-          allocate(charge(nummoltype), stat=stat)
-          if (stat /=0) then
-            write(*,*) "Allocation failed: charge"
-            call mpi_abend()
-          end if
-
-          allocate(start_index(nummoltype), stat=stat)
-          if (stat /=0) then
-            write(*,*) "Allocation failed: start_index"
-            call exit(1)
-          end if
-
-          do n = 1, nummoltype
-            call get_command_argument(i, sys%mol(n)%type)
-            i = i + 1
-            call get_command_argument(i, arg)
-            read(arg, *) start_index(n)
-            i = i + 1
-          end do
-
+        call get_command_argument(i, topfile)
+        i = i + 1
+        num_subarg = count_arg(i, num_arg)
+        num_arg_per_moltype = 2
+        if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
           if (myrank == root) then
-            write(*,*) "sys%mol%type = ", sys%mol%type
-            write(*,*) "start_index = ", start_index
-          end if
-
-          !read topFile
-          topfileio = open_top(topfile)
-          call read_top(topfileio, sys)
-          call close_top(topfileio)
-          if (myrank == root) call print_sys(sys)
-
-          do n = 1, nummoltype
-            charge(n) = nint(sum(sys%mol(n)%atom(:)%charge))
-          end do
-          totnummol = sum(sys%mol(:)%num)
-          if (myrank == root) write(*,*) "charge = ", charge
-
-        case ('-pm', '--pm')
-          if (is_pa_mode) then
-            if (myrank == root) then
-              write(*,*) "-pa and -pm cannot be given at the same time!"
-              call print_usage()
-            end if
+            write(*,*) "Wrong number of arguments for -" // trim(dec_mode) // ': ', num_subarg + 2
+            call print_usage()
             call mpi_abend()
           end if
-          is_pm_mode = .true.
-          num_subarg = count_arg(i, num_arg)
-          num_arg_per_moltype = 3
-          if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
-            if (myrank == root) then
-              write(*,*) "Wrong number of arguments for -pm: ", num_subarg
-              call print_usage()
-            end if
-            call mpi_abend()
-          end if
+        end if
 
-          nummoltype = num_subarg / num_arg_per_moltype
+        nummoltype = num_subarg / num_arg_per_moltype
 
-          allocate(sys%mol(nummoltype), stat=stat)
-          if (stat /=0) then
-            write(*,*) "Allocation failed: sys%mol"
-            call mpi_abend()
-          end if
-
-          allocate(charge(nummoltype), stat=stat)
-          if (stat /=0) then
-            write(*,*) "Allocation failed: charge"
-            call mpi_abend()
-          end if
-
-          do n = 1, nummoltype
-            call get_command_argument(i, sys%mol(n)%type)
-            i = i + 1
-            call get_command_argument(i, arg)
-            i = i + 1
-            read(arg, *) charge(n)
-            call get_command_argument(i, arg)
-            i = i + 1
-            read(arg, *) sys%mol(n)%num
-          end do
-
-          totnummol = sum(sys%mol(:)%num)
-          if (myrank == root) then
-            write(*,*) "sys%mol%type = ", sys%mol%type
-            write(*,*) "charge = ", charge
-            write(*,*) "sys%mol%num = ", sys%mol%num
-          end if
-
-        case ('-o')
-          call get_command_argument(i, corrfile)
-          i = i + 1
-
-        case ('-skiptrr')
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) skiptrr
-
-        case ('-skipeng')
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) skipEng
-
-
-        case ('-l')
-          call get_command_argument(i, arg) ! in the unit of frame number
-          i = i + 1
-          read(arg, *) maxlag
-
-        case ('-sd')
-          is_sd = .true.
-
-        case ('-ed')
-          is_ed = .true.
-          num_engfiles = count_arg(i, num_arg)
-          do n = 1, num_engfiles
-            call get_command_argument(i, engfiles(n))
-            i = i + 1
-          end do
-
-        case ('-sbwidth')
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) rbinwidth
-
-        case ('-ebwidth')
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) ebinwidth
-
-        case ('-d')
-          num_subarg = 2
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) num_domain_r
-
-          call get_command_argument(i, arg)
-          i = i + 1
-          read(arg, *) num_domain_c
-
-        case default
-          if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
+        allocate(sys%mol(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
           call mpi_abend()
-        end select
-      end if
+        end if
+
+        allocate(charge(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abend()
+        end if
+
+        allocate(start_index(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: start_index"
+          call exit(1)
+        end if
+
+        do n = 1, nummoltype
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          read(arg, *) start_index(n)
+          i = i + 1
+        end do
+
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "start_index = ", start_index
+        end if
+
+        !read topFile
+        topfileio = open_top(topfile)
+        call read_top(topfileio, sys)
+        call close_top(topfileio)
+        if (myrank == root) call print_sys(sys)
+
+        do n = 1, nummoltype
+          charge(n) = nint(sum(sys%mol(n)%atom(:)%charge))
+        end do
+        totnummol = sum(sys%mol(:)%num)
+        if (myrank == root) write(*,*) "charge = ", charge
+
+      case ('-' // dec_mode_ec1)
+        if (myrank == root .and. dec_mode /= 'undefined') then
+          write(*,*) "Only one mode can be given!"
+          call print_usage()
+          call mpi_abend()
+        end if
+        dec_mode = dec_mode_ec1
+        call get_command_argument(i, trjfile)
+        i = i + 1
+        num_subarg = count_arg(i, num_arg)
+        num_arg_per_moltype = 3
+        if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -" // trim(dec_mode) // ': ', num_subarg + 1
+            call print_usage()
+            call mpi_abend()
+          end if
+        end if
+
+        nummoltype = num_subarg / num_arg_per_moltype
+
+        allocate(sys%mol(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abend()
+        end if
+
+        allocate(charge(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abend()
+        end if
+
+        do n = 1, nummoltype
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          i = i + 1
+          read(arg, *) charge(n)
+          call get_command_argument(i, arg)
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totnummol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*,*) "charge = ", charge
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+      case ('-n', '--numframe')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) numframe  ! in the unit of frame number
+
+      case ('-T', '--temperature')
+        call get_command_argument(i, arg)
+        i = i + 1
+        if (trim(arg(scan(arg, '.', .true.) + 1:)) == 'log') then
+          logfile = arg
+          temperature = getTfromLog(logfile)
+        else
+          read(arg, *, iostat=stat) temperature
+          if (stat > 0) then
+            write(*,*) "Error reading temperature: ", trim(arg)
+            call mpi_abend()
+          end if
+        end if
+
+      case ('-o')
+        call get_command_argument(i, corrfile)
+        i = i + 1
+
+      case ('-skiptrj')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) skiptrj
+
+      case ('-skipeng')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) skipeng
+
+      case ('-l')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) maxlag  ! in the unit of frame number
+
+      case ('-sd')
+        is_sd = .true.
+
+      case ('-ed')
+        is_ed = .true.
+        num_engfiles = count_arg(i, num_arg)
+        do n = 1, num_engfiles
+          call get_command_argument(i, engfiles(n))
+          i = i + 1
+        end do
+
+      case ('-sbwidth')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) rbinwidth
+
+      case ('-ebwidth')
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) ebinwidth
+
+      case ('-d')
+        num_subarg = 2
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) num_domain_r
+
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) num_domain_c
+
+      case ('-h', '--help')
+        if (myrank == root) call print_usage()
+        call mpi_abend()
+
+      case ('-v', '--version')
+        if (myrank == root) write(*,*) "Decond " // decond_version
+        call mpi_abend()
+
+      case default
+        if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
+        if (myrank == root) call print_usage()
+        call mpi_abend()
+      end select
     end do
 
     !auto1, auto2, ...autoN, cross11, cross12, ..., cross1N, cross22, ...cross2N, cross33,..., crossNN
@@ -280,13 +282,37 @@ contains
       maxlag = numframe - 1
     end if
 
+    if (dec_mode == 'undefined') then
+      if (myrank == root) then
+        write(*,*) "A mode must be given!"
+        call print_usage()
+        call mpi_abend()
+      end if
+    end if
+
+    if (temperature == -1) then
+      if (myrank == root) then
+        write(*,*) "temperature must be given!"
+        call print_usage()
+        call mpi_abend()
+      end if
+    end if
+
+    if (numframe == -1) then
+      if (myrank == root) then
+        write(*,*) "numframe must be given!"
+        call print_usage()
+        call mpi_abend()
+      end if
+    end if
+
     !rank root output parameters read
     if (myrank == root) then
       write(*,*) "outFile = ", trim(corrfile)
-      write(*,*) "inFile.trr = ", trim(datafile)
+      write(*,*) "inFile.trr = ", trim(trjfile)
       write(*,*) "logFile = ", trim(logfile)
       write(*,*) "temperature = ", temperature
-      if (is_pa_mode) write(*,*) "topFile.top = ", trim(topfile)
+      if (dec_mode == dec_mode_ec0) write(*,*) "topFile.top = ", trim(topfile)
       write(*,*) "numframe= ", numframe
       write(*,*) "maxlag = ", maxlag
       if (is_sd) write(*,*) "rbinwidth = ", rbinwidth
@@ -335,10 +361,10 @@ contains
     if (myrank == root) then
       write(*,*) "start reading trajectory..."
       starttime = mpi_wtime()
-      sysnumatom = get_natom(datafile)
-      if (is_pm_mode .and. sysnumatom /= totnummol) then
+      sysnumatom = get_natom(trjfile)
+      if (dec_mode == dec_mode_ec1 .and. sysnumatom /= totnummol) then
         write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
-        write(*,*) "In COM mode, sysnumatom should equal to totnummol!"
+        write(*,*) "In ec1 mode, sysnumatom should equal to totnummol!"
         call mpi_abend()
       end if
       write(*,*) "sysnumatom=", sysnumatom
@@ -365,10 +391,10 @@ contains
       end if
 
       numframe_read = 0
-      call open_trajectory(datafileio, datafile)
+      call open_trajectory(trjfileio, trjfile)
       do i = 1, numframe
-        do j = 1, skiptrr-1
-          call read_trajectory(datafileio, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
+        do j = 1, skiptrj-1
+          call read_trajectory(trjfileio, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
           if (stat > 0) then
             write(*,*) "Reading trajectory error"
             call mpi_abend()
@@ -377,13 +403,13 @@ contains
             exit
           end if
         end do
-        call read_trajectory(datafileio, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
+        call read_trajectory(trjfileio, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
         if (stat /= 0) then
           write(*,*) "Reading trajectory error"
           call mpi_abend()
         end if
         numframe_read = numframe_read + 1
-        if (is_pm_mode) then
+        if (dec_mode == dec_mode_ec1) then
           vel(:, i, :) = vel_tmp
           if (is_sd) then
             pos(:, i, :) = pos_tmp
@@ -395,7 +421,7 @@ contains
           end if
         end if
       end do
-      call close_trajectory(datafileio)
+      call close_trajectory(trjfileio)
       if (myrank == root) write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
         write(*,*) "Number of frames expected to read is not the same as actually read!"
@@ -625,14 +651,14 @@ contains
     use h5ds
     use h5lt
     use hdf5
-    use spatial_dec, only: rBins
-    use energy_dec, only: eBins, engMin_global
+    use spatial_dec, only: rbins
+    use energy_dec, only: ebins, engMin_global
     implicit none
     real(dp), allocatable :: timeLags(:)
     integer :: ierr
     integer(hid_t) :: dset_ncorr, dset_timeLags, &
-                      dset_sdcorr, dset_sdpaircount, dset_rBins, &
-                      dset_edcorr, dset_edpaircount, dset_eBins, &
+                      dset_sdcorr, dset_sdpaircount, dset_rbins, &
+                      dset_edcorr, dset_edpaircount, dset_ebins, &
                       grp_sd_id, grp_ed_id, space_id, dset_id
 
     !HDF5:
@@ -729,8 +755,8 @@ contains
       call H5Dopen_f(grp_sd_id, DSETNAME_DECPAIRCOUNT, dset_sdpaircount, ierr)
 
       !decBins
-      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECBINS, 1, [size(rBins, kind=hsize_t)], rBins, ierr)
-      call H5Dopen_f(grp_sd_id, DSETNAME_DECBINS, dset_rBins, ierr)
+      call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECBINS, 1, [size(rbins, kind=hsize_t)], rbins, ierr)
+      call H5Dopen_f(grp_sd_id, DSETNAME_DECBINS, dset_rbins, ierr)
       call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECBINS, ATTR_UNIT, "nm", ierr)
     end if
 
@@ -750,8 +776,8 @@ contains
       call H5Dopen_f(grp_ed_id, DSETNAME_DECPAIRCOUNT, dset_edpaircount, ierr)
 
       !decBins
-      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(eBins, kind=hsize_t)], eBins, ierr)
-      call H5Dopen_f(grp_ed_id, DSETNAME_DECBINS, dset_eBins, ierr)
+      call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(ebins, kind=hsize_t)], ebins, ierr)
+      call H5Dopen_f(grp_ed_id, DSETNAME_DECBINS, dset_ebins, ierr)
       call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECBINS, ATTR_UNIT, "kcal mol$^{-1}$", ierr)
     end if
 
@@ -760,24 +786,24 @@ contains
     call H5DSattach_scale_f(dset_ncorr, dset_timeLags, 2, ierr)
     if (is_sd) then
       call H5DSattach_scale_f(dset_sdcorr, dset_timeLags, 3, ierr)
-      call H5DSattach_scale_f(dset_sdcorr, dset_rBins, 2, ierr)
-      call H5DSattach_scale_f(dset_sdpaircount, dset_rBins, 2, ierr)
+      call H5DSattach_scale_f(dset_sdcorr, dset_rbins, 2, ierr)
+      call H5DSattach_scale_f(dset_sdpaircount, dset_rbins, 2, ierr)
     end if
     if (is_ed) then
       call H5DSattach_scale_f(dset_edcorr, dset_timeLags, 3, ierr)
-      call H5DSattach_scale_f(dset_edcorr, dset_eBins, 2, ierr)
-      call H5DSattach_scale_f(dset_edpaircount, dset_eBins, 2, ierr)
+      call H5DSattach_scale_f(dset_edcorr, dset_ebins, 2, ierr)
+      call H5DSattach_scale_f(dset_edpaircount, dset_ebins, 2, ierr)
     end if
 
     call H5Dclose_f(dset_timeLags, ierr)
     call H5Dclose_f(dset_ncorr, ierr)
     if (is_sd) then
-      call H5Dclose_f(dset_rBins, ierr)
+      call H5Dclose_f(dset_rbins, ierr)
       call H5Dclose_f(dset_sdcorr, ierr)
       call H5Dclose_f(dset_sdpaircount, ierr)
     end if
     if (is_ed) then
-      call H5Dclose_f(dset_eBins, ierr)
+      call H5Dclose_f(dset_ebins, ierr)
       call H5Dclose_f(dset_edcorr, ierr)
       call H5Dclose_f(dset_edpaircount, ierr)
     end if
@@ -931,7 +957,7 @@ contains
     write(*, *)
     write(*, *) "  -o <outfile>: output filename. default = corr.h5"
     write(*, *)
-    write(*, *) "  -skiptrr <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "  -skiptrj <skip>: skip=1 means no frames are skipped, which is default."
     write(*, *) "             skip=2 means reading every 2nd frame."
     write(*, *)
     write(*, *) "  -skipeng <skip>: skip=1 means no frames are skipped, which is default."

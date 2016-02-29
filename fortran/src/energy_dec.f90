@@ -10,13 +10,13 @@ module energy_dec
          ed_average, ed_init, ed_make_ebins, ed_finish, ed_prep
   character(len=line_len), public, allocatable :: engfiles(:)
   real(8), public, allocatable :: ed_binIndex(:)  !ed_binIndex(numframe)
-  integer, public :: num_ebin, skipEng
+  integer, public :: num_ebin, skipeng
   real(8), public, allocatable :: edpaircount(:, :)
   !edpaircount(num_ebin, nummoltype*nummoltype)
   real(8), public, allocatable :: edcorr(:, :, :)
   real(8), public :: ebinwidth
   integer, public :: num_engfiles
-  real(8), public, allocatable :: eBins(:)  !eBins(num_ebin)
+  real(8), public, allocatable :: ebins(:)  !ebins(num_ebin)
   real(8), public :: engMin_global
 
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
@@ -34,7 +34,7 @@ contains
   subroutine ed_init()
     implicit none
     ebinwidth = 0.5
-    skipEng = 1
+    skipeng = 1
 
     ! initialize HDF5 Fortran predefined datatypes
     call h5open_f(ierr)
@@ -428,9 +428,9 @@ contains
     !  n = 4 in this example
     pairindex = get_pairindex_upper_nodiag(r, c, nummol)
     rel_pairindex = pairindex - first_pairindex_in_file + 1
-    offset = [skipEng - 1, rel_pairindex - 1]
+    offset = [skipeng - 1, rel_pairindex - 1]
     count = [numframe, 1]
-    stride = [skipEng, 1]
+    stride = [skipeng, 1]
     call H5Sselect_hyperslab_f(filespace, H5S_SELECT_SET_F, offset, count, &
                               &ierr, stride)
 
@@ -587,12 +587,12 @@ contains
   subroutine ed_make_ebins()
     implicit none
     integer :: i, stat
-    allocate(eBins(num_ebin), stat=stat)
+    allocate(ebins(num_ebin), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: eBins"
+      write(*,*) "Allocation failed: ebins"
       call mpi_abend()
     end if
-    eBins = [(i * ebinwidth, i = eBinIndex_absolute_min, eBinIndex_absolute_max)]
+    ebins = [(i * ebinwidth, i = eBinIndex_absolute_min, eBinIndex_absolute_max)]
   end subroutine ed_make_ebins
 
   subroutine ed_finish()
