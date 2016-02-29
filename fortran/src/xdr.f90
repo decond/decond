@@ -1,9 +1,9 @@
 module xdr
   use, intrinsic::iso_c_binding
-  use utility, only : handle, f2c_string
+  use utility, only : f2c_string
   implicit none
   private 
-  public :: open_trajectory, close_trajectory, read_trajectory, write_trajectory, get_natom
+  public :: open_xdr, close_xdr, read_xdr, write_xdr, read_natom_xdr
 
   integer, parameter :: line_len = 1024, XDRFILE_MAX = 100
   type(C_PTR), dimension(XDRFILE_MAX) :: xdr_iohandle = c_null_ptr
@@ -71,9 +71,9 @@ contains
   
   ! Open trajectory and returns handle as htraj. 
   ! Should open fails, the program abends.
-  subroutine open_trajectory(htraj, fname, mode)
+  subroutine open_xdr(htraj, fname, mode)
     implicit none
-    type(handle), intent(inout) :: htraj
+    integer, intent(inout) :: htraj
     character(len=*), intent(in) :: fname
     character(len=1), optional, intent(in) :: mode
     character(len=1) :: fmode
@@ -84,18 +84,18 @@ contains
       fmode = 'r'
     end if
 
-    xdr_iohandle(newunit(htraj%iohandle)) = xdrfile_open(f2c_string(fname), fmode)
-  end subroutine open_trajectory
+    xdr_iohandle(newunit(htraj)) = xdrfile_open(f2c_string(fname), fmode)
+  end subroutine open_xdr
 
   ! Close trajectory specified by handle
-  subroutine close_trajectory(htraj)
+  subroutine close_xdr(htraj)
     implicit none
-    type(handle), intent(inout) :: htraj
+    integer, intent(inout) :: htraj
     integer(C_INT) :: ret
 
-    ret = xdrfile_close(xdr_iohandle(htraj%iohandle)) 
-    xdr_iohandle(htraj%iohandle) = c_null_ptr
-  end subroutine close_trajectory
+    ret = xdrfile_close(xdr_iohandle(htraj)) 
+    xdr_iohandle(htraj) = c_null_ptr
+  end subroutine close_xdr
 
   ! Read trajectory and returns [crd] as a coordinates, and [cell] as a
   ! periodic cell, represented in nanometer.
@@ -103,10 +103,10 @@ contains
   ! [cell] may be an arbitrary value if the trajectory does not contain
   ! cell information.
   ! The coordinate is not guaranteed to be within a unit cell.
-  subroutine read_trajectory(htraj, natoms, crd, vel, cell, time, status)
+  subroutine read_xdr(htraj, natoms, crd, vel, cell, time, status)
     use, intrinsic :: iso_c_binding
     implicit none
-    type(handle), intent(in) :: htraj
+    integer, intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
     real(C_DOUBLE), intent(out) :: crd(3,natoms), vel(3,natoms)
     real(8), intent(out) :: cell(3)
@@ -119,28 +119,28 @@ contains
 
     integer :: i
 
-    ret = read_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
+    ret = read_trr(xdr_iohandle(htraj), natoms, step, time, lambda, box, crd, vel, f)
 
     do i = 1, 3
       cell(i) = box(i, i)
     end do
 
     status = ret
-  end subroutine read_trajectory
+  end subroutine read_xdr
   
-  function get_natom(fname)
+  function read_natom_xdr(fname)
     implicit none
-    integer :: get_natom
+    integer :: read_natom_xdr
     character(len=*), intent(in):: fname
 
-    get_natom = 0
-    call read_trr_natoms(f2c_string(fname), get_natom)
-  end function get_natom
+    read_natom_xdr = 0
+    call read_trr_natoms(f2c_string(fname), read_natom_xdr)
+  end function read_natom_xdr
 
-  subroutine write_trajectory(htraj, natoms, crd, vel, cell, step, time, status)
+  subroutine write_xdr(htraj, natoms, crd, vel, cell, step, time, status)
     use, intrinsic :: iso_c_binding
     implicit none
-    type(handle), intent(in) :: htraj
+    integer, intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
     real(C_DOUBLE), intent(in) :: crd(3,natoms), vel(3,natoms)
     real(8), intent(in) :: cell(3)
@@ -160,10 +160,10 @@ contains
       box(i, i) = cell(i)
     end do
 
-    ret = write_trr(xdr_iohandle(htraj%iohandle), natoms, step, time, lambda, box, crd, vel, f)
+    ret = write_trr(xdr_iohandle(htraj), natoms, step, time, lambda, box, crd, vel, f)
 
     status = ret
-  end subroutine write_trajectory
+  end subroutine write_xdr
 
 end module xdr
 

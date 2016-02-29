@@ -29,14 +29,9 @@ module utility
   private
   integer, parameter :: line_len = 1024
 
-  public handle, newunit, count_record_in_string, &
+  public count_record_in_string, &
          get_pairindex_upper_diag, parse_version, swap, &
          get_pairindex_upper_nodiag, f2c_string
-
-  type handle
-     integer :: iohandle
-     character(len=line_len) :: filename
-  end type handle
 
   interface swap
     module procedure swap_int, swap_char

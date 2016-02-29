@@ -1,16 +1,17 @@
 module manager
   use mpiproc
   use hdf5
-  use utility, only: handle, get_pairindex_upper_diag
+  use utility, only: get_pairindex_upper_diag
   use varpars, only: line_len, line_len_str, dp, decond_version, &
                      trjfile, corrfile, dec_mode, &
                      dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
-                     timestep
+                     timestep, world_dim, qnt_dim
   use top, only: open_top, close_top, read_top, print_sys
-  use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
+  use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
+  use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
   use correlation, only: corr
   use spatial_dec, only: sd_init, rbinwidth, pos, sd_binIndex, num_rbin, &
                          sdcorr, sdpaircount, sd_prep, sd_broadcastpos, &
@@ -29,21 +30,21 @@ module manager
   integer :: num_arg, num_subarg, num_arg_per_moltype
   character(len=line_len) :: arg
   integer, allocatable :: start_index(:)
-  type(handle) :: topfileio
+  integer :: topfileio
   character(len=line_len) :: logfile, topfile
   integer(hid_t) :: corrfileio
   integer :: i, j, k, n, t, stat, numframe_k, numframe_read, tmp_i
   integer :: moltypepair_idx, moltypepair_allidx
   real(dp) :: tmp_r
-  type(handle) :: trjfileio
+  integer :: trjfileio
   integer, allocatable :: framecount(:)
-  real(dp), allocatable :: pos_tmp(:, :), vel_tmp(:, :), vv(:)
-  !one frame data (dim=3, atom)
-  real(dp), allocatable :: vel(:, :, :)
-  !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
+  real(dp), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
+  !one frame data (dim=qnt_dim, atom)
+  real(dp), allocatable :: qnt(:, :, :)
+  !pos(dim=world_dim, timeFrame, atom), qnt(dim=qnt_dim, timeFrame, atom)
   real(dp), allocatable :: time(:), ncorr(:, :), corr_tmp(:)
   !MPI variables
-  real(dp), allocatable :: vel_r(:, :, :), vel_c(:, :, :)
+  real(dp), allocatable :: qnt_r(:, :, :), qnt_c(:, :, :)
 
 contains
   subroutine init_config()
@@ -79,6 +80,8 @@ contains
           call mpi_abend()
         end if
         dec_mode = dec_mode_ec0
+        qnt_dim = world_dim
+
         call get_command_argument(i, trjfile)
         i = i + 1
         call get_command_argument(i, topfile)
@@ -149,6 +152,8 @@ contains
           call mpi_abend()
         end if
         dec_mode = dec_mode_ec1
+        qnt_dim = world_dim
+
         call get_command_argument(i, trjfile)
         i = i + 1
         num_subarg = count_arg(i, num_arg)
@@ -204,6 +209,8 @@ contains
           call mpi_abend()
         end if
         dec_mode = dec_mode_vsc
+        qnt_dim = world_dim * (world_dim - 1)  ! off-diagonal tensor
+
         call get_command_argument(i, trjfile)
         i = i + 1
         num_subarg = count_arg(i, num_arg)
@@ -369,11 +376,13 @@ contains
 
     !rank root output parameters read
     if (myrank == root) then
-      write(*,*) "outFile = ", trim(corrfile)
-      write(*,*) "inFile.trr = ", trim(trjfile)
-      write(*,*) "logFile = ", trim(logfile)
+      write(*,*) "output corrfile = ", trim(corrfile)
+      write(*,*) "input trjfile = ", trim(trjfile)
+      if (dec_mode == dec_mode_ec0) then
+        write(*,*) "input topfile = ", trim(topfile)
+        write(*,*) "input logfile = ", trim(logfile)
+      end if
       write(*,*) "temperature = ", temperature
-      if (dec_mode == dec_mode_ec0) write(*,*) "topFile.top = ", trim(topfile)
       write(*,*) "numframe= ", numframe
       write(*,*) "maxlag = ", maxlag
       if (do_sd) write(*,*) "rbinwidth = ", rbinwidth
@@ -385,6 +394,10 @@ contains
   end subroutine read_config
 
   subroutine prepare()
+    character(len=line_len) :: info_xyz, dum_c
+    integer :: dum_i
+    real(dp) :: dum_r
+
     if (myrank == root) then
       ! create an HDF5 file
       call h5open_f(ierr)
@@ -407,14 +420,14 @@ contains
     end if
 
     !prepare memory for all ranks
-    allocate(vel_r(3, numframe, num_r), stat=stat)
+    allocate(qnt_r(qnt_dim, numframe, num_r), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: vel_r"
+      write(*,*) "Allocation failed: qnt_r"
       call mpi_abend()
     end if
-    allocate(vel_c(3, numframe, num_c), stat=stat)
+    allocate(qnt_c(qnt_dim, numframe, num_c), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: vel_r"
+      write(*,*) "Allocation failed: qnt_r"
       call mpi_abend()
     end if
 
@@ -422,86 +435,149 @@ contains
     if (myrank == root) then
       write(*,*) "start reading trajectory..."
       starttime = mpi_wtime()
-      sysnumatom = get_natom(trjfile)
-      if (dec_mode == dec_mode_ec1 .and. sysnumatom /= totnummol) then
-        write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
-        write(*,*) "In ec1 mode, sysnumatom should equal to totnummol!"
-        call mpi_abend()
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        sysnumatom = read_natom_xdr(trjfile)
+      case (dec_mode_vsc)
+        sysnumatom = read_natom_xyz(trjfile)
+      end select
+      if (dec_mode == dec_mode_ec1 .or. dec_mode == dec_mode_vsc) then
+        if (sysnumatom /= totnummol) then
+          write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
+          write(*,*) "In ec1 and vsc modes, sysnumatom should equal to totnummol!"
+          call mpi_abend()
+        end if
       end if
       write(*,*) "sysnumatom=", sysnumatom
 
-      allocate(vel(3, numframe, totnummol), stat=stat)
+      allocate(qnt(qnt_dim, numframe, totnummol), stat=stat)
       if (stat /=0) then
-        write(*,*) "Allocation failed: vel"
+        write(*,*) "Allocation failed: qnt"
         call mpi_abend()
       end if
-      allocate(pos_tmp(3, sysnumatom), stat=stat)
+      allocate(pos_tmp(world_dim, sysnumatom), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos_tmp"
         call mpi_abend()
       end if
-      allocate(vel_tmp(3, sysnumatom), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: vel_tmp"
-        call mpi_abend()
-      end if
-      allocate(time(numframe), stat=stat)
-      if (stat /=0) then
-        write(*,*) "Allocation failed: time"
-        call mpi_abend()
-      end if
 
-      numframe_read = 0
-      call open_trajectory(trjfileio, trjfile)
-      do i = 1, numframe
-        do j = 1, skiptrj-1
-          call read_trajectory(trjfileio, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
-          if (stat > 0) then
-            write(*,*) "Reading trajectory error"
-            call mpi_abend()
-          else if (stat < 0) then
-            !end of file
-            exit
-          end if
-        end do
-        call read_trajectory(trjfileio, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
-        if (stat /= 0) then
-          write(*,*) "Reading trajectory error"
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        allocate(qnt_tmp(qnt_dim, sysnumatom), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: qnt_tmp"
           call mpi_abend()
         end if
-        numframe_read = numframe_read + 1
-        if (dec_mode == dec_mode_ec1) then
-          vel(:, i, :) = vel_tmp
-          if (do_sd) then
-            pos(:, i, :) = pos_tmp
+        allocate(time(numframe), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: time"
+          call mpi_abend()
+        end if
+      case (dec_mode_vsc)
+        allocate(qnt_tmp(world_dim * world_dim, sysnumatom), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: qnt_tmp"
+          call mpi_abend()
+        end if
+      end select
+
+      numframe_read = 0
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        call open_xdr(trjfileio, trjfile)
+      case (dec_mode_vsc)
+        call open_xyz(trjfileio, trjfile, 'old')
+      end select
+      do i = 1, numframe
+        ! skip first skiptrj frames
+        do j = 1, skiptrj-1
+          select case (dec_mode)
+          case (dec_mode_ec0, dec_mode_ec1)
+            call read_xdr(trjfileio, sysnumatom, pos_tmp, qnt_tmp, cell, tmp_r, stat)
+            if (stat > 0) then
+              write(*,*) "Reading trajectory error"
+              call mpi_abend()
+            else if (stat < 0) then
+              write(*,*) "trjfile end-of-file! ", i-1, " frames have been read"
+              call mpi_abend()
+            end if
+          case (dec_mode_vsc)
+            call read_xyz(trjfileio, pos_tmp)
+          end select
+        end do
+
+        ! read frame i
+        select case (dec_mode)
+        case (dec_mode_ec0, dec_mode_ec1)
+          call read_xdr(trjfileio, sysnumatom, pos_tmp, qnt_tmp, cell, time(i), stat)
+          if (stat /= 0) then
+            write(*,*) "Reading trajectory error"
+            call mpi_abend()
           end if
-        else
-          call com_vel(vel(:, i, :), vel_tmp, start_index)
+        case (dec_mode_vsc)
+          call read_xyz(trjfileio, pos_tmp, info=info_xyz)
+        end select
+
+        numframe_read = numframe_read + 1
+
+        select case (dec_mode)
+        case (dec_mode_ec0)
+          call com_qnt(qnt(:, i, :), qnt_tmp, start_index)
           if (do_sd) then
             call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
           end if
-        end if
+        case (dec_mode_ec1)
+          qnt(:, i, :) = qnt_tmp
+          if (do_sd) then
+            pos(:, i, :) = pos_tmp
+          end if
+        case (dec_mode_vsc)
+          n = 0
+          do j = 1, world_dim
+            do k = 1, world_dim
+              if (j /= k) then
+                n = n + 1
+                qnt(n, i, :) = qnt_tmp(n, :)
+              end if
+            end do
+          end do
+          if (do_sd) then
+            pos(:, i, :) = pos_tmp
+          end if
+        end select
       end do
-      call close_trajectory(trjfileio)
+
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        call close_xdr(trjfileio)
+      case (dec_mode_vsc)
+        call close_xyz(trjfileio)
+      end select
+
       if (myrank == root) write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
         write(*,*) "Number of frames expected to read is not the same as actually read!"
         call mpi_abend()
       end if
 
-      timestep = time(2) - time(1)
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        timestep = time(2) - time(1)
+      case (dec_mode_vsc)
+        read(info_xyz, "(A, x, A, I, f)") dum_c, dum_c, dum_i, timestep
+      end select
       deallocate(pos_tmp)
-      deallocate(vel_tmp)
+      deallocate(qnt_tmp)
       deallocate(time)
       endtime = mpi_wtime()
       write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
       write(*,*) "timestep = ", timestep
       write(*,*) "cell = ", cell
     else
-      !not root, allocate dummy vel to inhibit error messages
-      allocate(vel(1, 1, 1), stat=stat)
+      !not root, allocate dummy qnt to inhibit error messages
+      allocate(qnt(1, 1, 1), stat=stat)
       if (stat /=0) then
-        write(*,*) "Allocation failed: dummy vel on rank", myrank
+        write(*,*) "Allocation failed: dummy qnt on rank", myrank
         call mpi_abend()
       end if
     end if
@@ -510,20 +586,20 @@ contains
     if (myrank == root) write(*,*) "start broadcasting trajectory"
     starttime = mpi_wtime()
     if (r_group_idx == 0) then
-      call mpi_scatterv(vel, scounts_c, displs_c, mpi_double_precision, vel_c,&
+      call mpi_scatterv(qnt, scounts_c, displs_c, mpi_double_precision, qnt_c,&
                         scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
     end if
-    call mpi_bcast(vel_c, scounts_c(c_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
+    call mpi_bcast(qnt_c, scounts_c(c_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
 
     if (c_group_idx == 0) then
-      call mpi_scatterv(vel, scounts_r, displs_r, mpi_double_precision, vel_r,&
+      call mpi_scatterv(qnt, scounts_r, displs_r, mpi_double_precision, qnt_r,&
                         scounts_r(r_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
     end if
-    call mpi_bcast(vel_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
+    call mpi_bcast(qnt_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
 
-    deallocate(vel)
+    deallocate(qnt)
 
-    call mpi_bcast(cell, 3, mpi_double_precision, root, mpi_comm_world, ierr)
+    call mpi_bcast(cell, world_dim, mpi_double_precision, root, mpi_comm_world, ierr)
 
     if (do_sd) call sd_broadcastpos()
     endtime = mpi_wtime()
@@ -539,9 +615,9 @@ contains
     end if
     starttime = mpi_wtime()
 
-    allocate(vv(numframe))
+    allocate(qq(numframe))
     if (stat /=0) then
-      write(*,*) "Allocation failed: vv"
+      write(*,*) "Allocation failed: qq"
       call mpi_abend()
     end if
 
@@ -579,12 +655,12 @@ contains
           if (do_sd .or. do_ed) then
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
-              vv(1:numframe_k) = sum(vel_r(:, k:numframe, i-r_start+1) * vel_c(:, 1:numframe_k, j-c_start+1), 1)
-              ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(vv(1:numframe_k))
+              qq(1:numframe_k) = sum(qnt_r(:, k:numframe, i-r_start+1) * qnt_c(:, 1:numframe_k, j-c_start+1), 1)
+              ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(qq(1:numframe_k))
             end do
           else
-            do k = 1, 3
-              corr_tmp = corr(vel_r(k, :, i-r_start+1), maxlag)
+            do k = 1, qnt_dim
+              corr_tmp = corr(qnt_r(k, :, i-r_start+1), maxlag)
               ncorr(:, moltypepair_allidx) = ncorr(:, moltypepair_allidx) + corr_tmp(maxlag+1:)
             end do
           end if
@@ -599,24 +675,24 @@ contains
             if (do_ed) call ed_getbinindex(i, j, ed_binIndex)
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
-              vv(1:numframe_k) = sum(vel_r(:, k:numframe, i-r_start+1) * vel_c(:, 1:numframe_k, j-c_start+1), 1)
+              qq(1:numframe_k) = sum(qnt_r(:, k:numframe, i-r_start+1) * qnt_c(:, 1:numframe_k, j-c_start+1), 1)
               !TODO: test if this sum should be put here or inside the following loop for better performance
-              ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(vv(1:numframe_k))
+              ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(qq(1:numframe_k))
               do n = 1, numframe_k
                 if (do_sd) then
                   tmp_i = sd_binIndex(n)
                   if (tmp_i <= num_rbin) then
-                    sdcorr(k, tmp_i, moltypepair_idx) = sdcorr(k, tmp_i, moltypepair_idx) + vv(n)
+                    sdcorr(k, tmp_i, moltypepair_idx) = sdcorr(k, tmp_i, moltypepair_idx) + qq(n)
                   end if
                 end if
                 if (do_ed) then
                   tmp_i = ed_binIndex(n)
                   if (tmp_i <= num_rbin) then
-                    edcorr(k, tmp_i, moltypepair_idx) = edcorr(k, tmp_i, moltypepair_idx) + vv(n)
+                    edcorr(k, tmp_i, moltypepair_idx) = edcorr(k, tmp_i, moltypepair_idx) + qq(n)
                   end if
                 end if
                 !TODO: need test
-                !ncorr(k, moltypepair_idx) = corr(k, moltypepair_idx) + vv(n)
+                !ncorr(k, moltypepair_idx) = corr(k, moltypepair_idx) + qq(n)
               end do
             end do
 
@@ -636,8 +712,8 @@ contains
             end do
 
           else ! one-two only
-            do k = 1, 3
-              corr_tmp = corr(vel_r(k, :, i-r_start+1), vel_c(k, :, j-c_start+1), maxlag)
+            do k = 1, qnt_dim
+              corr_tmp = corr(qnt_r(k, :, i-r_start+1), qnt_c(k, :, j-c_start+1), maxlag)
               ncorr(:, moltypepair_allidx) = ncorr(:, moltypepair_allidx) + corr_tmp(maxlag+1:)
             end do
           end if
@@ -685,7 +761,7 @@ contains
         end do
       end do
 
-      framecount = [ (numframe - (i-1), i = 1, maxlag+1) ] * 3d0
+      framecount = [ (numframe - (i-1), i = 1, maxlag+1) ] * real(qnt_dim, kind=dp)
       do n = 1, num_moltypepair_all
         ncorr(:,n) = ncorr(:,n) / framecount
       end do
@@ -873,7 +949,7 @@ contains
   end subroutine output_corr
 
   subroutine finish()
-    deallocate(ncorr, charge, vel_r, vel_c, start_index)
+    deallocate(ncorr, charge, qnt_r, qnt_c, start_index)
     if (do_sd) call sd_finish()
     if (do_ed) call ed_finish()
   end subroutine finish
@@ -986,13 +1062,13 @@ contains
     getMolTypePairIndex = (r - 1) * nummoltype + c - r * (r - 1) / 2
   end function getMolTypePairIndex
 
-  subroutine com_vel(com_v, vel, start_index)
-    real(dp), dimension(:, :), intent(out) :: com_v
-    real(dp), dimension(:, :), intent(in) :: vel
+  subroutine com_qnt(com_q, qnt, start_index)
+    real(dp), dimension(:, :), intent(out) :: com_q
+    real(dp), dimension(:, :), intent(in) :: qnt
     integer, dimension(:), intent(in) :: start_index
     integer :: d, i, j, idx_begin, idx_end, idx_com
 
-    com_v = 0d0
+    com_q = 0d0
     idx_com = 0
     do i = 1, size(sys%mol)
       do j = 1, sys%mol(i)%num
@@ -1000,12 +1076,12 @@ contains
         idx_end = idx_begin + size(sys%mol(i)%atom) - 1
         idx_com = idx_com + 1
         do d = 1, 3
-          com_v(d, idx_com) = com_v(d, idx_com) + &
-              sum(vel(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
+          com_q(d, idx_com) = com_q(d, idx_com) + &
+              sum(qnt(d, idx_begin:idx_end) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
         end do
       end do
     end do
-  end subroutine com_vel
+  end subroutine com_qnt
 
   subroutine print_usage()
     write(*, *) "usage: $ decond <trrfile> <logfile> <numFrameToRead> <-pa | -pm ...> [options]"

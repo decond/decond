@@ -1,6 +1,6 @@
 module spatial_dec
   use mpiproc
-  use varpars, only: numframe, totnummol
+  use varpars, only: numframe, totnummol, world_dim
   implicit none
   private
   public sd_init, com_pos, sd_prep_corrmemory, sd_getbinindex, &
@@ -24,20 +24,20 @@ contains
   end subroutine sd_init
 
   subroutine sd_prep()
-    allocate(pos_r(3, numframe, num_r), stat=stat)
+    allocate(pos_r(world_dim, numframe, num_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_r"
       call mpi_abend()
     end if 
 
-    allocate(pos_c(3, numframe, num_c), stat=stat)
+    allocate(pos_c(world_dim, numframe, num_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_c"
       call mpi_abend()
     end if 
 
     if (myrank == root) then
-      allocate(pos(3, numframe, totnummol), stat=stat)
+      allocate(pos(world_dim, numframe, totnummol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos"
         call mpi_abend()
@@ -60,13 +60,13 @@ contains
     real(8), dimension(:, :), allocatable :: pos_gathered
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    real(8), dimension(3), intent(in) :: cell
+    real(8), dimension(world_dim), intent(in) :: cell
     integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
     do i = 1, size(sys%mol)
       num_atom = size(sys%mol(i)%atom)
-      allocate(pos_gathered(3, num_atom), stat=stat)
+      allocate(pos_gathered(world_dim, num_atom), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos_gathered"
         call mpi_abend()
@@ -76,7 +76,7 @@ contains
         idx_end = idx_begin + num_atom - 1
         idx_com = idx_com + 1
         call gatherMolPos(pos_gathered, pos(:, idx_begin:idx_end), cell)
-        do d = 1, 3
+        do d = 1, world_dim
           com_p(d, idx_com) = sum(pos_gathered(d, :) * sys%mol(i)%atom(:)%mass) / sum(sys%mol(i)%atom(:)%mass)
         end do
       end do
@@ -89,12 +89,12 @@ contains
     implicit none
     real(8), dimension(:, :), intent(out) :: pos_gathered
     real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(3), intent(in) :: cell
-    real(8), dimension(3) :: ref_pos
+    real(8), dimension(world_dim), intent(in) :: cell
+    real(8), dimension(world_dim) :: ref_pos
     integer :: d
 
     ref_pos = pos(:, 1)
-    do d = 1, 3
+    do d = 1, world_dim
       pos_gathered(d, :) = pos(d, :) - ref_pos(d)
       pos_gathered(d, :) = ref_pos(d) + pos_gathered(d, :) - &
                            nint(pos_gathered(d, :) / cell(d)) * cell(d)
@@ -118,7 +118,7 @@ contains
 
   subroutine sd_cal_num_rbin(cell)
     implicit none
-    real(8), intent(in) :: cell(3)
+    real(8), intent(in) :: cell(world_dim)
 
     num_rbin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rbinwidth)
     ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
@@ -155,13 +155,13 @@ contains
   subroutine sd_getbinindex(r, c, cell, sd_binIndex)
     implicit none
     integer, intent(in) :: r, c
-    real(8), intent(in) :: cell(3)
+    real(8), intent(in) :: cell(world_dim)
     integer, intent(out) :: sd_binIndex(:)
-    real(8) :: pp(3, size(sd_binIndex))
+    real(8) :: pp(world_dim, size(sd_binIndex))
     integer :: d
 
     pp = pos_r(:,:,r) - pos_c(:,:,c)
-    do d = 1, 3
+    do d = 1, world_dim
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
     sd_binIndex = ceiling(sqrt(sum(pp*pp, 1)) / rbinwidth)

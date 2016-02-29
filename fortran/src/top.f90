@@ -1,5 +1,5 @@
 module top
-  use utility, only : handle, newunit, count_record_in_string
+  use utility, only : count_record_in_string
   implicit none
 
   private
@@ -27,23 +27,22 @@ module top
   end type system
   
 contains
-  type(handle) function open_top(filename)
+  integer function open_top(filename)
     implicit none
     character(len=*), intent(in) :: filename
   
-    open_top%filename = filename
-    open(unit=newunit(open_top%iohandle), file=filename, status='old', action="READ", form="FORMATTED")
+    open(newunit=open_top, file=filename, status='old', action="READ", form="FORMATTED")
   end function open_top
 
   subroutine close_top(htop)
     implicit none
-    type(handle), intent(in) :: htop
-    close(htop%iohandle)
+    integer, intent(in) :: htop
+    close(htop)
   end subroutine close_top
 
   subroutine read_top(htop, sys)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(system), intent(inout) :: sys
     type(system) :: sys_top
     integer :: i, j
@@ -62,7 +61,7 @@ contains
 
   subroutine read_top_system(htop, sys)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(system), intent(out) :: sys
     integer :: stat
     character(len=line_len) :: line
@@ -86,12 +85,12 @@ contains
       end if
       read(line, *) sys%mol(i)%type, sys%mol(i)%num
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_system
 
   subroutine read_top_molecule(htop, mol)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), dimension(:), intent(inout) :: mol
     integer :: stat
     character(len=line_len) :: line, dum_s
@@ -141,12 +140,12 @@ contains
         end select
       end do
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_molecule
 
   subroutine read_top_atype(htop, at)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(atom), intent(inout) :: at
     integer :: stat
     character(len=line_len) :: line, atype, dum_s
@@ -155,7 +154,7 @@ contains
     logical :: is_read
 
     is_read = .false.
-    rewind(htop%iohandle)
+    rewind(htop)
     do while(.true.)
       call read_to_next_directive(htop, "atomtypes", stat)
       if (stat < 0) exit  ! EOF
@@ -200,17 +199,17 @@ contains
       write(*,*) "Error: no [ atomtypes ] for ", trim(at%type), " is read"
       call exit(1)
     end if
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_atype
 
   integer function count_molatom(htop, mol)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), intent(inout) :: mol
     integer :: stat
     character(len=line_len) :: line
 
-    rewind(htop%iohandle)
+    rewind(htop)
     count_molatom = 0
     stat = 0
 
@@ -232,7 +231,7 @@ contains
       if (current_directive == 'atoms' .and. stat == 0) then
         count_molatom = count_molatom + 1
       else
-        rewind(htop%iohandle)
+        rewind(htop)
         return
       end if
     end do
@@ -240,12 +239,12 @@ contains
 
   subroutine read_to_moltype(htop, mol, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), intent(in) :: mol
     integer, intent(out) :: status
     character(len=line_len) :: line, name
     
-    rewind(htop%iohandle)
+    rewind(htop)
     do while(.true.)
       call read_to_next_directive(htop, 'moleculetype', status)
       if (status < 0) then
@@ -262,12 +261,12 @@ contains
         end if
       end if
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_to_moltype
   
   subroutine read_to_next_directive(htop, directive, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     character(len=*), intent(in) :: directive
     integer, intent(out) :: status
     character(len=line_len) :: line
@@ -285,7 +284,7 @@ contains
 
   subroutine read_next_directive(htop, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     integer, intent(out) :: status
     character(len=line_len) :: line
     do while(.true.)
@@ -301,7 +300,7 @@ contains
 
   integer function count_moltype(htop)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     integer :: stat
     character(len=line_len) :: line
 
@@ -319,12 +318,12 @@ contains
       end if
     end do
     
-    rewind(htop%iohandle)
+    rewind(htop)
   end function count_moltype
 
   subroutine read_line(htop, line, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     character(len=*), intent(out) :: line
     integer, intent(out) :: status
     integer :: stat
@@ -333,7 +332,7 @@ contains
     
     status = 0
     do while(.true.)
-      read(htop%iohandle, "(A"//line_len_str//")", iostat=stat) line
+      read(htop, "(A"//line_len_str//")", iostat=stat) line
       if (stat > 0) then
         write(*,*) "Error reading line"
         call exit(1)
@@ -395,12 +394,11 @@ contains
 end module top
 
 !program test
-!  use utility, only : handle
 !  use top, only: open_top, close_top, read_top, system
 !  implicit none
 !  integer, parameter :: line_len = 128
 !  character(len=line_len) :: top_filename
-!  type(handle) :: htop
+!  integer :: htop
 !  type(system) :: sys
 !
 !  call get_command_argument(1, top_filename)

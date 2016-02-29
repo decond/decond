@@ -1,5 +1,6 @@
 module mpiproc
   use mpi
+  use varpars, only: qnt_dim
   implicit none
   private
   public :: mpi_setup, domain_dec, mpi_abend
@@ -149,10 +150,10 @@ contains
     c_end = c_start + num_c - 1
 
     ! in view of memory, for distributing array in parallel
-    displs_r = displs_r * 3 * numframe
-    displs_c = displs_c * 3 * numframe
-    scounts_r = scounts_r * 3 * numframe
-    scounts_c = scounts_c * 3 * numframe
+    displs_r = displs_r * qnt_dim * numframe
+    displs_c = displs_c * qnt_dim * numframe
+    scounts_r = scounts_r * qnt_dim * numframe
+    scounts_c = scounts_c * qnt_dim * numframe
 
     !check if myrank is at the ending boundary and if indexes are coincident
     if (r_group_idx == num_domain_r - 1) then

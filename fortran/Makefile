@@ -57,7 +57,7 @@ PROGRAM = trjconv2com decond
 TRJCONV_DEPS = xdr.o top.o utility.o varpars.o
 TRJCONV_OBJS = trjconv2com.o $(TRJCONV_DEPS)
 
-DECOND_DEPS = manager.o mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o fftw.o varpars.o
+DECOND_DEPS = manager.o mpiproc.o spatial_dec.o energy_dec.o correlation.o utility.o xdr.o top.o fftw.o varpars.o xyz.o
 DECOND_OBJS = decond.o $(DECOND_DEPS)
 
 # ---------------------------
@@ -78,7 +78,7 @@ $(SRCDIR)/decond.o : $(addprefix $(SRCDIR)/, $(DECOND_DEPS))
 
 
 # ===== Library =====
-$(SRCDIR)/manager.o : $(addprefix $(SRCDIR)/, mpiproc.o spatial_dec.o energy_dec.o top.o utility.o varpars.o xdr.o correlation.o)
+$(SRCDIR)/manager.o : $(addprefix $(SRCDIR)/, mpiproc.o spatial_dec.o energy_dec.o top.o utility.o varpars.o xdr.o correlation.o xyz.o)
 
 $(SRCDIR)/spatial_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o top.o utility.o)
 
