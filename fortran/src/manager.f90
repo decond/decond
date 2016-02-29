@@ -7,7 +7,7 @@ module manager
                      dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
-                     maxlag, skiptrj, is_sd, is_ed, sysnumatom, cell, &
+                     maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
                      timestep
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_trajectory, close_trajectory, read_trajectory, get_natom
@@ -57,8 +57,8 @@ contains
     corrfile = 'corr.c5'
     skiptrj = 1
     maxlag = -1
-    is_sd = .false.
-    is_ed = .false.
+    do_sd = .false.
+    do_ed = .false.
     num_domain_r = 0
     num_domain_c = 0
     call sd_init()
@@ -289,10 +289,10 @@ contains
         read(arg, *) maxlag  ! in the unit of frame number
 
       case ('-sd')
-        is_sd = .true.
+        do_sd = .true.
 
       case ('-ed')
-        is_ed = .true.
+        do_ed = .true.
         num_engfiles = count_arg(i, num_arg)
         do n = 1, num_engfiles
           call get_command_argument(i, engfiles(n))
@@ -376,8 +376,8 @@ contains
       if (dec_mode == dec_mode_ec0) write(*,*) "topFile.top = ", trim(topfile)
       write(*,*) "numframe= ", numframe
       write(*,*) "maxlag = ", maxlag
-      if (is_sd) write(*,*) "rbinwidth = ", rbinwidth
-      if (is_ed) write(*,*) "ebinwidth = ", ebinwidth
+      if (do_sd) write(*,*) "rbinwidth = ", rbinwidth
+      if (do_ed) write(*,*) "ebinwidth = ", ebinwidth
       write(*,*) "nummoltype = ", nummoltype
       write(*,*) "num_domain_r = ", num_domain_r
       write(*,*) "num_domain_c = ", num_domain_c
@@ -398,11 +398,11 @@ contains
 
     call domain_dec(totnummol, numframe) ! determine r_start, c_start ...etc.
 
-    if (is_ed) then
+    if (do_ed) then
       call ed_prep()
     end if
 
-    if (is_sd) then
+    if (do_sd) then
       call sd_prep()
     end if
 
@@ -472,12 +472,12 @@ contains
         numframe_read = numframe_read + 1
         if (dec_mode == dec_mode_ec1) then
           vel(:, i, :) = vel_tmp
-          if (is_sd) then
+          if (do_sd) then
             pos(:, i, :) = pos_tmp
           end if
         else
           call com_vel(vel(:, i, :), vel_tmp, start_index)
-          if (is_sd) then
+          if (do_sd) then
             call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
           end if
         end if
@@ -525,7 +525,7 @@ contains
 
     call mpi_bcast(cell, 3, mpi_double_precision, root, mpi_comm_world, ierr)
 
-    if (is_sd) call sd_broadcastpos()
+    if (do_sd) call sd_broadcastpos()
     endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished broadcasting trajectory. It took ", endtime - starttime, " seconds"
   end subroutine prepare
@@ -534,8 +534,8 @@ contains
     !decomposition
     if (myrank == root) then
       write(*,*) "start one-two decomposition"
-      if (is_sd) write(*,*) "start spatial decomposition"
-      if (is_ed) write(*,*) "start energy decomposition"
+      if (do_sd) write(*,*) "start spatial decomposition"
+      if (do_ed) write(*,*) "start energy decomposition"
     end if
     starttime = mpi_wtime()
 
@@ -552,12 +552,12 @@ contains
     end if
     ncorr = 0d0
 
-    if (is_sd .or. is_ed) then
-      if (is_sd) then
+    if (do_sd .or. do_ed) then
+      if (do_sd) then
         call sd_cal_num_rbin(cell)
         call sd_prep_corrmemory(maxlag, nummoltype, numframe)
       end if
-      if (is_ed) call ed_prep_corrmemory(maxlag, nummoltype, numframe)
+      if (do_ed) call ed_prep_corrmemory(maxlag, nummoltype, numframe)
     else
       allocate(corr_tmp(2*maxlag+1), stat=stat)
       if (stat /=0) then
@@ -576,7 +576,7 @@ contains
                                             ", c =", j-c_start+1, " of ", num_c
           starttime2 = mpi_wtime()
           moltypepair_allidx = getMolTypeIndex(i, sys%mol(:)%num, nummoltype)
-          if (is_sd .or. is_ed) then
+          if (do_sd .or. do_ed) then
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
               vv(1:numframe_k) = sum(vel_r(:, k:numframe, i-r_start+1) * vel_c(:, 1:numframe_k, j-c_start+1), 1)
@@ -594,22 +594,22 @@ contains
           starttime2 = mpi_wtime()
           moltypepair_idx = getMolTypePairIndex(i, j, sys%mol(:)%num, nummoltype)
           moltypepair_allidx = moltypepair_idx + nummoltype
-          if (is_sd .or. is_ed) then
-            if (is_sd) call sd_getbinindex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
-            if (is_ed) call ed_getbinindex(i, j, ed_binIndex)
+          if (do_sd .or. do_ed) then
+            if (do_sd) call sd_getbinindex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
+            if (do_ed) call ed_getbinindex(i, j, ed_binIndex)
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
               vv(1:numframe_k) = sum(vel_r(:, k:numframe, i-r_start+1) * vel_c(:, 1:numframe_k, j-c_start+1), 1)
               !TODO: test if this sum should be put here or inside the following loop for better performance
               ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(vv(1:numframe_k))
               do n = 1, numframe_k
-                if (is_sd) then
+                if (do_sd) then
                   tmp_i = sd_binIndex(n)
                   if (tmp_i <= num_rbin) then
                     sdcorr(k, tmp_i, moltypepair_idx) = sdcorr(k, tmp_i, moltypepair_idx) + vv(n)
                   end if
                 end if
-                if (is_ed) then
+                if (do_ed) then
                   tmp_i = ed_binIndex(n)
                   if (tmp_i <= num_rbin) then
                     edcorr(k, tmp_i, moltypepair_idx) = edcorr(k, tmp_i, moltypepair_idx) + vv(n)
@@ -621,13 +621,13 @@ contains
             end do
 
             do t = 1, numframe
-              if (is_sd) then
+              if (do_sd) then
                 tmp_i = sd_binIndex(t)
                 if (tmp_i <= num_rbin) then
                   sdpaircount(tmp_i, moltypepair_idx) = sdpaircount(tmp_i, moltypepair_idx) + 1d0
                 end if
               end if
-              if (is_ed) then
+              if (do_ed) then
                 tmp_i = ed_binIndex(t)
                 if (tmp_i <= num_ebin) then
                   edpaircount(tmp_i, moltypepair_idx) = edpaircount(tmp_i, moltypepair_idx) + 1d0
@@ -646,8 +646,8 @@ contains
         if (myrank == root) write(*,*)
       end do
     end do
-    if (is_sd) deallocate(sd_binIndex)
-    if (is_ed) deallocate(ed_binIndex)
+    if (do_sd) deallocate(sd_binIndex)
+    if (do_ed) deallocate(ed_binIndex)
 
     endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished decomposition. It took ", endtime - starttime, " seconds"
@@ -662,8 +662,8 @@ contains
       call mpi_reduce(ncorr, dummy_null, size(ncorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
     call mpi_barrier(mpi_comm_world, ierr)
-    if (is_sd) call sd_collectcorr()
-    if (is_ed) call ed_collectcorr()
+    if (do_sd) call sd_collectcorr()
+    if (do_ed) call ed_collectcorr()
     endtime = mpi_wtime()
     if (myrank == root) write(*,*) "finished collecting results. It took ", endtime - starttime, " seconds"
 
@@ -690,8 +690,8 @@ contains
         ncorr(:,n) = ncorr(:,n) / framecount
       end do
 
-      if (is_sd) call sd_average(numframe, nummoltype, framecount)
-      if (is_ed) call ed_average(numframe, nummoltype, framecount)
+      if (do_sd) call sd_average(numframe, nummoltype, framecount)
+      if (do_ed) call ed_average(numframe, nummoltype, framecount)
 
       deallocate(framecount)
     end if
@@ -752,11 +752,11 @@ contains
     end if
     timeLags = [ (dble(i), i = 0, maxlag) ] * timestep
 
-    if (is_sd) then
+    if (do_sd) then
       call sd_make_rbins()
     end if
 
-    if (is_ed) then
+    if (do_ed) then
       call ed_make_ebins()
     end if
 
@@ -800,7 +800,7 @@ contains
     call H5Dopen_f(corrfileio, DSETNAME_NCORR, dset_ncorr, ierr)
     call H5LTset_attribute_string_f(corrfileio, DSETNAME_NCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
 
-    if (is_sd) then
+    if (do_sd) then
       !create a group for storing spatial-decomposition data
       call H5Gcreate_f(corrfileio, GROUP_SPATIAL, grp_sd_id, ierr)
 
@@ -821,7 +821,7 @@ contains
       call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECBINS, ATTR_UNIT, "nm", ierr)
     end if
 
-    if (is_ed) then
+    if (do_ed) then
       !create a group for storing energy-decomposition data
       call H5Gcreate_f(corrfileio, GROUP_ENERGY, grp_ed_id, ierr)
 
@@ -845,12 +845,12 @@ contains
     !attach scale dimension
     !dimension index is ordered in row major as (dimN, dimN-1, ..., dim2, dim1)
     call H5DSattach_scale_f(dset_ncorr, dset_timeLags, 2, ierr)
-    if (is_sd) then
+    if (do_sd) then
       call H5DSattach_scale_f(dset_sdcorr, dset_timeLags, 3, ierr)
       call H5DSattach_scale_f(dset_sdcorr, dset_rbins, 2, ierr)
       call H5DSattach_scale_f(dset_sdpaircount, dset_rbins, 2, ierr)
     end if
-    if (is_ed) then
+    if (do_ed) then
       call H5DSattach_scale_f(dset_edcorr, dset_timeLags, 3, ierr)
       call H5DSattach_scale_f(dset_edcorr, dset_ebins, 2, ierr)
       call H5DSattach_scale_f(dset_edpaircount, dset_ebins, 2, ierr)
@@ -858,12 +858,12 @@ contains
 
     call H5Dclose_f(dset_timeLags, ierr)
     call H5Dclose_f(dset_ncorr, ierr)
-    if (is_sd) then
+    if (do_sd) then
       call H5Dclose_f(dset_rbins, ierr)
       call H5Dclose_f(dset_sdcorr, ierr)
       call H5Dclose_f(dset_sdpaircount, ierr)
     end if
-    if (is_ed) then
+    if (do_ed) then
       call H5Dclose_f(dset_ebins, ierr)
       call H5Dclose_f(dset_edcorr, ierr)
       call H5Dclose_f(dset_edpaircount, ierr)
@@ -874,8 +874,8 @@ contains
 
   subroutine finish()
     deallocate(ncorr, charge, vel_r, vel_c, start_index)
-    if (is_sd) call sd_finish()
-    if (is_ed) call ed_finish()
+    if (do_sd) call sd_finish()
+    if (do_ed) call ed_finish()
   end subroutine finish
 
   integer function count_arg(i, num_arg)

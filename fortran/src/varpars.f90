@@ -15,6 +15,6 @@ module varpars
   integer :: numframe, maxlag, nummoltype, skiptrj, num_moltypepair_all
   integer, allocatable :: charge(:), framecount(:)
   real(dp) :: cell(3), timestep, temperature
-  logical :: is_sd, is_ed
+  logical :: do_sd, do_ed
   type(system) :: sys
 end module varpars
