@@ -197,6 +197,59 @@ contains
           write(*,*) "sys%mol%num = ", sys%mol%num
         end if
 
+      case ('-vsc')
+        if (myrank == root .and. dec_mode /= 'undefined') then
+          write(*,*) "Only one mode can be given!"
+          call print_usage()
+          call mpi_abend()
+        end if
+        dec_mode = dec_mode_vsc
+        call get_command_argument(i, trjfile)
+        i = i + 1
+        num_subarg = count_arg(i, num_arg)
+        num_arg_per_moltype = 2
+        if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -" // trim(dec_mode) // ': ', num_subarg + 1
+            call print_usage()
+            call mpi_abend()
+          end if
+        end if
+
+        nummoltype = num_subarg / num_arg_per_moltype
+
+        allocate(sys%mol(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abend()
+        end if
+
+        do n = 1, nummoltype
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totnummol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*, "(A)") "sys%mol%type = "
+          do n = 1, nummoltype
+            write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
+          end do
+          write(*,*)
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+        ! unused for viscosity
+        allocate(charge(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abend()
+        end if
+        charge = 0
+
       case ('-n', '--numframe')
         call get_command_argument(i, arg)
         i = i + 1
