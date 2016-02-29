@@ -122,7 +122,11 @@ contains
         end do
 
         if (myrank == root) then
-          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*, "(A)") "sys%mol%type = "
+          do n = 1, nummoltype
+            write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
+          end do
+          write(*,*)
           write(*,*) "start_index = ", start_index
         end if
 
@@ -184,7 +188,11 @@ contains
 
         totnummol = sum(sys%mol(:)%num)
         if (myrank == root) then
-          write(*,*) "sys%mol%type = ", sys%mol%type
+          write(*, "(A)") "sys%mol%type = "
+          do n = 1, nummoltype
+            write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
+          end do
+          write(*,*)
           write(*,*) "charge = ", charge
           write(*,*) "sys%mol%num = ", sys%mol%num
         end if
