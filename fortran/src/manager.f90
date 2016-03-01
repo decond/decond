@@ -394,9 +394,8 @@ contains
   end subroutine read_config
 
   subroutine prepare()
-    character(len=line_len) :: info_xyz, dum_c
-    integer :: dum_i
-    real(dp) :: dum_r
+    character(len=line_len) :: info_xyz, dum_c, xyz_version
+    real(dp) :: density
 
     if (myrank == root) then
       ! create an HDF5 file
@@ -460,17 +459,17 @@ contains
         write(*,*) "Allocation failed: pos_tmp"
         call mpi_abend()
       end if
+      allocate(time(numframe), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: time"
+        call mpi_abend()
+      end if
 
       select case (dec_mode)
       case (dec_mode_ec0, dec_mode_ec1)
         allocate(qnt_tmp(qnt_dim, sysnumatom), stat=stat)
         if (stat /=0) then
           write(*,*) "Allocation failed: qnt_tmp"
-          call mpi_abend()
-        end if
-        allocate(time(numframe), stat=stat)
-        if (stat /=0) then
-          write(*,*) "Allocation failed: time"
           call mpi_abend()
         end if
       case (dec_mode_vsc)
@@ -515,7 +514,8 @@ contains
             call mpi_abend()
           end if
         case (dec_mode_vsc)
-          call read_xyz(trjfileio, pos_tmp, info=info_xyz)
+          call read_xyz(trjfileio, pos_tmp, info=info_xyz, opt_data=qnt_tmp)
+          read(info_xyz, *) dum_c, xyz_version, time(i), density
         end select
 
         numframe_read = numframe_read + 1
@@ -537,7 +537,7 @@ contains
             do k = 1, world_dim
               if (j /= k) then
                 n = n + 1
-                qnt(n, i, :) = qnt_tmp(n, :)
+                qnt(n, i, :) = qnt_tmp((j - 1) * world_dim + k, :)
               end if
             end do
           end do
@@ -551,21 +551,17 @@ contains
       case (dec_mode_ec0, dec_mode_ec1)
         call close_xdr(trjfileio)
       case (dec_mode_vsc)
+        cell = (sysnumatom / density)**(1.0_dp / 3.0_dp)
         call close_xyz(trjfileio)
       end select
 
-      if (myrank == root) write(*,*) "numframe_read = ", numframe_read
+      write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
         write(*,*) "Number of frames expected to read is not the same as actually read!"
         call mpi_abend()
       end if
 
-      select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        timestep = time(2) - time(1)
-      case (dec_mode_vsc)
-        read(info_xyz, "(A, x, A, I, f)") dum_c, dum_c, dum_i, timestep
-      end select
+      timestep = time(2) - time(1)
       deallocate(pos_tmp)
       deallocate(qnt_tmp)
       deallocate(time)
