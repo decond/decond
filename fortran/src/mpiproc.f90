@@ -1,6 +1,6 @@
 module mpiproc
   use mpi
-  use varpars, only: qnt_dim
+  use varpars, only: world_dim, qnt_dim
   implicit none
   private
   public :: mpi_setup, domain_dec, mpi_abend
@@ -15,11 +15,13 @@ module mpiproc
   real(8), public :: dummy_null
   integer, public :: num_domain_r, num_domain_c, num_r, num_c
   integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
-  integer, public, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
+  integer, public, dimension(:), allocatable :: displs_r_world_dim, displs_c_world_dim, scounts_r_world_dim, scounts_c_world_dim
+  integer, public, dimension(:), allocatable :: displs_r_qnt_dim, displs_c_qnt_dim, scounts_r_qnt_dim, scounts_c_qnt_dim
 
   integer :: nummol_per_domain_r, nummol_per_domain_c
   integer :: r_start_offset, c_start_offset
   integer :: residueMol_r, residueMol_c
+  integer, dimension(:), allocatable :: displs_r, displs_c, scounts_r, scounts_c
 
 contains
   subroutine mpi_setup(type)
@@ -97,22 +99,64 @@ contains
     allocate(displs_r(num_domain_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: displs_r"
-      call exit(1)
+      call mpi_abend()
     end if
     allocate(displs_c(num_domain_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: displs_c"
-      call exit(1)
+      call mpi_abend()
     end if
     allocate(scounts_r(num_domain_r), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: scounts_r"
-      call exit(1)
+      call mpi_abend()
     end if
     allocate(scounts_c(num_domain_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: scounts_c"
-      call exit(1)
+      call mpi_abend()
+    end if
+
+    allocate(displs_r_world_dim(num_domain_r), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: displs_r_world_dim"
+      call mpi_abend()
+    end if
+    allocate(displs_c_world_dim(num_domain_c), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: displs_c_world_dim"
+      call mpi_abend()
+    end if
+    allocate(scounts_r_world_dim(num_domain_r), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: scounts_r_world_dim"
+      call mpi_abend()
+    end if
+    allocate(scounts_c_world_dim(num_domain_c), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: scounts_c_world_dim"
+      call mpi_abend()
+    end if
+
+    allocate(displs_r_qnt_dim(num_domain_r), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: displs_r_qnt_dim"
+      call mpi_abend()
+    end if
+    allocate(displs_c_qnt_dim(num_domain_c), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: displs_c_qnt_dim"
+      call mpi_abend()
+    end if
+    allocate(scounts_r_qnt_dim(num_domain_r), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: scounts_r_qnt_dim"
+      call mpi_abend()
+    end if
+    allocate(scounts_c_qnt_dim(num_domain_c), stat=stat)
+    if (stat /=0) then
+      write(*,*) "Allocation failed: scounts_c_qnt_dim"
+      call mpi_abend()
     end if
 
     offset = 0
@@ -150,10 +194,15 @@ contains
     c_end = c_start + num_c - 1
 
     ! in view of memory, for distributing array in parallel
-    displs_r = displs_r * qnt_dim * numframe
-    displs_c = displs_c * qnt_dim * numframe
-    scounts_r = scounts_r * qnt_dim * numframe
-    scounts_c = scounts_c * qnt_dim * numframe
+    displs_r_world_dim = displs_r * world_dim * numframe
+    displs_c_world_dim = displs_c * world_dim * numframe
+    scounts_r_world_dim = scounts_r * world_dim * numframe
+    scounts_c_world_dim = scounts_c * world_dim * numframe
+
+    displs_r_qnt_dim = displs_r * qnt_dim * numframe
+    displs_c_qnt_dim = displs_c * qnt_dim * numframe
+    scounts_r_qnt_dim = scounts_r * qnt_dim * numframe
+    scounts_c_qnt_dim = scounts_c * qnt_dim * numframe
 
     !check if myrank is at the ending boundary and if indexes are coincident
     if (r_group_idx == num_domain_r - 1) then

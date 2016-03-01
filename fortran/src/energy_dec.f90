@@ -597,12 +597,12 @@ contains
 
   subroutine ed_finish()
     implicit none
-    deallocate(engfiles, engfileids, sltfirsttag_list)
-    deallocate(eBinIndexAll, engLocLookupTable, edcorr)
-    if (myrank == root) then
-      deallocate(sltspec_list, numslt_list, nummol_list)
-      deallocate(numpair_list, numframe_list)
-    end if
+    !deallocate(engfiles, engfileids, sltfirsttag_list)
+    !deallocate(eBinIndexAll, engLocLookupTable, edcorr)
+    !if (myrank == root) then
+    !  deallocate(sltspec_list, numslt_list, nummol_list)
+    !  deallocate(numpair_list, numframe_list)
+    !end if
     ! ed_binIndex has been deallocated in the main program
   end subroutine ed_finish
 

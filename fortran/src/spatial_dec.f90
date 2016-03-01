@@ -103,16 +103,22 @@ contains
 
   subroutine sd_broadcastpos()
     if (r_group_idx == 0) then
-      call mpi_scatterv(pos, scounts_c, displs_c, mpi_double_precision, pos_c,&
-                        scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
+      call mpi_scatterv(pos, scounts_c_world_dim, displs_c_world_dim, &
+                        mpi_double_precision, pos_c, &
+                        scounts_c_world_dim(c_group_idx + 1), &
+                        mpi_double_precision, root, row_comm, ierr)
     end if
-    call mpi_bcast(pos_c, scounts_c(c_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
+    call mpi_bcast(pos_c, scounts_c_world_dim(c_group_idx + 1), &
+                   mpi_double_precision, root, col_comm, ierr)
 
     if (c_group_idx == 0) then
-      call mpi_scatterv(pos, scounts_r, displs_r, mpi_double_precision, pos_r,&
-                        scounts_r(r_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
+      call mpi_scatterv(pos, scounts_r_world_dim, displs_r_world_dim, &
+                        mpi_double_precision, pos_r,&
+                        scounts_r_world_dim(r_group_idx + 1), &
+                        mpi_double_precision, root, col_comm, ierr)
     end if
-    call mpi_bcast(pos_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
+    call mpi_bcast(pos_r, scounts_r_world_dim(r_group_idx + 1), &
+                   mpi_double_precision, root, row_comm, ierr)
     deallocate(pos)
   end subroutine sd_broadcastpos
 
@@ -229,7 +235,7 @@ contains
 
   subroutine sd_finish()
     implicit none
-    deallocate(pos_r, pos_c, sdcorr, sdpaircount)
+    !deallocate(pos_r, pos_c, sdcorr, sdpaircount)
     ! sd_binIndex has been deallocated in the main program
   end subroutine sd_finish
 end module spatial_dec

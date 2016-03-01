@@ -113,7 +113,7 @@ contains
         allocate(start_index(nummoltype), stat=stat)
         if (stat /=0) then
           write(*,*) "Allocation failed: start_index"
-          call exit(1)
+          call mpi_abend()
         end if
 
         do n = 1, nummoltype
@@ -358,6 +358,11 @@ contains
       end if
     end if
 
+    if (dec_mode == dec_mode_vsc .and. do_ed) then
+      write(*,*) 'Sorry, buddy. -' // dec_mode_vsc // " with -ed have not been implemented."
+      call mpi_abend()
+    end if
+
     if (temperature == -1) then
       if (myrank == root) then
         write(*,*) "temperature must be given!"
@@ -426,7 +431,7 @@ contains
     end if
     allocate(qnt_c(qnt_dim, numframe, num_c), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: qnt_r"
+      write(*,*) "Allocation failed: qnt_c"
       call mpi_abend()
     end if
 
@@ -582,16 +587,22 @@ contains
     if (myrank == root) write(*,*) "start broadcasting trajectory"
     starttime = mpi_wtime()
     if (r_group_idx == 0) then
-      call mpi_scatterv(qnt, scounts_c, displs_c, mpi_double_precision, qnt_c,&
-                        scounts_c(c_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
+      call mpi_scatterv(qnt, scounts_c_qnt_dim, displs_c_qnt_dim, &
+                        mpi_double_precision, qnt_c,&
+                        scounts_c_qnt_dim(c_group_idx + 1), &
+                        mpi_double_precision, root, row_comm, ierr)
     end if
-    call mpi_bcast(qnt_c, scounts_c(c_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
+    call mpi_bcast(qnt_c, scounts_c_qnt_dim(c_group_idx + 1), &
+                   mpi_double_precision, root, col_comm, ierr)
 
     if (c_group_idx == 0) then
-      call mpi_scatterv(qnt, scounts_r, displs_r, mpi_double_precision, qnt_r,&
-                        scounts_r(r_group_idx + 1), mpi_double_precision, root, col_comm, ierr)
+      call mpi_scatterv(qnt, scounts_r_qnt_dim, displs_r_qnt_dim, &
+                        mpi_double_precision, qnt_r, &
+                        scounts_r_qnt_dim(r_group_idx + 1), &
+                        mpi_double_precision, root, col_comm, ierr)
     end if
-    call mpi_bcast(qnt_r, scounts_r(r_group_idx + 1), mpi_double_precision, root, row_comm, ierr)
+    call mpi_bcast(qnt_r, scounts_r_qnt_dim(r_group_idx + 1), &
+                   mpi_double_precision, root, row_comm, ierr)
 
     deallocate(qnt)
 
@@ -634,7 +645,7 @@ contains
       allocate(corr_tmp(2*maxlag+1), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: corr_tmp"
-        call exit(1)
+        call mpi_abend()
       end if
       corr_tmp = 0d0
     end if
@@ -802,7 +813,10 @@ contains
     character(len=*), parameter :: ATTR_VERSION = "version", &
                                    ATTR_TYPE = "type", &
                                    ATTR_UNIT = "unit", &
-                                   OUT_TYPE = "CorrFile"
+                                   OUT_TYPE = "CorrFile", &
+                                   ATTR_QNT = "quantity", &
+                                   ATTR_QNT_EC = "electrical conductivity", &
+                                   ATTR_QNT_VSC = "viscosity"
     !/Dataset
     character(len=*), parameter :: DSETNAME_VOLUME = "volume", &
                                    DSETNAME_TEMP = "temperature", &
@@ -816,6 +830,46 @@ contains
                                    DSETNAME_DECCORR = "decCorr", &
                                    DSETNAME_DECPAIRCOUNT = "decPairCount"
 
+    character(len=*), parameter :: ec_unit_volume = "nm$^3$", &
+                                   ec_unit_corr = "nm$^2$ ps$^{-2}$", &
+                                   ec_unit_temperature = "K", &
+                                   ec_unit_time = "ps", &
+                                   ec_unit_charge = "e", &
+                                   ec_unit_decbins_sd = "nm", &
+                                   ec_unit_decbins_ed = "kcal mol$^{-1}$"
+
+    character(len=*), parameter :: vsc_unit_volume = "dimensionless", &
+                                   vsc_unit_corr = "dimensionless", &
+                                   vsc_unit_temperature = "dimensionless", &
+                                   vsc_unit_time = "dimensionless", &
+                                   vsc_unit_charge = "NA", &
+                                   vsc_unit_decbins_sd = "dimensionless", &
+                                   vsc_unit_decbins_ed = "dimensionless"
+
+    character(len=line_len) :: qnt_type, unit_volume, unit_corr, unit_time, &
+                               unit_decbins_sd, unit_decbins_ed, &
+                               unit_temperature, unit_charge
+
+    select case (dec_mode)
+    case (dec_mode_ec0, dec_mode_ec1)
+      qnt_type = ATTR_QNT_EC
+      unit_volume = ec_unit_volume
+      unit_corr = ec_unit_corr
+      unit_time = ec_unit_time
+      unit_temperature = ec_unit_temperature
+      unit_charge = ec_unit_charge
+      unit_decbins_sd = ec_unit_decbins_sd
+      unit_decbins_ed = ec_unit_decbins_ed
+    case (dec_mode_vsc)
+      qnt_type = ATTR_QNT_VSC
+      unit_volume = vsc_unit_volume
+      unit_corr = vsc_unit_corr
+      unit_time = vsc_unit_time
+      unit_temperature = vsc_unit_temperature
+      unit_charge = vsc_unit_charge
+      unit_decbins_sd = vsc_unit_decbins_sd
+      unit_decbins_ed = vsc_unit_decbins_ed
+    end select
 
     allocate(timeLags(maxlag+1), stat=stat)
     if (stat /=0) then
@@ -835,6 +889,7 @@ contains
     !create and write attributes
     call H5LTset_attribute_string_f(corrfileio, GROUP_ROOT, ATTR_VERSION, decond_version, ierr)
     call H5LTset_attribute_string_f(corrfileio, GROUP_ROOT, ATTR_TYPE, OUT_TYPE, ierr)
+    call H5LTset_attribute_string_f(corrfileio, GROUP_ROOT, ATTR_QNT, trim(qnt_type), ierr)
 
     !create and write datasets
     !volume
@@ -843,7 +898,7 @@ contains
     call H5Dwrite_f(dset_id, H5T_NATIVE_DOUBLE, product(cell), [0_hsize_t], ierr)
     call H5Dclose_f(dset_id, ierr)
     call H5Sclose_f(space_id, ierr)
-    call H5LTset_attribute_string_f(corrfileio, DSETNAME_VOLUME, ATTR_UNIT, "nm$^3$", ierr)
+    call H5LTset_attribute_string_f(corrfileio, DSETNAME_VOLUME, ATTR_UNIT, unit_volume, ierr)
 
     !temperature
     call H5Screate_f(H5S_SCALAR_F, space_id, ierr)
@@ -851,11 +906,11 @@ contains
     call H5Dwrite_f(dset_id, H5T_NATIVE_DOUBLE, temperature, [0_hsize_t], ierr)
     call H5Dclose_f(dset_id, ierr)
     call H5Sclose_f(space_id, ierr)
-    call H5LTset_attribute_string_f(corrfileio, DSETNAME_TEMP, ATTR_UNIT, "K", ierr)
+    call H5LTset_attribute_string_f(corrfileio, DSETNAME_TEMP, ATTR_UNIT, unit_temperature, ierr)
 
     !charge
     call H5LTmake_dataset_int_f(corrfileio, DSETNAME_CHARGE, 1, [size(charge, kind=hsize_t)], charge, ierr)
-    call H5LTset_attribute_string_f(corrfileio, DSETNAME_CHARGE, ATTR_UNIT, "e", ierr)
+    call H5LTset_attribute_string_f(corrfileio, DSETNAME_CHARGE, ATTR_UNIT, unit_charge, ierr)
 
     !numMol
     call H5LTmake_dataset_int_f(corrfileio, DSETNAME_NUMMOL, 1, &
@@ -864,13 +919,13 @@ contains
     !timeLags
     call H5LTmake_dataset_double_f(corrfileio, DSETNAME_TIMELAGS, 1, [size(timeLags, kind=hsize_t)], timeLags, ierr)
     call H5Dopen_f(corrfileio, DSETNAME_TIMELAGS, dset_timeLags, ierr)
-    call H5LTset_attribute_string_f(corrfileio, DSETNAME_TIMELAGS, ATTR_UNIT, "ps", ierr)
+    call H5LTset_attribute_string_f(corrfileio, DSETNAME_TIMELAGS, ATTR_UNIT, unit_time, ierr)
 
     !ncorr
     call H5LTmake_dataset_double_f(corrfileio, DSETNAME_NCORR, 2, &
         [size(ncorr, 1, kind=hsize_t), size(ncorr, 2, kind=hsize_t)], ncorr, ierr)
     call H5Dopen_f(corrfileio, DSETNAME_NCORR, dset_ncorr, ierr)
-    call H5LTset_attribute_string_f(corrfileio, DSETNAME_NCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
+    call H5LTset_attribute_string_f(corrfileio, DSETNAME_NCORR, ATTR_UNIT, unit_corr, ierr)
 
     if (do_sd) then
       !create a group for storing spatial-decomposition data
@@ -880,7 +935,7 @@ contains
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECCORR, 3, &
           [size(sdcorr, 1, kind=hsize_t), size(sdcorr, 2, kind=hsize_t), size(sdcorr, 3, kind=hsize_t)], sdcorr, ierr)
       call H5Dopen_f(grp_sd_id, DSETNAME_DECCORR, dset_sdcorr, ierr)
-      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
+      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECCORR, ATTR_UNIT, unit_corr, ierr)
 
       !decPairCount
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECPAIRCOUNT, 2, &
@@ -890,7 +945,7 @@ contains
       !decBins
       call H5LTmake_dataset_double_f(grp_sd_id, DSETNAME_DECBINS, 1, [size(rbins, kind=hsize_t)], rbins, ierr)
       call H5Dopen_f(grp_sd_id, DSETNAME_DECBINS, dset_rbins, ierr)
-      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECBINS, ATTR_UNIT, "nm", ierr)
+      call H5LTset_attribute_string_f(grp_sd_id, DSETNAME_DECBINS, ATTR_UNIT, unit_decbins_sd, ierr)
     end if
 
     if (do_ed) then
@@ -901,7 +956,7 @@ contains
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECCORR, 3, &
           [size(edcorr, 1, kind=hsize_t), size(edcorr, 2, kind=hsize_t), size(edcorr, 3, kind=hsize_t)], edcorr, ierr)
       call H5Dopen_f(grp_ed_id, DSETNAME_DECCORR, dset_edcorr, ierr)
-      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECCORR, ATTR_UNIT, "nm$^2$ ps$^{-2}$", ierr)
+      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECCORR, ATTR_UNIT, unit_corr, ierr)
 
       !decPairCount
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECPAIRCOUNT, 2, &
@@ -911,7 +966,7 @@ contains
       !decBins
       call H5LTmake_dataset_double_f(grp_ed_id, DSETNAME_DECBINS, 1, [size(ebins, kind=hsize_t)], ebins, ierr)
       call H5Dopen_f(grp_ed_id, DSETNAME_DECBINS, dset_ebins, ierr)
-      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECBINS, ATTR_UNIT, "kcal mol$^{-1}$", ierr)
+      call H5LTset_attribute_string_f(grp_ed_id, DSETNAME_DECBINS, ATTR_UNIT, unit_decbins_ed, ierr)
     end if
 
     !attach scale dimension
@@ -945,9 +1000,9 @@ contains
   end subroutine output_corr
 
   subroutine finish()
-    deallocate(ncorr, charge, qnt_r, qnt_c, start_index)
     if (do_sd) call sd_finish()
     if (do_ed) call ed_finish()
+    !deallocate(ncorr, charge, qnt_r, qnt_c, start_index)
   end subroutine finish
 
   integer function count_arg(i, num_arg)
@@ -991,10 +1046,10 @@ contains
       read(logio, "(A"//line_len_str//")", iostat=stat) line
       if (stat > 0) then
         write(*,*) "Error reading line"
-        call exit(1)
+        call mpi_abend()
       else if (stat < 0) then
         write(*,*) "Unable to find 'A V E R A G E S' in logfile ", trim(adjustl(logfile))
-        call exit(1)
+        call mpi_abend()
       end if
 
       if (found_average) then
@@ -1004,7 +1059,7 @@ contains
           read(logio, "(A"//line_len_str//")", iostat=stat) line
           if (stat > 0) then
             write(*,*) "Error reading temperature record"
-            call exit(1)
+            call mpi_abend()
           end if
           read(line(RECORD_LEN * (temp_idx - 1) + 1: RECORD_LEN * temp_idx), *) getTfromLog
           return
