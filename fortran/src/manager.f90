@@ -842,7 +842,7 @@ contains
                                    vsc_unit_corr = "dimensionless", &
                                    vsc_unit_temperature = "dimensionless", &
                                    vsc_unit_time = "dimensionless", &
-                                   vsc_unit_charge = "NA", &
+                                   vsc_unit_charge = "dimensionless", &
                                    vsc_unit_decbins_sd = "dimensionless", &
                                    vsc_unit_decbins_ed = "dimensionless"
 
