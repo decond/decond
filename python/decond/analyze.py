@@ -84,7 +84,7 @@ class CorrFile(h5py.File):
 
     def _read_corr_buffer(self):
         if Quantity.key in self.attrs:
-            self.buffer.quantity = self.attrs[Quantity.key]
+            self.buffer.quantity = np.string_(self.attrs[Quantity.key])
         else:
             self.buffer.quantity = np.string_(Quantity.econd)
         self.buffer.charge = self['charge'][...]
@@ -176,9 +176,16 @@ class CorrFile(h5py.File):
 
         self.buffer.nDCesaro = cesaro_integrate(self.buffer.nCorr,
                                                 self.buffer.timeLags)
-        self.buffer.nDTotalCesaro = np.sum(
-                self.buffer.nDCesaro *
-                (self.zz * self.ww)[:, np.newaxis], axis=0)
+
+        qnttype = self.buffer.quantity.decode()
+        if qnttype == Quantity.econd:
+            self.buffer.nDTotalCesaro = np.sum(
+                    self.buffer.nDCesaro *
+                    (self.zz * self.ww)[:, np.newaxis], axis=0)
+        elif qnttype == Quantity.vsc:
+            self.buffer.nDTotalCesaro = np.sum(self.buffer.nDCesaro, axis=0)
+        else:
+            raise Error("Oops! You shouldn't have been here!")
 
         # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
         nCorr_unit_str = self.buffer.nCorr_unit.decode()
@@ -328,6 +335,12 @@ class DecondFile(CorrFile):
     def _add_sample(self, samples, fit, report):
         if not isinstance(samples, list):
             samples = [samples]
+
+        qnttype_list = [get_qnttype(sample) for sample in samples]
+        if not all(q == qnttype_list[0] for q in qnttype_list):
+            raise Error("All input samples should have the same quantity type!")
+
+        self.buffer.quantity = qnttype_list[0]
 
         if self.buffer.numSample == 0:
             if (report):
