@@ -7,6 +7,28 @@ from enum import Enum
 from ._version import __version__
 
 
+class Quantity:
+    key = 'quantity'
+    econd = 'electrical conductivity'
+    vsc = 'viscosity'
+
+
+class Unit:
+    dimless = 'dimensionless'
+    electric_charge = 'e'
+    si_time = 's'
+    si_length = 'm'
+    si_energy = 'J'
+    si_siemens = 'S'
+    si_temperature = 'K'
+    default_unit = {'time': si_time,
+                    'length': si_length,
+                    'energy': 'k' + si_energy,
+                    'siemens': si_siemens,
+                    'temperature': si_temperature}
+    gmx_econd_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
+
+
 class DecType(Enum):
     spatial = 'spatialDec'
     energy = 'energyDec'
@@ -61,6 +83,10 @@ class CorrFile(h5py.File):
                 type(self).__name__, filetype))
 
     def _read_corr_buffer(self):
+        if Quantity.key in self.attrs:
+            self.buffer.quantity = self.attrs[Quantity.key]
+        else:
+            self.buffer.quantity = np.string_(Quantity.econd)
         self.buffer.charge = self['charge'][...]
         self.buffer.charge_unit = self['charge'].attrs['unit']
         self.buffer.numMol = self['numMol'][...]
@@ -150,17 +176,21 @@ class CorrFile(h5py.File):
 
         self.buffer.nDCesaro = cesaro_integrate(self.buffer.nCorr,
                                                 self.buffer.timeLags)
-
-        # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
-        self.buffer.nDCesaro_unit = np.string_(
-                self.buffer.nCorr_unit.decode().split()[0])
-
         self.buffer.nDTotalCesaro = np.sum(
                 self.buffer.nDCesaro *
                 (self.zz * self.ww)[:, np.newaxis], axis=0)
 
-        self.buffer.nDTotalCesaro_unit = np.string_(
-                self.buffer.nCorr_unit.decode().split()[0])
+        # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
+        nCorr_unit_str = self.buffer.nCorr_unit.decode()
+        if nCorr_unit_str == Unit.dimless:
+            self.buffer.nDCesaro_unit = np.string_(Unit.dimless)
+            self.buffer.nDTotalCesaro_unit = np.string_(Unit.dimless)
+        else:
+            self.buffer.nDCesaro_unit = np.string_(
+                    self.buffer.nCorr_unit.decode().split()[0])
+
+            self.buffer.nDTotalCesaro_unit = np.string_(
+                    self.buffer.nCorr_unit.decode().split()[0])
 
         def do_dec(buf):
             buf.decDCesaro = cesaro_integrate(
@@ -176,6 +206,7 @@ class CorrFile(h5py.File):
     def _write_buffer(self):
         self.attrs['version'] = np.string_(__version__)
         self.attrs['type'] = np.string_(type(self).__name__)
+        self.attrs[Quantity.key] = self.buffer.quantity
         self['charge'] = self.buffer.charge
         self['charge'].attrs['unit'] = self.buffer.charge_unit
         self['numMol'] = self.buffer.numMol
@@ -544,11 +575,14 @@ class DecondFile(CorrFile):
             setattr(buf, data_name + '_err', data_err)
 
             unit_ref = getattr(buf, unit_ref_name)
-            unit_list = unit_ref.decode().split()
-            unit_L2 = unit_list[0]
-            unit_T = unit_list[1].split(sep='$')[0]
-            unit_T_1 = "${0}^{{-1}}$".format(unit_T)
-            unit = unit_L2 + ' ' + unit_T_1
+            if unit_ref.decode() == Unit.dimless:
+                unit = Unit.dimless
+            else:
+                unit_list = unit_ref.decode().split()
+                unit_L2 = unit_list[0]
+                unit_T = unit_list[1].split(sep='$')[0]
+                unit_T_1 = "{0}$^{{-1}}$".format(unit_T)
+                unit = unit_L2 + ' ' + unit_T_1
             setattr(buf, data_name + '_unit', np.string_(unit))
 
         fit_data('nD', 'nCorr_unit')
@@ -676,6 +710,10 @@ class FitRangeError(Error):
 class ZeroStdError(Error):
     def __init__(self, std):
         self.std = std
+
+
+class UnknownUnitError(Error):
+    pass
 
 
 class NotImplementedError(Error):
@@ -960,11 +998,73 @@ def _zz(charge, nummol):
     return zz
 
 
-def _nD_to_ec_const(temperature, volume):
-    beta = 1 / (const.k * temperature)
-    nD_to_ec = beta / volume
-    nD_to_ec *= const.e**2 / const.nano**3 * (const.nano**2 / const.pico)
-    return nD_to_ec
+def _nD_to_qnt_const(decname):
+    qnttype = get_qnttype(decname)
+    with h5py.File(decname, 'r') as f:
+        vol = f['volume'][...]
+        vol_unit = f['volume'].attrs['unit'].decode()
+        temp = f['temperature'][...]
+        temp_unit = f['temperature'].attrs['unit'].decode()
+        nD_unit = f['nD'].attrs['unit'].decode()
+        charge_unit = f['charge'].attrs['unit'].decode()
+
+    if temp_unit == Unit.dimless:
+        kB = 1
+    elif temp_unit == Unit.si_temperature:
+        kB = const.k
+    else:
+        raise UnknownUnitError('temperature unit "{}" cannot be '
+                               'recognized'.format(temp_unit))
+    if vol_unit == Unit.dimless:
+        pass
+    elif vol_unit == "nm$^3$":
+        vol *= const.nano**3
+    else:
+        raise UnknownUnitError('volume unit "{}" cannot be '
+                               'recognized'.format(vol_unit))
+
+    if charge_unit == Unit.dimless:
+        e = 1
+    elif charge_unit == Unit.electric_charge:
+        e = const.e
+    else:
+        raise UnknownUnitError('charge unit "{}" cannot be '
+                               'recognized'.format(charge_unit))
+
+    if nD_unit == Unit.dimless:
+        fac = 1
+    elif nD_unit in Unit.gmx_econd_nD_list:
+        fac = (const.nano**2 / const.pico)
+    else:
+        raise UnknownUnitError('nD_unit "{}" cannot be '
+                               'recognized'.format(nD_unit))
+
+    if qnttype == Quantity.econd:
+        fac *= e**2
+
+    nD_to_qnt = fac / (kB * temp * vol)
+    return nD_to_qnt
+
+
+def get_qnttype(decname):
+    """
+    Return quantity string
+    """
+    with h5py.File(decname, 'r') as f:
+        if Quantity.key in f.attrs:
+            qnttype = f.attrs[Quantity.key].decode()
+        else:
+            qnttype = Quantity.econd
+
+    return qnttype
+
+
+def _check_qnttype(decname, required_qnt):
+    quantity = get_qnttype(decname)
+    if quantity != required_qnt:
+        raise Error('The file {} is of quantity "{}", but "{}" '
+                    'is required.'.format(decname, quantity,
+                                          required_qnt))
 
 
 def get_fit(decname):
@@ -973,8 +1073,11 @@ def get_fit(decname):
     """
     with h5py.File(decname, 'r') as f:
         fit = f['fit'][...]
-        fit *= const.pico
-        fit_unit = "s"
+        if f['fit'].attrs['unit'].decode() == Unit.dimless:
+            fit_unit = Unit.dimless
+        else:
+            fit *= const.pico
+            fit_unit = Unit.si_time
     return fit, fit_unit
 
 
@@ -987,8 +1090,11 @@ def get_rdf(decname):
         rbins = gid['decBins'][...]
         rdf = _paircount_to_rdf(gid['decPairCount'][...], rbins,
                                 f['numMol'][...], f['volume'][...])
-        rbins *= const.nano
-        rbins_unit = "m"
+        if gid['decBins'].attrs['unit'].decode() == Unit.dimless:
+            rbins_unit = Unit.dimless
+        else:
+            rbins *= const.nano
+            rbins_unit = Unit.si_length
 
         return rdf, rbins, rbins_unit
 
@@ -1002,8 +1108,14 @@ def get_edf(decname):
         ebins = gid['decBins'][...] * const.calorie  # kJ mol^-1
         volume = f['volume'][...] * const.nano**3  # m^3
         edf = _paircount_to_edf(gid['decPairCount'][...], ebins, volume)
-        edf_unit = "m$^{-3}$ kJ$^{-1} mol"
-        ebins_unit = "kJ mol$^{-1}$"
+        if gid['decBins'].attrs['unit'].decode() == Unit.dimless:
+            edf_unit = Unit.dimless
+            ebins_unit = Unit.dimless
+        else:
+            edf_unit = "{length}$^{{-3}}$ {energy}$^{{-1}} mol".format(
+                    **Unit.default_unit)
+            ebins_unit = "{energy} mol$^{{-1}}$".format(
+                    **Unit.default_unit)
         return edf, edf_unit, ebins, ebins_unit
 
 
@@ -1011,18 +1123,24 @@ def get_diffusion(decname):
     """
     Return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
     """
+    _check_qnttype(decname, Quantity.econd)
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
         nD = f['nD'][:, :num_moltype]
+        nD_unit = f['nD'].attrs['unit'].decode()
         nD_err = f['nD_err'][:, :num_moltype]
 
         diffusion = nD / nummol  # L^2 T^-1  [fit, num_moltype]
         diffusion_err = nD_err / nummol
-        cc = const.nano**2 / const.pico
-        diffusion *= cc
-        diffusion_err *= cc
-        diffusion_unit = "m$^2$ s$^{-1}$"
+        if nD_unit == Unit.dimless:
+            diffusion_unit = Unit.dimless
+        else:
+            cc = const.nano**2 / const.pico
+            diffusion *= cc
+            diffusion_err *= cc
+            diffusion_unit = "{length}$^2$ {time}$^{{-1}}$".format(
+                    **Unit.default_unit)
 
     fit, fit_unit = get_fit(decname)
     return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
@@ -1035,49 +1153,66 @@ def get_decD(decname, dectype):
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         decD = gid['decD'][...]  # L^2 T^-1
+        decD_unit = gid['decD'].attrs['unit'].decode()
         decD_err = gid['decD_err'][...]
         decBins = gid['decBins'][...]
         ccD = const.nano**2 / const.pico
         decD *= ccD
         decD_err *= ccD
-        decD_unit = "m$^2$ s$^{-1}$"
+        decD_unit = "{length}$^2$ {time}$^{{-1}}$".format(
+                **Unit.default_unit)
         if dectype is DecType.spatial:
             decBins *= const.nano
-            decBins_unit = "m"
+            decBins_unit = "{length}".format(**Unit.default_unit)
         elif dectype is DecType.energy:
             decBins *= const.calorie
-            decBins_unit = "kJ mol$^{-1}$"
+            decBins_unit = "{energy} mol$^{{-1}}$".format(
+                    **Unit.default_unit)
 
     fit, fit_unit = get_fit(decname)
     return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
 
 
-def get_ec(decname):
+def get_quantity(decname):
     """
     Return
-    ec_total, ec_total_err,
-    ec[:num_moltype], ec_err[:num_moltype], ec_unit,
+    qnt_total, qnt_total_err,
+    qnt[:num_moltype], qnt_err[:num_moltype], qnt_unit,
     fit, fit_unit
     """
+    qnttype = get_qnttype(decname)
+    nD2qnt = _nD_to_qnt_const(decname)
     with h5py.File(decname, 'r') as f:
-        volume = f['volume'][...]
-        temperature = f['temperature'][...]
         nDTotal = f['nDTotal'][...]
         nDTotal_err = f['nDTotal_err'][...]
         nD = f['nD'][...]
+        nD_unit = f['nD'].attrs['unit'].decode()
         nD_err = f['nD_err'][...]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
-        zz = _zz(charge, nummol)
-        cc = _nD_to_ec_const(temperature, volume)
-        ec_total = nDTotal * cc
-        ec_totol_err = nDTotal_err * cc
-        ec = nD * zz * cc
-        ec_err = nD_err * abs(zz) * cc
-        ec_unit = "S m$^{-1}$"
+        if qnttype == Quantity.econd:
+            zz = _zz(charge, nummol)
+            if nD_unit == Unit.dimless:
+                qnt_unit = Unit.dimless
+            elif nD_unit in Unit.gmx_econd_nD_list:
+                qnt_unit = "{siemens} m$^{{-1}}$".format(**Unit.default_unit)
+            else:
+                raise UnknownUnitError('nD_unit "{}" cannot be '
+                                       'recognized'.format(nD_unit))
+        elif qnttype == Quantity.vsc:
+            zz = 1
+            if nD_unit == Unit.dimless:
+                qnt_unit = Unit.dimless
+            else:
+                raise UnknownUnitError('nD_unit "{}" cannot be recognized '
+                                       'for viscosity'.format(nD_unit))
+        qnt_total = nDTotal * nD2qnt
+        qnt_totol_err = nDTotal_err * nD2qnt
+        qnt = nD * zz * nD2qnt
+        qnt_err = nD_err * abs(zz) * nD2qnt
 
     fit, fit_unit = get_fit(decname)
-    return ec_total, ec_totol_err, ec, ec_err, ec_unit, fit, fit_unit
+    return qnt_total, qnt_totol_err, qnt, qnt_err, qnt_unit, fit, fit_unit
 
 
 def _symmetrize_array(arr, decBins, center=0, axis=-1):
@@ -1107,6 +1242,8 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
     Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
            ec_local, ec_nonlocal
     """
+    _check_qnttype(decname, Quantity.econd)
+    nD2ec = _nD_to_qnt_const(decname)
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         nummol = f['numMol'][...]
@@ -1173,16 +1310,17 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
               const.e**2)
         ec_nonlocal *= cc
         ec_local *= cc
-        ec_dec_unit = "S m$^{-1}$"
+        ec_dec_unit = "{siemens} {length}$^{{-1}}$".format(
+                **Unit.default_unit)
         if dectype is DecType.spatial:
             decBins *= const.nano
-            decBins_unit = "m"
+            decBins_unit = "{length}".format(**Unit.default_unit)
         elif dectype is DecType.energy:
             decBins *= const.calorie
-            decBins_unit = "kJ mol$^{-1}$"
+            decBins_unit = "{energy} mol$^{{-1}}$".format(
+                    **Unit.default_unit)
 
-        ec_auto = (nD[:, :num_moltype] * zz[:num_moltype] *
-                   _nD_to_ec_const(temperature, volume))
+        ec_auto = (nD[:, :num_moltype] * zz[:num_moltype] * nD2ec)
         ec_dec = ec_auto[:, :, np.newaxis] * np.ones_like(decBins)
 
         # ec_dec = ec_auto + ec_cross = ec_auto + (ec_local + ec_nonlocal)
@@ -1302,12 +1440,15 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
           const.nano**2 / const.pico *
           const.e**2)
     ec_dec_cross_IL *= cc
-    ec_dec_cross_IL_unit = "S m$^{-1}$"
+    ec_dec_cross_IL_unit = "{siemens} {length}$^{{-1}}$".format(
+            **Unit.default_unit)
     ec_dec_cross_I *= cc
-    ec_dec_cross_I_unit = "S m$^{-1}$"
+    ec_dec_cross_I_unit = "{siemens} {length}$^{{-1}}$".format(
+            **Unit.default_unit)
 
     decBins *= const.calorie
-    decBins_unit = "kJ mol$^{-1}$"
+    decBins_unit = "{energy} mol$^{{-1}}$".format(
+            **Unit.default_unit)
 
     fit, fit_unit = get_fit(decname)
 
@@ -1356,30 +1497,48 @@ def window_decond(outname, decname, window, report=True):
 def report_decond(decname):
     print()
 
-    diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
-        get_diffusion(decname)
-    print("Diffusion")
-    print("=========")
-    print("{:<15} {:<}".format(
-        'Fit (ps)', 'Diffusion (' + diffusion_unit + ')'))
-    for i in range(len(fit)):
-        print("{:<15}    {:<}".format(str(fit[i] * 1e12), str(diffusion[i])))
-        print("{:<15} +/-{:<}".format('', str(diffusion_err[i])))
+    quantity = get_qnttype(decname)
+    if quantity == Quantity.econd:
+        diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
+            get_diffusion(decname)
+        print("Diffusion")
+        print("=========")
+        print("{:<15} {:<}".format(
+            'Fit (ps)', 'Diffusion (' + diffusion_unit + ')'))
+        for i in range(len(fit)):
+            print("{:<15}    {:<}".format(str(fit[i] / const.pico),
+                                          str(diffusion[i])))
+            print("{:<15} +/-{:<}".format('', str(diffusion_err[i])))
+            print()
+
         print()
 
-    print()
+        ec_total, ec_total_err, ec, ec_err, ec_unit, fit, fit_unit = \
+            get_quantity(decname)
+        print("Electrical conductivity")
+        print("=======================")
+        print("{:<15} {:<15}".format(
+            'Fit (ps)', 'Electrical conductivity (' + ec_unit + ')'))
+        for i in range(len(fit)):
+            print("{:<15}    {:<}".format(str(fit[i] / const.pico),
+                                          str(ec[i])))
+            print("{:<15} +/-{:<}".format('', str(ec_err[i])))
+            print("{:<15} Total: {:<} +/- {:<}".format(
+                '', str(ec_total[i]), str(ec_total_err[i])))
+            print()
 
-    ec_total, ec_total_err, ec, ec_err, ec_unit, fit, fit_unit = \
-        get_ec(decname)
-    print("Electrical conductivity")
-    print("=======================")
-    print("{:<15} {:<15}".format(
-        'Fit (ps)', 'Electrical conductivity (' + ec_unit + ')'))
-    for i in range(len(fit)):
-        print("{:<15}    {:<}".format(str(fit[i] * 1e12), str(ec[i])))
-        print("{:<15} +/-{:<}".format('', str(ec_err[i])))
-        print("{:<15} Total: {:<} +/- {:<}".format(
-            '', str(ec_total[i]), str(ec_total_err[i])))
-        print()
+    elif quantity == Quantity.vsc:
+        vsc_total, vsc_total_err, vsc, vsc_err, vsc_unit, fit, fit_unit = \
+            get_quantity(decname)
+        print("Viscosity")
+        print("=======================")
+        print("{:<15} {:<15}".format(
+            'Fit', 'Viscosity (' + vsc_unit + ')'))
+        for i in range(len(fit)):
+            print("{:<15}    {:<}".format(str(fit[i]), str(vsc[i])))
+            print("{:<15} +/-{:<}".format('', str(vsc_err[i])))
+            print("{:<15} Total: {:<} +/- {:<}".format(
+                '', str(vsc_total[i]), str(vsc_total_err[i])))
+            print()
 
     print()
