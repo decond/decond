@@ -1,30 +1,29 @@
 program trjconv2com
-  use utility, only : handle
-  use xdr, only : open_trajectory, close_trajectory, read_trajectory, write_trajectory, get_natom
+  use, intrinsic :: iso_fortran_env, only: real64
+  use xdr, only : open_xdr, close_xdr, read_xdr, write_xdr, read_natom_xdr
   use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
-  integer :: num_dataArg, i, j, k, n, totNumMol, t, sysNumAtom
+  integer, parameter :: rk = real64
+  integer :: num_dataArg, i, j, k, n, totnummol, t, sysnumatom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   character(len=128) :: topFilename
-  type(handle) :: outFileHandle, dataFileHandle, topFileHandle
+  integer :: outFileHandle, dataFileHandle, topFileHandle
   integer :: numFrame, stat, numMolType, numFrameRead, percent
-  integer :: molTypePairIndex, molTypePairAllIndex, tmp_i, skip
+  integer :: moltypepair_idx, moltypepair_allidx, tmp_i, skip
   integer, allocatable :: charge(:), start_index(:)
   character(len=10) :: tmp_str
-  real(8) :: cell(3), timestep, tmp_r
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), pos_com(:, :), vel_com(:, :)
+  real(rk) :: cell(3), timestep, tmp_r
+  real(rk), allocatable :: pos_tmp(:, :), vel_tmp(:, :), pos_com(:, :), vel_com(:, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), dummy_null
+  real(rk), allocatable :: time(:), dummy_null
 
-  logical :: is_periodic
   type(system) :: sys
 
   num_dataArg = command_argument_count() - num_parArg
 
-  is_periodic = .true.
   if (num_dataArg < num_argPerData .or. mod(num_dataArg, num_argPerData) /= 0) then
     write(*,*) "usage: $trjconv2com <outfile> <infile.trr> <topfile.top> <numFrameToRead> &
                &<skip> <molecule1> <start_index1> [<molecule2> <start_index2>...]"
@@ -89,29 +88,29 @@ program trjconv2com
   do n = 1, numMolType
     charge(n) = sum(sys%mol(n)%atom(:)%charge)
   end do
-  totNumMol = sum(sys%mol(:)%num)
+  totnummol = sum(sys%mol(:)%num)
 
   !read trajectory
   write(*,*) "start converting trajectory..."
-  sysNumAtom = get_natom(dataFilename)
-  write(*,*) "sysNumAtom=", sysNumAtom
+  sysnumatom = read_natom_xdr(dataFilename)
+  write(*,*) "sysnumatom=", sysnumatom
 
-  allocate(pos_com(3, totNumMol), stat=stat)
+  allocate(pos_com(3, totnummol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos"
     call exit(1)
   end if 
-  allocate(vel_com(3, totNumMol), stat=stat)
+  allocate(vel_com(3, totnummol), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel"
     call exit(1)
   end if 
-  allocate(pos_tmp(3, sysNumAtom), stat=stat)
+  allocate(pos_tmp(3, sysnumatom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: pos_tmp"
     call exit(1)
   end if 
-  allocate(vel_tmp(3, sysNumAtom), stat=stat)
+  allocate(vel_tmp(3, sysnumatom), stat=stat)
   if (stat /=0) then
     write(*,*) "Allocation failed: vel_tmp"
     call exit(1)
@@ -123,12 +122,12 @@ program trjconv2com
   end if 
 
   numFrameRead = 0
-  call open_trajectory(dataFileHandle, dataFilename)
-  call open_trajectory(outFileHandle, outFilename, 'w')
+  call open_xdr(dataFileHandle, dataFilename)
+  call open_xdr(outFileHandle, outFilename, 'w')
   percent = numFrame / 100
   do i = 1, numFrame
     if (mod(i, percent) == 0) write(*,*) "progress: ", i / percent, "%"
-    call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, time(i), stat)
+    call read_xdr(dataFileHandle, sysnumatom, pos_tmp, vel_tmp, cell, time(i), stat)
     if (stat /= 0) then
       write(*,*) "Reading trajectory error"
       call exit(1)
@@ -136,9 +135,9 @@ program trjconv2com
     numFrameRead = numFrameRead + 1
     call com_pos(pos_com, pos_tmp, start_index, sys, cell)
     call com_vel(vel_com, vel_tmp, start_index, sys)
-    call write_trajectory(outFileHandle, totNumMol, is_periodic, pos_com, vel_com, cell, i-1, time(i), stat)
+    call write_xdr(outFileHandle, totnummol, pos_com, vel_com, cell, i-1, time(i), stat)
     do j = 1, skip-1
-      call read_trajectory(dataFileHandle, sysNumAtom, is_periodic, pos_tmp, vel_tmp, cell, tmp_r, stat)
+      call read_xdr(dataFileHandle, sysnumatom, pos_tmp, vel_tmp, cell, tmp_r, stat)
       if (stat > 0) then
         write(*,*) "Reading trajectory error"
         call exit(1)
@@ -148,8 +147,8 @@ program trjconv2com
       end if 
     end do
   end do
-  call close_trajectory(dataFileHandle)
-  call close_trajectory(outFileHandle)
+  call close_xdr(dataFileHandle)
+  call close_xdr(outFileHandle)
   write(*,*) "numFrameRead = ", numFrameRead
   if (numFrameRead /= numFrame) then
     write(*,*) "Number of frames expected to read is not the same as actually read!"
@@ -161,12 +160,12 @@ program trjconv2com
 contains
   subroutine com_pos(com_p, pos, start_index, sys, cell)
     implicit none
-    real(8), dimension(:, :), intent(out) :: com_p
-    real(8), dimension(:, :), intent(in) :: pos 
-    real(8), dimension(:, :), allocatable :: pos_gathered
+    real(rk), dimension(:, :), intent(out) :: com_p
+    real(rk), dimension(:, :), intent(in) :: pos 
+    real(rk), dimension(:, :), allocatable :: pos_gathered
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    real(8), dimension(3), intent(in) :: cell
+    real(rk), dimension(3), intent(in) :: cell
     integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
@@ -192,10 +191,10 @@ contains
 
   subroutine gatherMolPos(pos_gathered, pos, cell)
     implicit none
-    real(8), dimension(:, :), intent(out) :: pos_gathered
-    real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(3), intent(in) :: cell
-    real(8), dimension(3) :: ref_pos
+    real(rk), dimension(:, :), intent(out) :: pos_gathered
+    real(rk), dimension(:, :), intent(in) :: pos
+    real(rk), dimension(3), intent(in) :: cell
+    real(rk), dimension(3) :: ref_pos
     integer :: d
 
     ref_pos = pos(:, 1)
@@ -208,8 +207,8 @@ contains
 
   subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
-    real(8), dimension(:, :), intent(out) :: com_v
-    real(8), dimension(:, :), intent(in) :: vel 
+    real(rk), dimension(:, :), intent(out) :: com_v
+    real(rk), dimension(:, :), intent(in) :: vel 
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     integer :: d, i, j, k, idx_begin, idx_end, idx_com

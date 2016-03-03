@@ -1,43 +1,61 @@
 module energy_dec
   use mpiproc
   use hdf5
-  use utility, only: LINE_LEN
+  use varpars, only: rk, numframe, totnummol
   implicit none
-  integer :: num_eBin, skipEng
+  private
+  integer, parameter :: line_len = 1024
+
+  public ed_getbinindex, ed_prep_corrmemory, ed_collectcorr, &
+         ed_average, ed_init, ed_make_ebins, ed_finish, ed_prep
+  character(len=line_len), public, allocatable :: engfiles(:)
+  real(rk), public, allocatable :: ed_binIndex(:)  !ed_binIndex(numframe)
+  integer, public :: num_ebin, skipeng
+  real(rk), public, allocatable :: edpaircount(:, :)
+  !edpaircount(num_ebin, nummoltype*nummoltype)
+  real(rk), public, allocatable :: edcorr(:, :, :)
+  real(rk), public :: ebinwidth
+  integer, public :: num_engfiles
+  real(rk), public, allocatable :: ebins(:)  !ebins(num_ebin)
+  real(rk), public :: engMin_global
+
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
   character(len=*), parameter :: ENGDSET_NAME = "energy"
-  character(len=LINE_LEN), allocatable :: engfiles(:)
   integer(hid_t), allocatable :: engfileids(:)
-  integer :: num_engfiles
-  real(8), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numFrame,
+  real(rk), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numframe,
                                               !             uniqueNumMolPair)
-  real(8), allocatable :: ed_binIndex(:)  !ed_binIndex(numFrame)
-  real(8), allocatable :: edCorr(:, :, :)  !edCorr(maxLag+1, num_eBin,
-                                           !       numMolType*numMolType)
-  real(8), allocatable :: edPairCount(:, :)  !edPairCount(num_eBin,
-                                             !            numMolType*numMolType)
-  real(8), allocatable :: eBins(:)  !eBins(num_eBin)
-  real(8) :: engMin_global, engMax_global
+  real(rk) :: engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
-  real(8) :: eBinWidth
   integer :: eBinIndex_absolute_max, eBinIndex_absolute_min
   integer, allocatable :: sltspec_list(:), sltfirsttag_list(:), &
                          &nummol_list(:), numpair_list(:), &
                          &numframe_list(:), numslt_list(:)
-
 contains
   subroutine ed_init()
     implicit none
-    eBinWidth = 0.5
-    skipEng = 1
+    ebinwidth = 0.5
+    skipeng = 1
 
     ! initialize HDF5 Fortran predefined datatypes
     call h5open_f(ierr)
   end subroutine ed_init
 
-  subroutine ed_prep_engfiles()
-    implicit none
+  subroutine ed_prep()
+    call prep_engfiles()
 
+    ! prepare eBinIndex for each rank
+    if (myrank == root) then
+      write(*,*) "start preparing eBinIndex..."
+      starttime = mpi_wtime()
+    end if
+    call readEng()
+    if (myrank == root) then
+      endtime = mpi_wtime()
+      write(*,*) "finished preparing eBinIndex. It took ", endtime - starttime, "seconds"
+    end if
+  end subroutine ed_prep
+
+  subroutine prep_engfiles()
     allocate(engfiles(num_engfiles))
     allocate(engfileids(num_engfiles))
     allocate(sltfirsttag_list(num_engfiles))
@@ -49,7 +67,7 @@ contains
       allocate(numpair_list(num_engfiles))
       allocate(numframe_list(num_engfiles))
     end if
-  end subroutine ed_prep_engfiles
+  end subroutine prep_engfiles
 
   subroutine check_version()
     use utility, only: parse_version
@@ -75,8 +93,7 @@ contains
                    &or equal to ", MIN_ENGTRJ_VER_MAJOR, " is supported."
         write(*,*) "The major version of the file '", trim(engfiles(i)), &
                    " is: ", major
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end do
   end subroutine check_version
@@ -151,9 +168,8 @@ contains
     end do
   end subroutine read_attrs
 
-  subroutine check_sanity(nummol)
+  subroutine check_sanity()
     implicit none
-    integer, intent(in) :: nummol
     integer :: i
 
     do i = 1, num_engfiles
@@ -169,98 +185,88 @@ contains
       if (sltfirsttag_list(i) >= sltfirsttag_list(i+1)) then
         write(*,*) "sltfirsttag_list should be an ascending list"
         write(*,*) "sltfirsttag_list =", sltfirsttag_list
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-        call exit(1)
+        call mpi_abend()
       end if
     end do
 
     if (.not. all(nummol_list == nummol_list(1))) then
       write(*,*) "nummol's should be all the same"
       write(*,*) "nummol_list =", nummol_list
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
-    if (nummol /= nummol_list(1)) then
+    if (totnummol /= nummol_list(1)) then
       write(*,*) "nummol inconsistent:"
-      write(*,*) "nummol from topology:", nummol
+      write(*,*) "nummol from topology:", totnummol
       write(*,*) "nummol from energy trajectories =", nummol_list
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     if (.not. all(numframe_list == numframe_list(1))) then
       write(*,*) "numframe's should be all the same"
       write(*,*) "numframe_list =", numframe_list
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     if (sum(numslt_list) /= nummol_list(1)) then
       write(*,*) "sum of numslt's should equal to nummol"
       write(*,*) "numslt_list =", numslt_list
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     if (sum(numpair_list) /= nummol_list(1) * (nummol_list(1) - 1) / 2) then
       write(*,*) "numpair is not consistent with nummol"
       write(*,*) "numpair_list =", numpair_list
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
   end subroutine check_sanity
 
   subroutine bcast_attrs()
     implicit none
-    call mpi_bcast(engfiles, num_engfiles * LINE_LEN, MPI_CHARACTER, root, MPI_COMM_WORLD, ierr)
-    call mpi_bcast(sltfirsttag_list, num_engfiles, MPI_INTEGER, root, MPI_COMM_WORLD, ierr)
+    call mpi_bcast(engfiles, num_engfiles * line_len, MPI_CHARACTER, root, mpi_comm_world, ierr)
+    call mpi_bcast(sltfirsttag_list, num_engfiles, MPI_INTEGER, root, mpi_comm_world, ierr)
   end subroutine bcast_attrs
 
-  subroutine ed_readEng(numFrame, nummol)
+  subroutine readEng()
     implicit none
-    integer, intent(in) :: numFrame, nummol
     integer :: i, r, c, loc, lastLoc, locMax, stat, begin_time
     integer, allocatable :: eBinIndex_single(:)
-    real(8), allocatable :: eng(:)
-    real(8) :: engMax, engMin, engMax_node, engMin_node
+    real(rk), allocatable :: eng(:)
+    real(rk) :: engMax, engMin, engMax_node, engMin_node
     logical :: isFirstRun
 
     if (myrank == root) then
       call check_version()
       call sort_engfiles()
       call read_attrs()
-      call check_sanity(nummol)
+      call check_sanity()
     end if
 
     call bcast_attrs()
     call openEngtraj()
     call makeEngPairLookupTable(r_start, r_end, c_start, c_end, locMax)
-    allocate(eBinIndexAll(numFrame, locMax), stat=stat)
+    allocate(eBinIndexAll(numframe, locMax), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: eBinIndexAll"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
-    allocate(eng(numFrame), stat=stat)
+    allocate(eng(numframe), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: eng"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
-    allocate(eBinIndex_single(numFrame), stat=stat)
+    allocate(eBinIndex_single(numframe), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: eBinIndex_single"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     ! determine max and min of engtraj records
     if (myrank == root) then
       write(*,*) "determining min and max of engtraj"
-      begin_time = MPI_Wtime()
+      begin_time = mpi_wtime()
     end if
     engMin_node = 1.0
     engMax_node = 1.0
@@ -272,7 +278,7 @@ contains
           loc = engLocLookupTable(r, c)
           if (loc > lastLoc) then
             ! new location, read new data
-            call readPairEng(eng, r, c, numFrame, nummol)
+            call readPairEng(eng, r, c, numframe, totnummol)
             engMin = minval(eng)
             engMax = maxval(eng)
             if (isFirstRun) then
@@ -289,11 +295,11 @@ contains
       end do
     end do
     if (myrank == root) write(*,*) "time for determining min and max (sec):", &
-                                   &MPI_Wtime() - begin_time
+                                   &mpi_wtime() - begin_time
     call mpi_allreduce(engMin_node, engMin_global, 1, MPI_DOUBLE_PRECISION, &
-                      &MPI_MIN, MPI_COMM_WORLD, ierr)
+                      &MPI_MIN, mpi_comm_world, ierr)
     call mpi_allreduce(engMax_node, engMax_global, 1, MPI_DOUBLE_PRECISION, &
-                      &MPI_MAX, MPI_COMM_WORLD, ierr)
+                      &MPI_MAX, mpi_comm_world, ierr)
 
     if (myrank == root) then
       write(*, *) "energy min:", engMin_global, " max:", engMax_global
@@ -301,7 +307,7 @@ contains
 
     eBinIndex_absolute_max = getAbsoluteIndex(engMax_global)
     eBinIndex_absolute_min = getAbsoluteIndex(engMin_global)
-    num_eBin = eBinIndex_absolute_max - eBinIndex_absolute_min + 1
+    num_ebin = eBinIndex_absolute_max - eBinIndex_absolute_min + 1
 
     if (myrank == root) write(*,*) "reading engtraj data"
     lastLoc = 0
@@ -311,7 +317,7 @@ contains
           loc = engLocLookupTable(r, c)
           if (loc > lastLoc) then
             ! new loc, read new data
-            call readPairEng(eng, r, c, numFrame, nummol)
+            call readPairEng(eng, r, c, numframe, totnummol)
             call eng2BinIndex(eng, eBinIndex_single)
             eBinIndexAll(:, loc) = eBinIndex_single
             lastLoc = loc
@@ -325,38 +331,35 @@ contains
     do i = 1, num_engfiles
       call H5Fclose_f(engfileids(i), ierr)
     end do
-  end subroutine ed_readEng
+  end subroutine readEng
 
-  subroutine ed_prepCorrMemory(maxLag, numMolType, numFrame)
+  subroutine ed_prep_corrmemory(maxlag, nummoltype, numframe)
     implicit none
-    integer, intent(in) :: maxLag, numMolType, numFrame
+    integer, intent(in) :: maxlag, nummoltype, numframe
     integer :: stat
-    integer :: numMolTypePair
+    integer :: num_moltypepair
 
-    numMolTypePair = numMolType * (numMolType + 1) / 2
-    allocate(edCorr(maxLag+1, num_eBin, numMolTypePair), stat=stat)
+    num_moltypepair = nummoltype * (nummoltype + 1) / 2
+    allocate(edcorr(maxlag+1, num_ebin, num_moltypepair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: edCorr"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      write(*,*) "Allocation failed: edcorr"
+      call mpi_abend()
     end if
-    edCorr = 0d0
+    edcorr = 0d0
 
-    allocate(edPairCount(num_eBin, numMolTypePair), stat=stat)
+    allocate(edpaircount(num_ebin, num_moltypepair), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: edPairCount"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      write(*,*) "Allocation failed: edpaircount"
+      call mpi_abend()
     end if
-    edPairCount = 0d0
+    edpaircount = 0d0
 
-    allocate(ed_binIndex(numFrame), stat=stat)
+    allocate(ed_binIndex(numframe), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: ed_binIndex"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
-  end subroutine ed_prepCorrMemory
+  end subroutine ed_prep_corrmemory
 
   subroutine openEngtraj()
     use utility, only: parse_version
@@ -369,7 +372,7 @@ contains
 
     ! setup file access property list with parallel I/O access.
     call H5Pcreate_f(H5P_FILE_ACCESS_F, plist_id, ierr)
-    call H5Pset_fapl_mpio_f(plist_id, MPI_COMM_WORLD, MPI_INFO_NULL, ierr)
+    call H5Pset_fapl_mpio_f(plist_id, mpi_comm_world, MPI_INFO_NULL, ierr)
 
     do i = 1, num_engfiles
       ! open the existing engtraj file.
@@ -377,7 +380,7 @@ contains
                     &access_prp = plist_id)
       if (ierr /= 0) then
         write(*,*) "Failed to open HDF5 file: ", trim(adjustl(engfiles(i)))
-        call mpi_abort(MPI_COMM_WORLD, 1, ierr);
+        call mpi_abort(mpi_comm_world, 1, ierr);
         call exit(1)
       end if
     end do
@@ -386,12 +389,12 @@ contains
     call H5Pclose_f(plist_id, ierr)
   end subroutine openEngtraj
 
-  subroutine readPairEng(eng, r, c, numFrame, nummol)
+  subroutine readPairEng(eng, r, c, numframe, nummol)
     use hdf5
     use utility, only: get_pairindex_upper_nodiag
     implicit none
-    real(8), intent(out) :: eng(numFrame)
-    integer, intent(in) :: r, c, numFrame, nummol
+    real(rk), intent(out) :: eng(numframe)
+    integer, intent(in) :: r, c, numframe, nummol
     integer(hid_t) :: engfile_id
     integer(hid_t) :: dset_id
     integer(hid_t) :: filespace     ! Dataspace identifier in file
@@ -425,21 +428,21 @@ contains
     !  n = 4 in this example
     pairindex = get_pairindex_upper_nodiag(r, c, nummol)
     rel_pairindex = pairindex - first_pairindex_in_file + 1
-    offset = [skipEng - 1, rel_pairindex - 1]
-    count = [numFrame, 1]
-    stride = [skipEng, 1]
+    offset = [skipeng - 1, rel_pairindex - 1]
+    count = [numframe, 1]
+    stride = [skipeng, 1]
     call H5Sselect_hyperslab_f(filespace, H5S_SELECT_SET_F, offset, count, &
                               &ierr, stride)
 
     ! create memory space
-    call H5Screate_simple_f(1, [int(numFrame, kind=hsize_t)], memspace, ierr)
+    call H5Screate_simple_f(1, [int(numframe, kind=hsize_t)], memspace, ierr)
 
     ! Create property list for reading dataset
     call H5Pcreate_f(H5P_DATASET_XFER_F, plist_id, ierr)
     call H5Pset_dxpl_mpio_f(plist_id, H5FD_MPIO_INDEPENDENT_F, ierr)
 
     call H5Dread_f(dset_id, H5T_NATIVE_DOUBLE, eng, &
-                  &[int(numFrame, kind=hsize_t)], ierr, &
+                  &[int(numframe, kind=hsize_t)], ierr, &
                   &file_space_id = filespace, mem_space_id = memspace, &
                   &xfer_prp = plist_id)
 
@@ -462,8 +465,7 @@ contains
     allocate(engLocLookupTable(r_start:r_end, c_start:c_end), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: engLocLookupTable"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      call mpi_abend()
     end if
 
     pairHashCache = -1
@@ -519,89 +521,88 @@ contains
   end function getUnorderedCantorPairHash
 
   !Absolute energy indexes are centered at 0
-  !The bin grid is totally determined by eBinWidth
+  !The bin grid is totally determined by ebinwidth
   integer elemental function getAbsoluteIndex(eng)
     implicit none
-    real(8), intent(in) :: eng
-      getAbsoluteIndex = floor(eng / eBinWidth + 0.5)
+    real(rk), intent(in) :: eng
+      getAbsoluteIndex = floor(eng / ebinwidth + 0.5)
   end function getAbsoluteIndex
 
   subroutine eng2BinIndex(eng, eBinIndex_single)
     implicit none
-    real(8), intent(in) :: eng(:)
+    real(rk), intent(in) :: eng(:)
     integer, intent(out) :: eBinIndex_single(size(eng))
 
     eBinIndex_single = getAbsoluteIndex(eng) - eBinIndex_absolute_min + 1
   end subroutine eng2BinIndex
 
-  subroutine ed_getBinIndex(r, c, eBin)
+  subroutine ed_getbinindex(r, c, eBin)
     implicit none
     integer, intent(in) :: r, c
-    real(8), intent(out) :: eBin(:)
+    real(rk), intent(out) :: eBin(:)
 
     eBin = eBinIndexAll(:, engLocLookupTable(r, c))
-  end subroutine ed_getBinIndex
+  end subroutine ed_getbinindex
 
-  subroutine ed_collectCorr()
+  subroutine ed_collectcorr()
     implicit none
     if (myrank == root) then
-      call mpi_reduce(MPI_IN_PLACE, edCorr, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, edcorr, size(edcorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     else
-      call mpi_reduce(edCorr, dummy_null, size(edCorr), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(edcorr, dummy_null, size(edcorr), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
-    call mpi_barrier(MPI_COMM_WORLD, ierr)
+    call mpi_barrier(mpi_comm_world, ierr)
 
     if (myrank == root) then
-      call mpi_reduce(MPI_IN_PLACE, edPairCount, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(MPI_IN_PLACE, edpaircount, size(edpaircount), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     else
-      call mpi_reduce(edPairCount, dummy_null, size(edPairCount), mpi_double_precision, MPI_SUM, root, MPI_COMM_WORLD, ierr)
+      call mpi_reduce(edpaircount, dummy_null, size(edpaircount), mpi_double_precision, MPI_SUM, root, mpi_comm_world, ierr)
     end if
-    call mpi_barrier(MPI_COMM_WORLD, ierr)
-  end subroutine ed_collectCorr
+    call mpi_barrier(mpi_comm_world, ierr)
+  end subroutine ed_collectcorr
 
-  subroutine ed_average(numFrame, numMolType, frameCount)
+  subroutine ed_average(numframe, nummoltype, framecount)
     use utility, only: get_pairindex_upper_diag
     implicit none
-    integer, intent(in) :: numFrame, numMolType, frameCount(:)
-    integer :: i, t1, t2, n, molTypePairIndex
+    integer, intent(in) :: numframe, nummoltype, framecount(:)
+    integer :: i, t1, t2, n, moltypepair_idx
 
-    edPairCount = edPairCount / numFrame
-    do n = 1, numMolType * (numMolType + 1) / 2
-      do i = 1, num_eBin
-        edCorr(:,i,n) = edCorr(:,i,n) / frameCount / edPairCount(i, n)
+    edpaircount = edpaircount / numframe
+    do n = 1, nummoltype * (nummoltype + 1) / 2
+      do i = 1, num_ebin
+        edcorr(:,i,n) = edcorr(:,i,n) / framecount / edpaircount(i, n)
       end do
     end do
 
-    do t2 = 1, numMolType
-      do t1 = t2, numMolType
+    do t2 = 1, nummoltype
+      do t1 = t2, nummoltype
         if (t1 /= t2) then
-          molTypePairIndex = get_pairindex_upper_diag(t1, t2, numMolType)
-          edPairCount(:, molTypePairIndex) = edPairCount(:, molTypePairIndex) / 2d0
+          moltypepair_idx = get_pairindex_upper_diag(t1, t2, nummoltype)
+          edpaircount(:, moltypepair_idx) = edpaircount(:, moltypepair_idx) / 2d0
         end if
       end do
     end do
   end subroutine ed_average
 
-  subroutine ed_make_eBins()
+  subroutine ed_make_ebins()
     implicit none
     integer :: i, stat
-    allocate(eBins(num_eBin), stat=stat)
+    allocate(ebins(num_ebin), stat=stat)
     if (stat /=0) then
-      write(*,*) "Allocation failed: eBins"
-      call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-      call exit(1)
+      write(*,*) "Allocation failed: ebins"
+      call mpi_abend()
     end if
-    eBins = [(i * eBinWidth, i = eBinIndex_absolute_min, eBinIndex_absolute_max)]
-  end subroutine ed_make_eBins
+    ebins = [(i * ebinwidth, i = eBinIndex_absolute_min, eBinIndex_absolute_max)]
+  end subroutine ed_make_ebins
 
   subroutine ed_finish()
     implicit none
-    deallocate(engfiles, engfileids, sltfirsttag_list)
-    deallocate(eBinIndexAll, engLocLookupTable, edCorr)
-    if (myrank == root) then
-      deallocate(sltspec_list, numslt_list, nummol_list)
-      deallocate(numpair_list, numframe_list)
-    end if
+    !deallocate(engfiles, engfileids, sltfirsttag_list)
+    !deallocate(eBinIndexAll, engLocLookupTable, edcorr)
+    !if (myrank == root) then
+    !  deallocate(sltspec_list, numslt_list, nummol_list)
+    !  deallocate(numpair_list, numframe_list)
+    !end if
     ! ed_binIndex has been deallocated in the main program
   end subroutine ed_finish
 
@@ -617,7 +618,6 @@ contains
       end if
     end do
     write(*,*) "Unable to determine moltype for index:", molidx
-    call mpi_abort(MPI_COMM_WORLD, 1, ierr);
-    call exit(1)
+    call mpi_abend()
   end function getmoltype
 end module energy_dec

@@ -1,23 +1,25 @@
 module top
-  use utility, only : handle, newunit, LINE_LEN, count_record_in_string
+  use, intrinsic :: iso_fortran_env, only: real64
+  use utility, only: count_record_in_string
   implicit none
 
   private
   public :: open_top, close_top, read_top, system, print_sys
   
-  character(len=*), parameter :: LINE_LEN_STR = "128"
-  character(len=1), dimension(2), parameter :: COMMENT_CHAR = [";", "#"]
-  
-  character(len=LINE_LEN) :: current_directive = ''
+  integer, parameter :: line_len = 1024
+  integer, parameter:: rk = real64
+  character(len=*), parameter :: line_len_str = "1024"
+  character(len=1), dimension(2), parameter :: comment_char = [";", "#"]
+  character(len=line_len) :: current_directive = ''
 
   type atom
-    character(len=LINE_LEN) :: type
-    real(8) :: mass
-    real(8) :: charge
+    character(len=line_len) :: type
+    real(rk) :: mass
+    real(rk) :: charge
   end type atom
 
   type molecule
-    character(len=LINE_LEN) :: type
+    character(len=line_len) :: type
     integer :: num  ! number of molecules of the same type
     type(atom), dimension(:), allocatable :: atom
   end type molecule
@@ -27,23 +29,22 @@ module top
   end type system
   
 contains
-  type(handle) function open_top(filename)
+  integer function open_top(filename)
     implicit none
     character(len=*), intent(in) :: filename
   
-    open_top%filename = filename
-    open(unit=newunit(open_top%iohandle), file=filename, status='old', action="READ", form="FORMATTED")
+    open(newunit=open_top, file=filename, status='old', action="READ", form="FORMATTED")
   end function open_top
 
   subroutine close_top(htop)
     implicit none
-    type(handle), intent(in) :: htop
-    close(htop%iohandle)
+    integer, intent(in) :: htop
+    close(htop)
   end subroutine close_top
 
   subroutine read_top(htop, sys)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(system), intent(inout) :: sys
     type(system) :: sys_top
     integer :: i, j
@@ -62,10 +63,10 @@ contains
 
   subroutine read_top_system(htop, sys)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(system), intent(out) :: sys
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     integer :: num_moltype, i
 
     num_moltype = count_moltype(htop)
@@ -86,15 +87,15 @@ contains
       end if
       read(line, *) sys%mol(i)%type, sys%mol(i)%num
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_system
 
   subroutine read_top_molecule(htop, mol)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), dimension(:), intent(inout) :: mol
     integer :: stat
-    character(len=LINE_LEN) :: line, dum_s
+    character(len=line_len) :: line, dum_s
     integer :: i, j, num_atom, num_rec, dum_i
 
     do i = 1, size(mol)
@@ -141,21 +142,21 @@ contains
         end select
       end do
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_molecule
 
   subroutine read_top_atype(htop, at)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(atom), intent(inout) :: at
     integer :: stat
-    character(len=LINE_LEN) :: line, atype, dum_s
+    character(len=line_len) :: line, atype, dum_s
     integer :: i, j, num_atom, num_rec, dum_i
-    real(8) :: dum_r, mass, charge
+    real(rk) :: dum_r, mass, charge
     logical :: is_read
 
     is_read = .false.
-    rewind(htop%iohandle)
+    rewind(htop)
     do while(.true.)
       call read_to_next_directive(htop, "atomtypes", stat)
       if (stat < 0) exit  ! EOF
@@ -200,17 +201,17 @@ contains
       write(*,*) "Error: no [ atomtypes ] for ", trim(at%type), " is read"
       call exit(1)
     end if
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_top_atype
 
   integer function count_molatom(htop, mol)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), intent(inout) :: mol
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
 
-    rewind(htop%iohandle)
+    rewind(htop)
     count_molatom = 0
     stat = 0
 
@@ -232,7 +233,7 @@ contains
       if (current_directive == 'atoms' .and. stat == 0) then
         count_molatom = count_molatom + 1
       else
-        rewind(htop%iohandle)
+        rewind(htop)
         return
       end if
     end do
@@ -240,12 +241,12 @@ contains
 
   subroutine read_to_moltype(htop, mol, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     type(molecule), intent(in) :: mol
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line, name
+    character(len=line_len) :: line, name
     
-    rewind(htop%iohandle)
+    rewind(htop)
     do while(.true.)
       call read_to_next_directive(htop, 'moleculetype', status)
       if (status < 0) then
@@ -262,15 +263,15 @@ contains
         end if
       end if
     end do
-    rewind(htop%iohandle)
+    rewind(htop)
   end subroutine read_to_moltype
   
   subroutine read_to_next_directive(htop, directive, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     character(len=*), intent(in) :: directive
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     do while(.true.)
       call read_line(htop, line, status=status)
       if (status < 0) then
@@ -285,9 +286,9 @@ contains
 
   subroutine read_next_directive(htop, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     integer, intent(out) :: status
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
     do while(.true.)
       call read_line(htop, line, status=status)
       if (status < 0) then
@@ -301,9 +302,9 @@ contains
 
   integer function count_moltype(htop)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     integer :: stat
-    character(len=LINE_LEN) :: line
+    character(len=line_len) :: line
 
     count_moltype = 0
     stat = 0
@@ -319,21 +320,21 @@ contains
       end if
     end do
     
-    rewind(htop%iohandle)
+    rewind(htop)
   end function count_moltype
 
   subroutine read_line(htop, line, status)
     implicit none
-    type(handle), intent(in) :: htop
+    integer, intent(in) :: htop
     character(len=*), intent(out) :: line
     integer, intent(out) :: status
     integer :: stat
-    character(len=LINE_LEN) :: directive
+    character(len=line_len) :: directive
     character(len=1) :: dum_c
     
     status = 0
     do while(.true.)
-      read(htop%iohandle, "(A"//LINE_LEN_STR//")", iostat=stat) line
+      read(htop, "(A"//line_len_str//")", iostat=stat) line
       if (stat > 0) then
         write(*,*) "Error reading line"
         call exit(1)
@@ -366,8 +367,8 @@ contains
     character(len=*), intent(inout) :: line
     integer :: idx, i
 
-    do i = 1, size(COMMENT_CHAR)
-      idx = index(line, COMMENT_CHAR(i))
+    do i = 1, size(comment_char)
+      idx = index(line, comment_char(i))
       if (idx > 0) then
         line = line(:idx - 1)
       end if
@@ -378,6 +379,8 @@ contains
     implicit none
     type(system) :: sys
     integer :: i, j
+
+    write(*,*)
     write(*,*) "[ molecules ]"
     do i = 1, size(sys%mol)
       write(*, *) adjustl(trim(sys%mol(i)%type)), sys%mol(i)%num
@@ -391,16 +394,16 @@ contains
         write(*,*) trim(sys%mol(i)%atom(j)%type), " ", sys%mol(i)%atom(j)%mass, sys%mol(i)%atom(j)%charge
       end do
     end do
+    write(*,*)
   end subroutine print_sys
 end module top
 
 !program test
-!  use utility, only : handle
 !  use top, only: open_top, close_top, read_top, system
 !  implicit none
-!  integer, parameter :: LINE_LEN = 128
-!  character(len=LINE_LEN) :: top_filename
-!  type(handle) :: htop
+!  integer, parameter :: line_len = 128
+!  character(len=line_len) :: top_filename
+!  integer :: htop
 !  type(system) :: sys
 !
 !  call get_command_argument(1, top_filename)

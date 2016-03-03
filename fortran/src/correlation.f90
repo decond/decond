@@ -1,10 +1,13 @@
 module correlation
   use fftw
   implicit none
+  private
 
   interface corr
     module procedure corr_vec1, corr_vec2, corr_mat
   end interface
+
+  public corr
 
 contains
   function corr_vec1(vec, maxlag)
