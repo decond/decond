@@ -1134,37 +1134,56 @@ contains
     end do
   end subroutine com_qnt
 
-  !TODO: update help message
   subroutine print_usage()
-    write(*, *) "usage: $ decond <trrfile> <logfile> <numFrameToRead> <-pa | -pm ...> [options]"
-    write(*, *) "options: "
-    write(*, *) "  -pa <topfile.top> <molecule1> <start_index1> [<molecule2> <start_index2>...]:"
-    write(*, *) "   read parameters from topology file. ignored when -pm is given"
+    write(*, *) "Necessary arguments"
+    write(*, *) "=================================================================="
     write(*, *)
-    write(*, *) "  -pm <molecule1> <charge1> <number1> [<molecule2> <charge2> <number2>...]:"
-    write(*, *) "   manually assign parameters for single-atom-molecule system"
+    write(*, *) "Select one of the modes"
+    write(*, *) "--------------------------------"
+    write(*, *) "-ec0 <trajectory.trr> <topfile.top> <molecule1> <start_index1> "
+    write(*, *) "      [<molecule2> <start_index2>...]"
     write(*, *)
-    write(*, *) "  -o <outfile>: output filename. default = corr.h5"
+    write(*, *) "-ec1 <trajectory.trr> <molecule1> <charge1> <number1>"
+    write(*, *) "      [<molecule2> <charge2> <number2>...]"
     write(*, *)
-    write(*, *) "  -skiptrj <skip>: skip=1 means no frames are skipped, which is default."
-    write(*, *) "             skip=2 means reading every 2nd frame."
+    write(*, *) "-vsc <trajectory.xyz> <molecule1> <number1>"
+    write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
-    write(*, *) "  -skipeng <skip>: skip=1 means no frames are skipped, which is default."
-    write(*, *) "             skip=2 means reading every 2nd frame."
     write(*, *)
-    write(*, *) "  -l <maxlag>: maximum time lag in frames. default = <numFrameToRead - 1>"
+    write(*, *) "Provide the necessary parameters"
+    write(*, *) "--------------------------------"
+    write(*, *) "-T <temperature> or <GROMACS logfile>"
     write(*, *)
-    write(*, *) "  -sd: do spatial decomposition. default no sd."
+    write(*, *) "-n <numFrameToRead>"
     write(*, *)
-    write(*, *) "  -ed <engtraj> <engtraj> ...: do energy decomposition. default no ed."
     write(*, *)
-    write(*, *) "  -sbwidth <sBinWidth(nm)>: spatial-decomposition bin width. default = 0.01."
-    write(*, *) "                            only meaningful when -sd is given."
+    write(*, *) "Optional arguments"
+    write(*, *) "=================================================================="
+    write(*, *) "-v: show version number"
     write(*, *)
-    write(*, *) "  -ebwidth <ebinwidth(kcal/mol)>: energy-decomposition bin width. default = 0.1"
-    write(*, *) "                                  only meaningful when -ed is given."
+    write(*, *) "-o <outfile>: output filename. default = corr.h5"
     write(*, *)
-    write(*, *) "  -d <num_domain_r> <num_domain_c>:"
+    write(*, *) "-l <maxlag>: maximum time lag in frames. default = <numFrameToRead - 1>"
+    write(*, *)
+    write(*, *) "-skiptrj <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "                 skip=2 means reading every 2nd frame."
+    write(*, *)
+    write(*, *) "-skipeng <skip>: skip=1 means no frames are skipped, which is default."
+    write(*, *) "                 skip=2 means reading every 2nd frame."
+    write(*, *)
+    write(*, *) "-sd: do spatial decomposition."
+    write(*, *)
+    write(*, *) "-ed <engtraj> <engtraj> ...: do energy decomposition."
+    write(*, *)
+    write(*, *) "-sbwidth <sBinWidth(nm)>:"
+    write(*, *) "         spatial-decomposition bin width. default = 0.01."
+    write(*, *) "         only meaningful when -sd is given."
+    write(*, *)
+    write(*, *) "-ebwidth <ebinwidth(kcal/mol)>:"
+    write(*, *) "         energy-decomposition bin width. default = 0.1"
+    write(*, *) "         only meaningful when -ed is given."
+    write(*, *)
+    write(*, *) "-d <num_domain_r> <num_domain_c>:"
     write(*, *) "   manually assign the MPI decomposition pattern"
   end subroutine print_usage
 end module manager
