@@ -1,9 +1,9 @@
 program decond
   use mpiproc
-  use varpars, only: dp
+  use varpars, only: rk
   use manager, only: init_config, read_config, prepare, decompose, output, finish
   implicit none
-  real(dp) :: prog_starttime
+  real(rk) :: prog_starttime
 
   call mpi_setup('init')
   prog_starttime = mpi_wtime()

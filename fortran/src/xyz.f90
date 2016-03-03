@@ -1,5 +1,5 @@
 module xyz
-  use varpars, only: dp
+  use varpars, only: rk
   implicit none
   private
   integer, parameter :: line_len = 1024
@@ -19,10 +19,10 @@ contains
   subroutine write_xyz(unit, coord, num_atom, info, atom_name, opt_data)
     implicit none
     integer, intent(in) :: unit
-    real(dp), intent(in) :: coord(:, :)  !(3, num_atom)
+    real(rk), intent(in) :: coord(:, :)  !(3, num_atom)
     integer, intent(in), optional :: num_atom
     character(len=*), intent(in), optional :: info, atom_name(:)
-    real(dp), intent(in), optional :: opt_data(:, :)  ! (:, num_atom)
+    real(rk), intent(in), optional :: opt_data(:, :)  ! (:, num_atom)
     integer :: num_atom_
     character(len=line_len) :: info_, atom_name_(size(coord, 2))
     character(len=line_len) :: format_opt, num_opt_c, format
@@ -68,10 +68,10 @@ contains
   subroutine read_xyz(unit, coord, num_atom, info, atom_name, opt_data)
     implicit none
     integer, intent(in) :: unit
-    real(dp), intent(out) :: coord(:, :)  !(3, num_atom)
+    real(rk), intent(out) :: coord(:, :)  !(3, num_atom)
     integer, intent(out), optional :: num_atom
     character(len=*), intent(out), optional :: info, atom_name(:)
-    real(dp), intent(out), optional :: opt_data(:, :)  ! (:, num_atom)
+    real(rk), intent(out), optional :: opt_data(:, :)  ! (:, num_atom)
     integer :: num_atom_
     character(len=line_len) :: info_, atom_name_(size(coord, 2))
     integer :: i

@@ -82,13 +82,13 @@ $(SRCDIR)/manager.o : $(addprefix $(SRCDIR)/, mpiproc.o spatial_dec.o energy_dec
 
 $(SRCDIR)/spatial_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o top.o utility.o)
 
-$(SRCDIR)/energy_dec.o : $(addprefix $(SRCDIR)/,  mpiproc.o utility.o)
+$(SRCDIR)/energy_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o utility.o)
+
+$(SRCDIR)/xdr.o : $(addprefix $(SRCDIR)/, varpars.o utility.o)
 
 $(SRCDIR)/varpars.o : $(SRCDIR)/top.o
 
 $(SRCDIR)/top.o : $(SRCDIR)/utility.o
-
-$(SRCDIR)/xdr.o : $(SRCDIR)/utility.o
 
 $(SRCDIR)/correlation.o : $(SRCDIR)/fftw.o
 

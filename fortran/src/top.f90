@@ -1,5 +1,6 @@
 module top
-  use utility, only : count_record_in_string
+  use varpars, only: rk
+  use utility, only: count_record_in_string
   implicit none
 
   private
@@ -12,8 +13,8 @@ module top
 
   type atom
     character(len=line_len) :: type
-    real(8) :: mass
-    real(8) :: charge
+    real(rk) :: mass
+    real(rk) :: charge
   end type atom
 
   type molecule
@@ -150,7 +151,7 @@ contains
     integer :: stat
     character(len=line_len) :: line, atype, dum_s
     integer :: i, j, num_atom, num_rec, dum_i
-    real(8) :: dum_r, mass, charge
+    real(rk) :: dum_r, mass, charge
     logical :: is_read
 
     is_read = .false.

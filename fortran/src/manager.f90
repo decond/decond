@@ -2,7 +2,7 @@ module manager
   use mpiproc
   use hdf5
   use utility, only: get_pairindex_upper_diag
-  use varpars, only: line_len, line_len_str, dp, decond_version, &
+  use varpars, only: line_len, line_len_str, rk, decond_version, &
                      trjfile, corrfile, dec_mode, &
                      dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, &
                      temperature, numframe, nummoltype, &
@@ -35,16 +35,16 @@ module manager
   integer(hid_t) :: corrfileio
   integer :: i, j, k, n, t, stat, numframe_k, numframe_read, tmp_i
   integer :: moltypepair_idx, moltypepair_allidx
-  real(dp) :: tmp_r
+  real(rk) :: tmp_r
   integer :: trjfileio
   integer, allocatable :: framecount(:)
-  real(dp), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
+  real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
   !one frame data (dim=qnt_dim, atom)
-  real(dp), allocatable :: qnt(:, :, :)
+  real(rk), allocatable :: qnt(:, :, :)
   !pos(dim=world_dim, timeFrame, atom), qnt(dim=qnt_dim, timeFrame, atom)
-  real(dp), allocatable :: time(:), ncorr(:, :), corr_tmp(:)
+  real(rk), allocatable :: time(:), ncorr(:, :), corr_tmp(:)
   !MPI variables
-  real(dp), allocatable :: qnt_r(:, :, :), qnt_c(:, :, :)
+  real(rk), allocatable :: qnt_r(:, :, :), qnt_c(:, :, :)
 
 contains
   subroutine init_config()
@@ -400,7 +400,7 @@ contains
 
   subroutine prepare()
     character(len=line_len) :: info_xyz, dum_c, xyz_version
-    real(dp) :: density
+    real(rk) :: density
 
     if (myrank == root) then
       ! create an HDF5 file
@@ -556,7 +556,7 @@ contains
       case (dec_mode_ec0, dec_mode_ec1)
         call close_xdr(trjfileio)
       case (dec_mode_vsc)
-        cell = (sysnumatom / density)**(1.0_dp / 3.0_dp)
+        cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
         call close_xyz(trjfileio)
       end select
 
@@ -768,7 +768,7 @@ contains
         end do
       end do
 
-      framecount = [ (numframe - (i-1), i = 1, maxlag+1) ] * real(qnt_dim, kind=dp)
+      framecount = [ (numframe - (i-1), i = 1, maxlag+1) ] * real(qnt_dim, kind=rk)
       do n = 1, num_moltypepair_all
         ncorr(:,n) = ncorr(:,n) / framecount
       end do
@@ -798,7 +798,7 @@ contains
     use spatial_dec, only: rbins
     use energy_dec, only: ebins, engMin_global
     implicit none
-    real(dp), allocatable :: timeLags(:)
+    real(rk), allocatable :: timeLags(:)
     integer :: ierr
     integer(hid_t) :: dset_ncorr, dset_timeLags, &
                       dset_sdcorr, dset_sdpaircount, dset_rbins, &
@@ -1033,7 +1033,7 @@ contains
     end do
   end function count_arg
 
-  real(dp) function getTfromLog(logfile)
+  real(rk) function getTfromLog(logfile)
     character(len=*), intent(in) :: logfile
     integer :: logio, idx, temp_idx, stat
     integer, parameter :: RECORD_LEN = 15
@@ -1055,7 +1055,7 @@ contains
       if (found_average) then
         idx = index(line, "Temperature")
         if (idx > 0) then
-          temp_idx = ceiling(real(idx, dp) / RECORD_LEN)
+          temp_idx = ceiling(real(idx, rk) / RECORD_LEN)
           read(logio, "(A"//line_len_str//")", iostat=stat) line
           if (stat > 0) then
             write(*,*) "Error reading temperature record"
@@ -1114,8 +1114,8 @@ contains
   end function getMolTypePairIndex
 
   subroutine com_qnt(com_q, qnt, start_index)
-    real(dp), dimension(:, :), intent(out) :: com_q
-    real(dp), dimension(:, :), intent(in) :: qnt
+    real(rk), dimension(:, :), intent(out) :: com_q
+    real(rk), dimension(:, :), intent(in) :: qnt
     integer, dimension(:), intent(in) :: start_index
     integer :: d, i, j, idx_begin, idx_end, idx_com
 
@@ -1134,6 +1134,7 @@ contains
     end do
   end subroutine com_qnt
 
+  !TODO: update help message
   subroutine print_usage()
     write(*, *) "usage: $ decond <trrfile> <logfile> <numFrameToRead> <-pa | -pm ...> [options]"
     write(*, *) "options: "

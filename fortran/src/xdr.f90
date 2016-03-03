@@ -1,6 +1,7 @@
 module xdr
-  use, intrinsic::iso_c_binding
-  use utility, only : f2c_string
+  use, intrinsic :: iso_c_binding
+  use varpars, only: rk
+  use utility, only: f2c_string
   implicit none
   private 
   public :: open_xdr, close_xdr, read_xdr, write_xdr, read_natom_xdr
@@ -109,7 +110,7 @@ contains
     integer, intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
     real(C_DOUBLE), intent(out) :: crd(3,natoms), vel(3,natoms)
-    real(8), intent(out) :: cell(3)
+    real(rk), intent(out) :: cell(3)
     real(C_DOUBLE), intent(out) :: time
     integer, intent(out) :: status
 
@@ -143,7 +144,7 @@ contains
     integer, intent(in) :: htraj
     integer(C_INT), intent(in) :: natoms
     real(C_DOUBLE), intent(in) :: crd(3,natoms), vel(3,natoms)
-    real(8), intent(in) :: cell(3)
+    real(rk), intent(in) :: cell(3)
     integer(C_INT) :: step
     real(C_DOUBLE), intent(in) :: time
     integer, intent(out) :: status

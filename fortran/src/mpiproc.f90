@@ -1,6 +1,6 @@
 module mpiproc
   use mpi
-  use varpars, only: world_dim, qnt_dim
+  use varpars, only: rk, world_dim, qnt_dim
   implicit none
   private
   public :: mpi_setup, domain_dec, mpi_abend
@@ -10,9 +10,9 @@ module mpiproc
   public :: mpi_comm_world, mpi_in_place, mpi_sum, mpi_double_precision
   public :: mpi_integer, mpi_character, mpi_min, mpi_max, mpi_info_null
   public :: mpi_wtime
-  real(8), public :: starttime, endtime, starttime2
+  real(rk), public :: starttime, endtime, starttime2
   integer, public :: r_start, r_end, c_start, c_end
-  real(8), public :: dummy_null
+  real(rk), public :: dummy_null
   integer, public :: num_domain_r, num_domain_c, num_r, num_c
   integer, public :: row_comm, col_comm, r_group_idx, c_group_idx, offset
   integer, public, dimension(:), allocatable :: displs_r_world_dim, displs_c_world_dim, scounts_r_world_dim, scounts_c_world_dim

@@ -1,7 +1,7 @@
 module energy_dec
   use mpiproc
   use hdf5
-  use varpars, only: numframe, totnummol
+  use varpars, only: rk, numframe, totnummol
   implicit none
   private
   integer, parameter :: line_len = 1024
@@ -9,22 +9,22 @@ module energy_dec
   public ed_getbinindex, ed_prep_corrmemory, ed_collectcorr, &
          ed_average, ed_init, ed_make_ebins, ed_finish, ed_prep
   character(len=line_len), public, allocatable :: engfiles(:)
-  real(8), public, allocatable :: ed_binIndex(:)  !ed_binIndex(numframe)
+  real(rk), public, allocatable :: ed_binIndex(:)  !ed_binIndex(numframe)
   integer, public :: num_ebin, skipeng
-  real(8), public, allocatable :: edpaircount(:, :)
+  real(rk), public, allocatable :: edpaircount(:, :)
   !edpaircount(num_ebin, nummoltype*nummoltype)
-  real(8), public, allocatable :: edcorr(:, :, :)
-  real(8), public :: ebinwidth
+  real(rk), public, allocatable :: edcorr(:, :, :)
+  real(rk), public :: ebinwidth
   integer, public :: num_engfiles
-  real(8), public, allocatable :: ebins(:)  !ebins(num_ebin)
-  real(8), public :: engMin_global
+  real(rk), public, allocatable :: ebins(:)  !ebins(num_ebin)
+  real(rk), public :: engMin_global
 
   integer, parameter :: MIN_ENGTRJ_VER_MAJOR = 0
   character(len=*), parameter :: ENGDSET_NAME = "energy"
   integer(hid_t), allocatable :: engfileids(:)
-  real(8), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numframe,
+  real(rk), allocatable :: eBinIndexAll(:, :)  !eBinIndexAll(numframe,
                                               !             uniqueNumMolPair)
-  real(8) :: engMax_global
+  real(rk) :: engMax_global
   integer, allocatable :: engLocLookupTable(:, :)
   integer :: eBinIndex_absolute_max, eBinIndex_absolute_min
   integer, allocatable :: sltspec_list(:), sltfirsttag_list(:), &
@@ -231,8 +231,8 @@ contains
     implicit none
     integer :: i, r, c, loc, lastLoc, locMax, stat, begin_time
     integer, allocatable :: eBinIndex_single(:)
-    real(8), allocatable :: eng(:)
-    real(8) :: engMax, engMin, engMax_node, engMin_node
+    real(rk), allocatable :: eng(:)
+    real(rk) :: engMax, engMin, engMax_node, engMin_node
     logical :: isFirstRun
 
     if (myrank == root) then
@@ -393,7 +393,7 @@ contains
     use hdf5
     use utility, only: get_pairindex_upper_nodiag
     implicit none
-    real(8), intent(out) :: eng(numframe)
+    real(rk), intent(out) :: eng(numframe)
     integer, intent(in) :: r, c, numframe, nummol
     integer(hid_t) :: engfile_id
     integer(hid_t) :: dset_id
@@ -524,13 +524,13 @@ contains
   !The bin grid is totally determined by ebinwidth
   integer elemental function getAbsoluteIndex(eng)
     implicit none
-    real(8), intent(in) :: eng
+    real(rk), intent(in) :: eng
       getAbsoluteIndex = floor(eng / ebinwidth + 0.5)
   end function getAbsoluteIndex
 
   subroutine eng2BinIndex(eng, eBinIndex_single)
     implicit none
-    real(8), intent(in) :: eng(:)
+    real(rk), intent(in) :: eng(:)
     integer, intent(out) :: eBinIndex_single(size(eng))
 
     eBinIndex_single = getAbsoluteIndex(eng) - eBinIndex_absolute_min + 1
@@ -539,7 +539,7 @@ contains
   subroutine ed_getbinindex(r, c, eBin)
     implicit none
     integer, intent(in) :: r, c
-    real(8), intent(out) :: eBin(:)
+    real(rk), intent(out) :: eBin(:)
 
     eBin = eBinIndexAll(:, engLocLookupTable(r, c))
   end subroutine ed_getbinindex

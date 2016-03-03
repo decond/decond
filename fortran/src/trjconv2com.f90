@@ -1,9 +1,11 @@
 program trjconv2com
+  use, intrinsic :: iso_fortran_env, only: real64
   use xdr, only : open_xdr, close_xdr, read_xdr, write_xdr, read_natom_xdr
   use top, only : open_top, close_top, read_top, system, print_sys
   implicit none
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
+  integer, parameter :: rk = real64
   integer :: num_dataArg, i, j, k, n, totnummol, t, sysnumatom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
@@ -13,10 +15,10 @@ program trjconv2com
   integer :: moltypepair_idx, moltypepair_allidx, tmp_i, skip
   integer, allocatable :: charge(:), start_index(:)
   character(len=10) :: tmp_str
-  real(8) :: cell(3), timestep, tmp_r
-  real(8), allocatable :: pos_tmp(:, :), vel_tmp(:, :), pos_com(:, :), vel_com(:, :)
+  real(rk) :: cell(3), timestep, tmp_r
+  real(rk), allocatable :: pos_tmp(:, :), vel_tmp(:, :), pos_com(:, :), vel_com(:, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(8), allocatable :: time(:), dummy_null
+  real(rk), allocatable :: time(:), dummy_null
 
   type(system) :: sys
 
@@ -158,12 +160,12 @@ program trjconv2com
 contains
   subroutine com_pos(com_p, pos, start_index, sys, cell)
     implicit none
-    real(8), dimension(:, :), intent(out) :: com_p
-    real(8), dimension(:, :), intent(in) :: pos 
-    real(8), dimension(:, :), allocatable :: pos_gathered
+    real(rk), dimension(:, :), intent(out) :: com_p
+    real(rk), dimension(:, :), intent(in) :: pos 
+    real(rk), dimension(:, :), allocatable :: pos_gathered
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    real(8), dimension(3), intent(in) :: cell
+    real(rk), dimension(3), intent(in) :: cell
     integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
@@ -189,10 +191,10 @@ contains
 
   subroutine gatherMolPos(pos_gathered, pos, cell)
     implicit none
-    real(8), dimension(:, :), intent(out) :: pos_gathered
-    real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(3), intent(in) :: cell
-    real(8), dimension(3) :: ref_pos
+    real(rk), dimension(:, :), intent(out) :: pos_gathered
+    real(rk), dimension(:, :), intent(in) :: pos
+    real(rk), dimension(3), intent(in) :: cell
+    real(rk), dimension(3) :: ref_pos
     integer :: d
 
     ref_pos = pos(:, 1)
@@ -205,8 +207,8 @@ contains
 
   subroutine com_vel(com_v, vel, start_index, sys)
     implicit none
-    real(8), dimension(:, :), intent(out) :: com_v
-    real(8), dimension(:, :), intent(in) :: vel 
+    real(rk), dimension(:, :), intent(out) :: com_v
+    real(rk), dimension(:, :), intent(in) :: vel 
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     integer :: d, i, j, k, idx_begin, idx_end, idx_com

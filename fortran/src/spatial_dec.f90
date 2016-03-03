@@ -1,20 +1,20 @@
 module spatial_dec
   use mpiproc
-  use varpars, only: numframe, totnummol, world_dim
+  use varpars, only: rk, numframe, totnummol, world_dim
   implicit none
   private
   public sd_init, com_pos, sd_prep_corrmemory, sd_getbinindex, &
          sd_cal_num_rbin, sd_broadcastpos, sd_prep, &
          sd_collectcorr, sd_average, sd_make_rbins, sd_finish
-  real(8), public :: rbinwidth
+  real(rk), public :: rbinwidth
   !sdcorr: spatially decomposed correlation (lag, rBin, moltypepair_idx)
   !sdpaircount: (num_rbin, moltypepair_idx)
-  real(8), public, allocatable :: sdpaircount(:, :), sdcorr(:, :, :), pos(:, :, :)
+  real(rk), public, allocatable :: sdpaircount(:, :), sdcorr(:, :, :), pos(:, :, :)
   integer, public :: num_rbin
   integer, public, allocatable :: sd_binIndex(:)
-  real(8), public, allocatable :: rbins(:)
+  real(rk), public, allocatable :: rbins(:)
   !MPI variables
-  real(8), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
+  real(rk), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
 
   integer :: stat
 
@@ -55,12 +55,12 @@ contains
   subroutine com_pos(com_p, pos, start_index, sys, cell)
     use top, only : system
     implicit none
-    real(8), dimension(:, :), intent(out) :: com_p
-    real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(:, :), allocatable :: pos_gathered
+    real(rk), dimension(:, :), intent(out) :: com_p
+    real(rk), dimension(:, :), intent(in) :: pos
+    real(rk), dimension(:, :), allocatable :: pos_gathered
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    real(8), dimension(world_dim), intent(in) :: cell
+    real(rk), dimension(world_dim), intent(in) :: cell
     integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
@@ -87,10 +87,10 @@ contains
   ! make sure the gathered positions are from the same moleucle, instead of different images
   subroutine gatherMolPos(pos_gathered, pos, cell)
     implicit none
-    real(8), dimension(:, :), intent(out) :: pos_gathered
-    real(8), dimension(:, :), intent(in) :: pos
-    real(8), dimension(world_dim), intent(in) :: cell
-    real(8), dimension(world_dim) :: ref_pos
+    real(rk), dimension(:, :), intent(out) :: pos_gathered
+    real(rk), dimension(:, :), intent(in) :: pos
+    real(rk), dimension(world_dim), intent(in) :: cell
+    real(rk), dimension(world_dim) :: ref_pos
     integer :: d
 
     ref_pos = pos(:, 1)
@@ -124,7 +124,7 @@ contains
 
   subroutine sd_cal_num_rbin(cell)
     implicit none
-    real(8), intent(in) :: cell(world_dim)
+    real(rk), intent(in) :: cell(world_dim)
 
     num_rbin = ceiling(cell(1) / 2d0 * sqrt(3d0) / rbinwidth)
     ! *sqrt(3) to accommodate the longest distance inside a cubic (diagonal)
@@ -161,9 +161,9 @@ contains
   subroutine sd_getbinindex(r, c, cell, sd_binIndex)
     implicit none
     integer, intent(in) :: r, c
-    real(8), intent(in) :: cell(world_dim)
+    real(rk), intent(in) :: cell(world_dim)
     integer, intent(out) :: sd_binIndex(:)
-    real(8) :: pp(world_dim, size(sd_binIndex))
+    real(rk) :: pp(world_dim, size(sd_binIndex))
     integer :: d
 
     pp = pos_r(:,:,r) - pos_c(:,:,c)
