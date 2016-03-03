@@ -1,5 +1,5 @@
 module top
-  use varpars, only: rk
+  use, intrinsic :: iso_fortran_env, only: real64
   use utility, only: count_record_in_string
   implicit none
 
@@ -7,6 +7,7 @@ module top
   public :: open_top, close_top, read_top, system, print_sys
   
   integer, parameter :: line_len = 1024
+  integer, parameter:: rk = real64
   character(len=*), parameter :: line_len_str = "1024"
   character(len=1), dimension(2), parameter :: comment_char = [";", "#"]
   character(len=line_len) :: current_directive = ''
