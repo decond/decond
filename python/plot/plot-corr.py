@@ -41,6 +41,19 @@ color = None
 
 xmax = None
 
+# axis labels
+# e.g.
+# xlabel = r'$t$\ \ (ps)'
+# ylable = r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)'
+xlabel = r'$t$'
+ylabel = r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$'
+
+# scaling factor for x and y axes
+# e.g. to change the unit of y-axis from nm^2 / ps^2 to AA^2 / ps^2
+#      yfac = (da.const.nano / da.const.angstrom)**2
+xfac = 1
+yfac = 1
+
 # distance between axis and axis label
 xlabelpad = 5
 ylabelpad = 0.5
@@ -78,9 +91,8 @@ rc = {'font': {'size': 34,
 # ===========================================================
 
 with h5py.File(args.corrData, 'r') as f:
-    timeLags = f['timeLags'][...]
-    nCorr = f['nCorr'][...]  # nm^2 / ps^2
-    nCorr *= (da.const.nano / da.const.angstrom)**2  # AA^2 / ps^2
+    timeLags = f['timeLags'][...] * xfac
+    nCorr = f['nCorr'][...] * yfac
     numMol = f['numMol'][...]
     numIonTypes = numMol.size
     numIonTypePairs = (numIonTypes*(numIonTypes+1)) // 2
@@ -117,9 +129,8 @@ for i, corr in enumerate(nCorr):
 
 leg = plt.legend()
 plt.xlim(xmax=xmax)
-plt.xlabel(r'$t$\ \ (ps)', labelpad=xlabelpad)
-plt.ylabel(r'$C_I^{(1)}(t)$, $C_{IL}^{(2)}(t)$\ \ (\AA$^2$ ps$^{-2}$)',
-           labelpad=ylabelpad)
+plt.xlabel(xlabel, labelpad=xlabelpad)
+plt.ylabel(ylabel, labelpad=ylabelpad)
 # plt.tight_layout()
 
 ax = plt.gca()
