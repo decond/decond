@@ -9,7 +9,7 @@ from ._version import __version__
 
 class Quantity:
     key = 'quantity'
-    econd = 'electrical conductivity'
+    ec = 'electrical conductivity'
     vsc = 'viscosity'
 
 
@@ -26,7 +26,7 @@ class Unit:
                     'energy': 'k' + si_energy,
                     'siemens': si_siemens,
                     'temperature': si_temperature}
-    gmx_econd_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
+    gmx_ec_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
 
 
 class DecType(Enum):
@@ -86,7 +86,7 @@ class CorrFile(h5py.File):
         if Quantity.key in self.attrs:
             self.buffer.quantity = np.string_(self.attrs[Quantity.key])
         else:
-            self.buffer.quantity = np.string_(Quantity.econd)
+            self.buffer.quantity = np.string_(Quantity.ec)
         self.buffer.charge = self['charge'][...]
         self.buffer.charge_unit = self['charge'].attrs['unit']
         self.buffer.numMol = self['numMol'][...]
@@ -178,7 +178,7 @@ class CorrFile(h5py.File):
                                                 self.buffer.timeLags)
 
         qnttype = self.buffer.quantity.decode()
-        if qnttype == Quantity.econd:
+        if qnttype == Quantity.ec:
             self.buffer.nDTotalCesaro = np.sum(
                     self.buffer.nDCesaro *
                     (self.zz * self.ww)[:, np.newaxis], axis=0)
@@ -338,7 +338,8 @@ class DecondFile(CorrFile):
 
         qnttype_list = [get_qnttype(sample) for sample in samples]
         if not all(q == qnttype_list[0] for q in qnttype_list):
-            raise Error("All input samples should have the same quantity type!")
+            raise Error("All input samples should have the same "
+                        "quantity type!")
 
         self.buffer.quantity = qnttype_list[0]
 
@@ -1046,13 +1047,13 @@ def _nD_to_qnt_const(decname):
 
     if nD_unit == Unit.dimless:
         fac = 1
-    elif nD_unit in Unit.gmx_econd_nD_list:
+    elif nD_unit in Unit.gmx_ec_nD_list:
         fac = (const.nano**2 / const.pico)
     else:
         raise UnknownUnitError('nD_unit "{}" cannot be '
                                'recognized'.format(nD_unit))
 
-    if qnttype == Quantity.econd:
+    if qnttype == Quantity.ec:
         fac *= e**2
 
     nD_to_qnt = fac / (kB * temp * vol)
@@ -1067,7 +1068,7 @@ def get_qnttype(decname):
         if Quantity.key in f.attrs:
             qnttype = f.attrs[Quantity.key].decode()
         else:
-            qnttype = Quantity.econd
+            qnttype = Quantity.ec
 
     return qnttype
 
@@ -1136,7 +1137,7 @@ def get_diffusion(decname):
     """
     Return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
     """
-    _check_qnttype(decname, Quantity.econd)
+    _check_qnttype(decname, Quantity.ec)
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
@@ -1203,11 +1204,11 @@ def get_quantity(decname):
         nD_err = f['nD_err'][...]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
-        if qnttype == Quantity.econd:
+        if qnttype == Quantity.ec:
             zz = _zz(charge, nummol)
             if nD_unit == Unit.dimless:
                 qnt_unit = Unit.dimless
-            elif nD_unit in Unit.gmx_econd_nD_list:
+            elif nD_unit in Unit.gmx_ec_nD_list:
                 qnt_unit = "{siemens} m$^{{-1}}$".format(**Unit.default_unit)
             else:
                 raise UnknownUnitError('nD_unit "{}" cannot be '
@@ -1255,7 +1256,7 @@ def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
     Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
            ec_local, ec_nonlocal
     """
-    _check_qnttype(decname, Quantity.econd)
+    _check_qnttype(decname, Quantity.ec)
     nD2ec = _nD_to_qnt_const(decname)
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
@@ -1511,7 +1512,7 @@ def report_decond(decname):
     print()
 
     quantity = get_qnttype(decname)
-    if quantity == Quantity.econd:
+    if quantity == Quantity.ec:
         diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
             get_diffusion(decname)
         print("Diffusion")
