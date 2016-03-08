@@ -16,17 +16,28 @@ class Quantity:
 class Unit:
     dimless = 'dimensionless'
     electric_charge = 'e'
+
     si_time = 's'
     si_length = 'm'
     si_energy = 'J'
     si_siemens = 'S'
     si_temperature = 'K'
+    si_D = 'm$^2$ s$^{-1}$'
+
+    gmx_time = 'ps'
+    gmx_length = 'nm'
+    gmx_energy = 'kJ mol$^{-1}$'
+    gmx_temperature = si_temperature
+    gmx_ec_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
+
+    er_energy = 'kcal mol$^{-1}$'
+
     default_unit = {'time': si_time,
                     'length': si_length,
-                    'energy': 'k' + si_energy,
+                    'energy': gmx_energy,
+                    'energy_inv': 'kJ$^{-1}$ mol',
                     'siemens': si_siemens,
                     'temperature': si_temperature}
-    gmx_ec_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
 
 
 class DecType(Enum):
@@ -84,7 +95,7 @@ class CorrFile(h5py.File):
 
     def _read_corr_buffer(self):
         if Quantity.key in self.attrs:
-            self.buffer.quantity = np.string_(self.attrs[Quantity.key])
+            self.buffer.quantity = self.attrs[Quantity.key]
         else:
             self.buffer.quantity = np.string_(Quantity.ec)
         self.buffer.charge = self['charge'][...]
@@ -185,7 +196,7 @@ class CorrFile(h5py.File):
         elif qnttype == Quantity.vsc:
             self.buffer.nDTotalCesaro = np.sum(self.buffer.nDCesaro, axis=0)
         else:
-            raise Error("Oops! You shouldn't have been here!")
+            raise Error("Unknown qnttype: {}".format(qnttype))
 
         # Unit: nCorr (L^2 T^-2), nDCesaro (L^2)
         nCorr_unit_str = self.buffer.nCorr_unit.decode()
@@ -341,7 +352,7 @@ class DecondFile(CorrFile):
             raise Error("All input samples should have the same "
                         "quantity type!")
 
-        self.buffer.quantity = qnttype_list[0]
+        self.buffer.quantity = np.string_(qnttype_list[0])
 
         if self.buffer.numSample == 0:
             if (report):
@@ -1085,14 +1096,64 @@ def get_fit(decname):
     """
     Return fit, fit_unit
     """
+    qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
         fit = f['fit'][...]
-        if f['fit'].attrs['unit'].decode() == Unit.dimless:
+        fit_unit = f['fit'].attrs['unit'].decode()
+        if fit_unit == Unit.dimless:
             fit_unit = Unit.dimless
         else:
-            fit *= const.pico
-            fit_unit = Unit.si_time
+            if qnttype == Quantity.ec:
+                if fit_unit == Unit.gmx_time:
+                    fit *= const.pico
+                    fit_unit = Unit.si_time
+                else:
+                    raise UnknownUnitError('fit_unit "{}" cannot be recognized'
+                                           ' for ec'.format(fit_unit))
+            elif qnttype == Quantity.vsc:
+                raise UnknownUnitError('fit_unit "{}" cannot be recognized '
+                                       'for viscosity'.format(fit_unit))
+            else:
+                raise Error("Unknown qnttype: {}".format(qnttype))
     return fit, fit_unit
+
+def get_decBins(decname, dectype):
+    """
+    Return decBins, decBins_unit
+    """
+    qnttype = get_qnttype(decname)
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
+        decBins = gid['decBins'][...]
+        decBins_unit = gid['decBins'].attrs['unit'].decode()
+        if decBins_unit == Unit.dimless:
+            decBins_unit = Unit.dimless
+        else:
+            if qnttype == Quantity.ec:
+                if dectype is DecType.spatial:
+                    if decBins_unit == Unit.gmx_length:
+                        decBins *= const.nano
+                        decBins_unit = "{length}".format(**Unit.default_unit)
+                    else:
+                        raise UnknownUnitError('decBins_unit "{}" cannot be '
+                                               'recognized for ec'.format(
+                                                   decBins_unit))
+                elif dectype is DecType.energy:
+                    if decBins_unit == Unit.er_energy:
+                        decBins *= const.calorie
+                        decBins_unit = "{energy}".format(
+                                **Unit.default_unit)
+                    else:
+                        raise UnknownUnitError('decBins_unit "{}" cannot be '
+                                               'recognized for ec'.format(
+                                                   decBins_unit))
+            elif qnttype == Quantity.vsc:
+                raise UnknownUnitError('decBins_unit "{}" cannot be '
+                                       'recognized for viscosity'.format(
+                                           decBins_unit))
+            else:
+                raise Error("Unknown qnttype: {}".format(qnttype))
+    return decBins, decBins_unit
 
 
 def get_rdf(decname):
@@ -1126,18 +1187,18 @@ def get_edf(decname):
             edf_unit = Unit.dimless
             ebins_unit = Unit.dimless
         else:
-            edf_unit = "{length}$^{{-3}}$ {energy}$^{{-1}} mol".format(
+            edf_unit = "{length}$^{{-3}}$ {energy_inv}".format(
                     **Unit.default_unit)
-            ebins_unit = "{energy} mol$^{{-1}}$".format(
+            ebins_unit = "{energy}".format(
                     **Unit.default_unit)
         return edf, edf_unit, ebins, ebins_unit
 
 
-def get_diffusion(decname):
+def get_D(decname):
     """
-    Return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
+    Return D, D_err, D_unit, fit, fit_unit
     """
-    _check_qnttype(decname, Quantity.ec)
+    qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
         nummol = f['numMol'][...]
         num_moltype, _, _ = _numtype(nummol)
@@ -1145,45 +1206,62 @@ def get_diffusion(decname):
         nD_unit = f['nD'].attrs['unit'].decode()
         nD_err = f['nD_err'][:, :num_moltype]
 
-        diffusion = nD / nummol  # L^2 T^-1  [fit, num_moltype]
-        diffusion_err = nD_err / nummol
-        if nD_unit == Unit.dimless:
-            diffusion_unit = Unit.dimless
+    D = nD / nummol  # L^2 T^-1  [fit, num_moltype]
+    D_err = nD_err / nummol
+    if nD_unit == Unit.dimless:
+        D_unit = Unit.dimless
+    else:
+        if qnttype == Quantity.ec:
+            if nD_unit in Unit.gmx_ec_nD_list:
+                cc = const.nano**2 / const.pico
+                D *= cc
+                D_err *= cc
+                D_unit = "{length}$^2$ {time}$^{{-1}}$".format(
+                        **Unit.default_unit)
+            else:
+                raise UnknownUnitError('nD_unit "{}" cannot be '
+                                       'recognized'.format(nD_unit))
+        elif qnttype == Quantity.vsc:
+            raise UnknownUnitError('nD_unit "{}" cannot be recognized '
+                                   'for viscosity'.format(nD_unit))
         else:
-            cc = const.nano**2 / const.pico
-            diffusion *= cc
-            diffusion_err *= cc
-            diffusion_unit = "{length}$^2$ {time}$^{{-1}}$".format(
-                    **Unit.default_unit)
+            raise Error("Unknown qnttype: {}".format(qnttype))
 
     fit, fit_unit = get_fit(decname)
-    return diffusion, diffusion_err, diffusion_unit, fit, fit_unit
+    return D, D_err, D_unit, fit, fit_unit
 
 
 def get_decD(decname, dectype):
     """
     Return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
     """
+    qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         decD = gid['decD'][...]  # L^2 T^-1
         decD_unit = gid['decD'].attrs['unit'].decode()
         decD_err = gid['decD_err'][...]
         decBins = gid['decBins'][...]
-        ccD = const.nano**2 / const.pico
-        decD *= ccD
-        decD_err *= ccD
-        decD_unit = "{length}$^2$ {time}$^{{-1}}$".format(
-                **Unit.default_unit)
-        if dectype is DecType.spatial:
-            decBins *= const.nano
-            decBins_unit = "{length}".format(**Unit.default_unit)
-        elif dectype is DecType.energy:
-            decBins *= const.calorie
-            decBins_unit = "{energy} mol$^{{-1}}$".format(
-                    **Unit.default_unit)
+
+    if decD_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if decD_unit in Unit.gmx_ec_nD_list:
+                ccD = const.nano**2 / const.pico
+                decD *= ccD
+                decD_err *= ccD
+                decD_unit = "{length}$^2$ {time}$^{{-1}}$".format(
+                        **Unit.default_unit)
+            else:
+                raise UnknownUnitError('decD_unit "{}" cannot be '
+                                       'recognized'.format(decD_unit))
+        elif qnttype == Quantity.vsc:
+            raise UnknownUnitError('decD_unit "{}" cannot be recognized '
+                                   'for viscosity'.format(decD_unit))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
 
     fit, fit_unit = get_fit(decname)
+    decBins, decBins_unit = get_decBins(decname, dectype)
     return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
 
 
@@ -1220,6 +1298,9 @@ def get_quantity(decname):
             else:
                 raise UnknownUnitError('nD_unit "{}" cannot be recognized '
                                        'for viscosity'.format(nD_unit))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
         qnt_total = nDTotal * nD2qnt
         qnt_totol_err = nDTotal_err * nD2qnt
         qnt = nD * zz * nD2qnt
@@ -1250,106 +1331,96 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
     return arr, decBins
 
 
-def get_ec_dec(decname, dectype, sep_nonlocal=True, nonlocal_ref=None,
-               avewidth=None):
+def get_decqnt_sd(decname, sep_nonlocal=True, nonlocal_ref=None,
+                  avewidth=None):
     """
-    Return ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
-           ec_local, ec_nonlocal
+    Return decqnt, decqnt_unit, decBins, decBins_unit, fit, fit_unit,
+           decqnt_local, decqnt_nonlocal
     """
-    _check_qnttype(decname, Quantity.ec)
-    nD2ec = _nD_to_qnt_const(decname)
+    dectype = DecType.spatial
+    qnttype = get_qnttype(decname)
+    nD2qnt = _nD_to_qnt_const(decname)
     with h5py.File(decname, 'r') as f:
         gid = f[dectype.value]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
-        volume = f['volume'][...]
-        temperature = f['temperature'][...]
         num_moltype, _, _ = _numtype(nummol)
-        zz = _zz(charge, nummol)
         nD = f['nD'][...]
+        nD_unit = f['nD'].attrs['unit'].decode()
         decD = gid['decD'][...]  # L^2 T^-1
         decBins = gid['decBins'][...]
-        beta = 1 / (const.k * temperature)
+        decBins_unit = gid['decBins'].attrs['unit'].decode()
         paircount = gid['decPairCount'][...]
         bw = decBins[1] - decBins[0]
 
-        if dectype is DecType.energy:
-            decD, _ = _symmetrize_array(decD, decBins)
-            paircount, decBins = _symmetrize_array(paircount, decBins)
+    if qnttype == Quantity.ec:
+        zz = _zz(charge, nummol)
+    elif qnttype == Quantity.vsc:
+        zz = np.ones_like(_zz(charge, nummol))
+    else:
+        raise Error("Unknown qnttype: {}".format(qnttype))
 
-        if sep_nonlocal:
-            if dectype is DecType.spatial:
-                if nonlocal_ref is None:
-                    nonlocal_ref_idx = decBins.size / np.sqrt(3)
-                else:
-                    nonlocal_ref_idx = int(nonlocal_ref / bw)
-                if avewidth is None:
-                    avewidth = 0.25
-                avewidth_idx = int(avewidth / bw)
-            elif dectype is DecType.energy:
-                raise NotImplementedError(
-                        "ec_dec with sep_nonlocal is not implemented "
-                        "for DecType.energy yet")
-            else:
-                raise Error("Impossible DecType...")
-            decD_nonlocal = np.mean(
-                    decD[:, :,
-                         nonlocal_ref_idx - avewidth_idx:
-                         nonlocal_ref_idx + avewidth_idx],
-                    axis=-1)
-            ec_nonlocal = (_nummolpair(nummol) / volume *
-                           decD_nonlocal *
-                           zz[num_moltype:] * beta)
+    if sep_nonlocal:
+        if nonlocal_ref is None:
+            nonlocal_ref_idx = decBins.size / np.sqrt(3)
         else:
-            decD_nonlocal = np.zeros(decD.shape[:-1])
-            ec_nonlocal = np.zeros_like(decD_nonlocal)
+            nonlocal_ref_idx = int(nonlocal_ref / bw)
+        if avewidth is None:
+            avewidth = 0.25
+        avewidth_idx = int(avewidth / bw)
+        decD_nonlocal = np.mean(
+                decD[:, :,
+                     nonlocal_ref_idx - avewidth_idx:
+                     nonlocal_ref_idx + avewidth_idx],
+                axis=-1)
+        decqnt_nonlocal = (_nummolpair(nummol) * decD_nonlocal *
+                           zz[num_moltype:] * nD2qnt)
+    else:
+        decD_nonlocal = np.zeros(decD.shape[:-1])
+        decqnt_nonlocal = np.zeros_like(decD_nonlocal)
 
-        ec_local = (paircount / volume *
-                    (decD - decD_nonlocal[:, :, np.newaxis]) *
-                    zz[num_moltype:, np.newaxis] * beta)
-        ec_local[np.isnan(ec_local)] = 0
+    decqnt_local = (paircount * (decD - decD_nonlocal[:, :, np.newaxis]) *
+                    zz[num_moltype:, np.newaxis] * nD2qnt)
+    decqnt_local[np.isnan(decqnt_local)] = 0
+    decqnt_local = integrate.cumtrapz(decqnt_local, initial=0)
 
-        if dectype is DecType.energy:
-            ec_local = (integrate.cumtrapz(
-                ec_local[..., :(decBins.size+1)/2], initial=0) +
-                        integrate.cumtrapz(
-                ec_local[..., -1:(decBins.size-1)/2-1:-1], initial=0))
-            ec_nonlocal = np.zeros(ec_local.shape[:-1])
-            decBins = decBins[:(decBins.size+1)/2]
-        else:
-            ec_local = integrate.cumtrapz(ec_local, initial=0)
+    qnt_auto = (nD[:, :num_moltype] * zz[:num_moltype] * nD2qnt)
+    decqnt = qnt_auto[:, :, np.newaxis] * np.ones_like(decBins)
 
-        cc = (1 / const.nano**3 *
-              const.nano**2 / const.pico *
-              const.e**2)
-        ec_nonlocal *= cc
-        ec_local *= cc
-        ec_dec_unit = "{siemens} {length}$^{{-1}}$".format(
-                **Unit.default_unit)
-        if dectype is DecType.spatial:
-            decBins *= const.nano
-            decBins_unit = "{length}".format(**Unit.default_unit)
-        elif dectype is DecType.energy:
-            decBins *= const.calorie
-            decBins_unit = "{energy} mol$^{{-1}}$".format(
+    # decqnt = qnt_auto + qnt_cross
+    #        = qnt_auto + (decqnt_local + decqnt_nonlocal)
+    for r in range(num_moltype):
+        for c in range(r, num_moltype):
+            idx = _pairtype_index(r, c, num_moltype)
+            decqnt[:, r] += (decqnt_local[:, idx] +
+                             decqnt_nonlocal[:, idx, np.newaxis])
+            if (r != c):
+                decqnt[:, c] += (decqnt_local[:, idx] +
+                                 decqnt_nonlocal[:, idx, np.newaxis])
+
+    if qnttype == Quantity.ec:
+        if nD_unit in Unit.gmx_ec_nD_list:
+            decqnt_unit = "{siemens} {length}$^{{-1}}$".format(
                     **Unit.default_unit)
+        else:
+            raise UnknownUnitError('nD_unit "{}" cannot be '
+                                   'recognized'.format(nD_unit))
+    elif qnttype == Quantity.vsc:
+        if nD_unit == Unit.dimless:
+            decqnt_unit = Unit.dimless
+        else:
+            raise UnknownUnitError('nD_unit "{}" cannot be recognized '
+                                   'for viscosity'.format(nD_unit))
+    else:
+        raise Error("Unknown qnttype: {}".format(qnttype))
 
-        ec_auto = (nD[:, :num_moltype] * zz[:num_moltype] * nD2ec)
-        ec_dec = ec_auto[:, :, np.newaxis] * np.ones_like(decBins)
-
-        # ec_dec = ec_auto + ec_cross = ec_auto + (ec_local + ec_nonlocal)
-        for r in range(num_moltype):
-            for c in range(r, num_moltype):
-                idx = _pairtype_index(r, c, num_moltype)
-                ec_dec[:, r] += (ec_local[:, idx] +
-                                 ec_nonlocal[:, idx, np.newaxis])
-                if (r != c):
-                    ec_dec[:, c] += (ec_local[:, idx] +
-                                     ec_nonlocal[:, idx, np.newaxis])
+    if decBins_unit == Unit.gmx_length:
+        decBins *= const.nano
+        decBins_unit = "{length}".format(**Unit.default_unit)
 
     fit, fit_unit = get_fit(decname)
-    return (ec_dec, ec_dec_unit, decBins, decBins_unit, fit, fit_unit,
-            ec_local[:, :, -1], ec_nonlocal)
+    return (decqnt, decqnt_unit, decBins, decBins_unit, fit, fit_unit,
+            decqnt_local[:, :, -1], decqnt_nonlocal)
 
 
 def get_normalize_paircount(decname, dectype):
@@ -1461,7 +1532,7 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
             **Unit.default_unit)
 
     decBins *= const.calorie
-    decBins_unit = "{energy} mol$^{{-1}}$".format(
+    decBins_unit = "{energy}".format(
             **Unit.default_unit)
 
     fit, fit_unit = get_fit(decname)
@@ -1514,7 +1585,7 @@ def report_decond(decname):
     quantity = get_qnttype(decname)
     if quantity == Quantity.ec:
         diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
-            get_diffusion(decname)
+            get_D(decname)
         print("Diffusion")
         print("=========")
         print("{:<15} {:<}".format(

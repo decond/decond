@@ -10,13 +10,13 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 from scipy import interpolate
 
-default_outbasename = "rdf-D-ecdec"
-parser = argparse.ArgumentParser(description="Plot rdf-D-ecdec")
+default_outbasename = "rdf-D-decqnt"
+parser = argparse.ArgumentParser(description="Plot rdf-D-decqnt")
 parser.add_argument('decond', help="decond analysis file. <decond.d5>")
 parser.add_argument('--decond_D', metavar='DECOND', nargs='+',
                     help="decond analysis file(s) for plotting D. <decond.d5>")
-parser.add_argument('--decond_ecdec', metavar='DECOND',
-                    help="decond analysis file for plotting ecdec."
+parser.add_argument('--decond_decqnt', metavar='DECOND',
+                    help="decond analysis file for plotting decqnt."
                          " <decond.d5>")
 parser.add_argument('--smooth_D', action='store_true',
                     help="smooth D")
@@ -65,6 +65,21 @@ D_top = None       # D_top = 0.004
 D_bottom = None    # D_bottom = -0.001
 sig_top = None     # sig_top = 0.75
 sig_bottom = None  # sig_bottom = 0
+
+# axis labels
+# e.g.
+# xlabel_rdf = r"$r$\ \ (\AA)"
+# ylabel_rdf = r"$\textsl{\textrm{g}}_{IL}(r)$"
+# xlabel_D = r"$r$\ \ (\AA)"
+# ylabel_D = r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)"
+# xlabel_qnt = r"$\lambda$\ \ (\AA)"
+# ylabel_qnt = r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)"
+xlabel_rdf = r'$r$'
+ylabel_rdf = r'$\textsl{\textrm{g}}(r)$'
+xlabel_D = r'$r$'
+ylabel_D = r'$D(r)$'
+xlabel_qnt = r'$\lambda$'
+ylabel_qnt = r'quantity$(\lambda)$'
 
 # ticks for x-axis
 xticks = None  # xticks = np.arange(0, 21, 5)
@@ -171,13 +186,13 @@ else:
         assert(sdD_plot_list is not None)
         assert(len(sdD_plot_list) == len(decond_D))
 
-if (args.decond_ecdec is None):
-    decond_ecdec = args.decond
+if (args.decond_decqnt is None):
+    decond_decqnt = args.decond
 else:
-    decond_ecdec = args.decond_ecdec
+    decond_decqnt = args.decond_decqnt
 
-g, rBins = da.get_rdf(args.decond)[0:2]
-DI, _, _, fit = da.get_diffusion(decond_D[0])[0:4]
+g, rBins, rBins_unit = da.get_rdf(args.decond)[0:3]
+DI, _, DI_unit, fit = da.get_D(decond_D[0])[0:4]
 sdD_list = []
 rBins_sdD_list = []
 g_sdD_list = []
@@ -188,24 +203,27 @@ for file in decond_D:
     rBins_sdD_list.append(_rBins_sdD)
     g_sdD_list.append(da.get_rdf(file)[0])
 
-sigI, sig_unit, rBins_sigI, _, _, _, sig_local, sig_nonlocal = da.get_ec_dec(
-        decond_ecdec, da.DecType.spatial, sep_nonlocal=sep_nonlocal,
-        nonlocal_ref=nonlocal_ref, avewidth=avewidth)
+sigI, sig_unit, rBins_sigI, _, _, _, sig_local, sig_nonlocal = (
+        da.get_decqnt_sd(decond_decqnt, sep_nonlocal=sep_nonlocal,
+                         nonlocal_ref=nonlocal_ref, avewidth=avewidth))
 
 print()
-print("Electrical conductivity from cross terms ({})".format(sig_unit))
+print("({})".format(sig_unit))
 print("=======================================")
 print("{:<10} {:<}".format('local', str(sig_local[fitkey])))
 print("{:<10} {:<}".format('nonlocal', str(sig_nonlocal[fitkey])))
 print()
 
-rBins /= da.const.angstrom
-for rBins_sdD in rBins_sdD_list:
-    rBins_sdD /= da.const.angstrom
-rBins_sigI /= da.const.angstrom
-DI /= da.const.angstrom**2 / da.const.pico
-for sdD in sdD_list:
-    sdD /= da.const.angstrom**2 / da.const.pico
+if rBins_unit == da.Unit.si_length:
+    rBins /= da.const.angstrom
+    for rBins_sdD in rBins_sdD_list:
+        rBins_sdD /= da.const.angstrom
+    rBins_sigI /= da.const.angstrom
+
+if DI_unit == da.Unit.si_D:
+    DI /= da.const.angstrom**2 / da.const.pico
+    for sdD in sdD_list:
+        sdD /= da.const.angstrom**2 / da.const.pico
 
 numPlots = 3
 
@@ -227,8 +245,8 @@ for i, rdf in enumerate(g):
 
 axs[0].legend(loc=rdf_legend_loc)
 #    axs[0].set_title("Fit {} ps".format(fitkey))
-axs[0].set_xlabel(r"$r$\ \ (\AA)")
-axs[0].set_ylabel(r"$\textsl{\textrm{g}}_{IL}(r)$")
+axs[0].set_xlabel(xlabel_rdf)
+axs[0].set_ylabel(ylabel_rdf)
 plt.text(abc_pos[0], abc_pos[1], '(a)', transform=axs[0].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
@@ -271,8 +289,8 @@ for n, (sdD, rBins_sdD, g_sdD) in enumerate(
                         linestyle=lineStyle[numIonTypes + i],
                         color=color[numIonTypes + i])
 
-axs[1].set_xlabel(r"$r$\ \ (\AA)")
-axs[1].set_ylabel(r"$D^{(1)}_I$, $D^{(2)}_{IL}(r)$\ \ (\AA$^2$ ps$^{-1}$)")
+axs[1].set_xlabel(xlabel_D)
+axs[1].set_ylabel(ylabel_D)
 axs[1].legend(loc=D_legend_loc)
 # axs[1].legend(loc=(0.515, 0.245), labelspacing=0.2)
 # axs[1].set_title("threshold {}".format(threshold))
@@ -287,8 +305,8 @@ for i, sig in enumerate(sigI[fitkey]):
     if i in sig_plot_list:
         axs[2].plot(rBins_sigI, sig, label=label[i], color=color[i])
         axs[2].legend(loc=sig_legend_loc)
-axs[2].set_xlabel(r"$\lambda$\ \ (\AA)")
-axs[2].set_ylabel(r"$\sigma_I(\lambda)$\ \ (S m$^{-1}$)")
+axs[2].set_xlabel(xlabel_qnt)
+axs[2].set_ylabel(ylabel_qnt)
 plt.text(abc_pos[0], abc_pos[1], '(c)', transform=axs[2].transAxes,
          horizontalalignment='left', verticalalignment='top')
 
