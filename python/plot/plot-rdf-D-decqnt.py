@@ -126,7 +126,7 @@ num_smooth_point = 500
 # D(\infty) = average of D(r) over nonlocal_ref - avewidth < r < nonlocal_ref + avewidth
 # note that nonlocal_ref and avewidth are in the unit of nm
 sep_nonlocal = True
-nonlocal_ref = None  # default to cell-length / np.sqrt(3)
+nonlocal_ref = None  # default to halfCellLength
 avewidth = 0.25
 
 # other adjustment

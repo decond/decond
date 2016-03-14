@@ -1331,7 +1331,7 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
     return arr, decBins
 
 
-def get_decqnt_sd(decname, sep_nonlocal=True, nonlocal_ref=None,
+def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
                   avewidth=None):
     """
     Return decqnt, decqnt_unit, decBins, decBins_unit, fit, fit_unit,
