@@ -52,7 +52,9 @@ FLFLAGS = $(HDF5_LINK) $(FFTW_LINK) $(XDRFILE_LINK)
 
 
 # ===== Program =====
-PROGRAM = trjconv2com decond
+DEC = decond
+TRJCONV = trjconv2com
+PROGRAM = $(TRJCONV) $(DEC)
 
 TRJCONV_DEPS = xdr.o top.o utility.o varpars.o
 TRJCONV_OBJS = trjconv2com.o $(TRJCONV_DEPS)
@@ -64,10 +66,10 @@ DECOND_OBJS = decond.o $(DECOND_DEPS)
 .PHONY : all
 all : $(addprefix $(BINDIR)/, $(PROGRAM))
 
-$(BINDIR)/trjconv2com : $(addprefix $(SRCDIR)/, $(TRJCONV_OBJS))
+$(BINDIR)/$(TRJCONV) : $(addprefix $(SRCDIR)/, $(TRJCONV_OBJS))
 	$(FC) $^ $(FLFLAGS) -o $@ 
 
-$(BINDIR)/decond : $(addprefix $(SRCDIR)/, $(DECOND_OBJS))
+$(BINDIR)/$(DEC) : $(addprefix $(SRCDIR)/, $(DECOND_OBJS))
 	$(FC) $^ $(FLFLAGS) -o $@
 
 
