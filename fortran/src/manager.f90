@@ -38,7 +38,7 @@ module manager
   real(rk) :: tmp_r
   integer :: trjfileio
   integer, allocatable :: framecount(:)
-  real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
+  real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qnt_ave(:, :), qq(:)
   !one frame data (dim=qnt_dim, atom)
   real(rk), allocatable :: qnt(:, :, :)
   !pos(dim=world_dim, timeFrame, atom), qnt(dim=qnt_dim, timeFrame, atom)
@@ -483,6 +483,12 @@ contains
           write(*,*) "Allocation failed: qnt_tmp"
           call mpi_abend()
         end if
+        allocate(qnt_ave(world_dim * world_dim, sysnumatom), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: qnt_ave"
+          call mpi_abend()
+        end if
+        qnt_ave = 0.0_rk
       end select
 
       numframe_read = 0
@@ -521,6 +527,8 @@ contains
         case (dec_mode_vsc)
           call read_xyz(trjfileio, pos_tmp, info=info_xyz, opt_data=qnt_tmp)
           read(info_xyz, *) dum_c, xyz_version, time(i), density
+          ! calculate the time averge of qnt
+          qnt_ave = qnt_ave + qnt_tmp
         end select
 
         numframe_read = numframe_read + 1
@@ -552,23 +560,37 @@ contains
         end select
       end do
 
-      select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        call close_xdr(trjfileio)
-      case (dec_mode_vsc)
-        cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
-        call close_xyz(trjfileio)
-      end select
-
       write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
         write(*,*) "Number of frames expected to read is not the same as actually read!"
         call mpi_abend()
       end if
 
+      select case (dec_mode)
+      case (dec_mode_ec0, dec_mode_ec1)
+        call close_xdr(trjfileio)
+      case (dec_mode_vsc)
+        cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
+        qnt_ave = qnt_ave / numframe
+        n = 0
+        do j = 1, world_dim
+          do k = 1, world_dim
+            if (j /= k) then
+              n = n + 1
+              qnt(n, i, :) = qnt(n, i, :) - qnt_ave((j - 1) * world_dim + k, :)
+            end if
+          end do
+        end do
+do n = 1, sysnumatom
+  write(*,*) qnt_ave(:, n)
+end do
+        call close_xyz(trjfileio)
+      end select
+
       timestep = time(2) - time(1)
       deallocate(pos_tmp)
       deallocate(qnt_tmp)
+      if (dec_mode == dec_mode_vsc) deallocate(qnt_ave)
       deallocate(time)
       endtime = mpi_wtime()
       write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
