@@ -7,10 +7,11 @@ module varpars
   integer, parameter:: rk = real64
   integer, parameter :: line_len = 1024
   character(len=*), parameter :: line_len_str = "1024"
-  character(len=*), parameter :: decond_version = "v0.5.0-pre"
+  character(len=*), parameter :: decond_version = "v0.5.0-dev-vel"
   character(len=*), parameter :: dec_mode_ec0 = "ec0"
   character(len=*), parameter :: dec_mode_ec1 = "ec1"
   character(len=*), parameter :: dec_mode_vsc = "vsc"
+  character(len=*), parameter :: dec_mode_vel = "vel"
   integer, parameter :: world_dim = 3
   integer :: totnummol, sysnumatom
   character(len=line_len) :: corrfile, trjfile, dec_mode

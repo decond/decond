@@ -11,6 +11,7 @@ class Quantity:
     key = 'quantity'
     ec = 'electrical conductivity'
     vsc = 'viscosity'
+    vel = 'velocity correlation'
 
 
 class Unit:
@@ -158,10 +159,7 @@ class CorrFile(h5py.File):
         ww = np.ones(self.num_alltype, dtype=np.int)
         for i in range(self.num_moltype):
             for j in range(i, self.num_moltype):
-                if i == j:
-                    ww[self.num_moltype +
-                       _pairtype_index(i, j, self.num_moltype)] = 1
-                else:
+                if i != j:
                     ww[self.num_moltype +
                        _pairtype_index(i, j, self.num_moltype)] = 2
         return ww
@@ -193,8 +191,9 @@ class CorrFile(h5py.File):
             self.buffer.nDTotalCesaro = np.sum(
                     self.buffer.nDCesaro *
                     (self.zz * self.ww)[:, np.newaxis], axis=0)
-        elif qnttype == Quantity.vsc:
-            self.buffer.nDTotalCesaro = np.sum(self.buffer.nDCesaro, axis=0)
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            self.buffer.nDTotalCesaro = np.sum(
+                    self.buffer.nDCesaro * self.ww[:, np.newaxis], axis=0)
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
 
@@ -1109,10 +1108,10 @@ def get_fit(decname):
                     fit_unit = Unit.si_time
                 else:
                     raise UnknownUnitError('fit_unit "{}" cannot be recognized'
-                                           ' for ec'.format(fit_unit))
-            elif qnttype == Quantity.vsc:
+                                           ' for {}'.format(fit_unit, qnttype))
+            elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
                 raise UnknownUnitError('fit_unit "{}" cannot be recognized '
-                                       'for viscosity'.format(fit_unit))
+                                       'for {}'.format(fit_unit, qnttype))
             else:
                 raise Error("Unknown qnttype: {}".format(qnttype))
     return fit, fit_unit
@@ -1147,10 +1146,10 @@ def get_decBins(decname, dectype):
                         raise UnknownUnitError('decBins_unit "{}" cannot be '
                                                'recognized for ec'.format(
                                                    decBins_unit))
-            elif qnttype == Quantity.vsc:
+            elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
                 raise UnknownUnitError('decBins_unit "{}" cannot be '
-                                       'recognized for viscosity'.format(
-                                           decBins_unit))
+                                       'recognized for {}'.format(
+                                           decBins_unit, qnttype))
             else:
                 raise Error("Unknown qnttype: {}".format(qnttype))
     return decBins, decBins_unit
@@ -1221,9 +1220,9 @@ def get_D(decname):
             else:
                 raise UnknownUnitError('nD_unit "{}" cannot be '
                                        'recognized'.format(nD_unit))
-        elif qnttype == Quantity.vsc:
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
             raise UnknownUnitError('nD_unit "{}" cannot be recognized '
-                                   'for viscosity'.format(nD_unit))
+                                   'for {}'.format(nD_unit, qnttype))
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
 
@@ -1254,9 +1253,9 @@ def get_decD(decname, dectype):
             else:
                 raise UnknownUnitError('decD_unit "{}" cannot be '
                                        'recognized'.format(decD_unit))
-        elif qnttype == Quantity.vsc:
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
             raise UnknownUnitError('decD_unit "{}" cannot be recognized '
-                                   'for viscosity'.format(decD_unit))
+                                   'for {}'.format(decD_unit, qnttype))
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
 
@@ -1291,13 +1290,13 @@ def get_quantity(decname):
             else:
                 raise UnknownUnitError('nD_unit "{}" cannot be '
                                        'recognized'.format(nD_unit))
-        elif qnttype == Quantity.vsc:
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
             zz = 1
             if nD_unit == Unit.dimless:
                 qnt_unit = Unit.dimless
             else:
                 raise UnknownUnitError('nD_unit "{}" cannot be recognized '
-                                       'for viscosity'.format(nD_unit))
+                                       'for {}'.format(nD_unit, qnttype))
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
 
@@ -1355,7 +1354,7 @@ def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
 
     if qnttype == Quantity.ec:
         zz = _zz(charge, nummol)
-    elif qnttype == Quantity.vsc:
+    elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
         zz = np.ones_like(_zz(charge, nummol))
     else:
         raise Error("Unknown qnttype: {}".format(qnttype))
@@ -1405,12 +1404,12 @@ def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
         else:
             raise UnknownUnitError('nD_unit "{}" cannot be '
                                    'recognized'.format(nD_unit))
-    elif qnttype == Quantity.vsc:
+    elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
         if nD_unit == Unit.dimless:
             decqnt_unit = Unit.dimless
         else:
             raise UnknownUnitError('nD_unit "{}" cannot be recognized '
-                                   'for viscosity'.format(nD_unit))
+                                   'for {}'.format(nD_unit, qnttype))
     else:
         raise Error("Unknown qnttype: {}".format(qnttype))
 

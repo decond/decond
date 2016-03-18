@@ -4,7 +4,7 @@ module manager
   use utility, only: get_pairindex_upper_diag
   use varpars, only: line_len, line_len_str, rk, decond_version, &
                      trjfile, corrfile, dec_mode, &
-                     dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, &
+                     dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, dec_mode_vel, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
@@ -257,6 +257,61 @@ contains
         end if
         charge = 0
 
+      case ('-vel')
+        if (myrank == root .and. dec_mode /= 'undefined') then
+          write(*,*) "Only one mode can be given!"
+          call print_usage()
+          call mpi_abend()
+        end if
+        dec_mode = dec_mode_vel
+        qnt_dim = world_dim
+
+        call get_command_argument(i, trjfile)
+        i = i + 1
+        num_subarg = count_arg(i, num_arg)
+        num_arg_per_moltype = 2
+        if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -" // trim(dec_mode) // ': ', num_subarg + 1
+            call print_usage()
+            call mpi_abend()
+          end if
+        end if
+
+        nummoltype = num_subarg / num_arg_per_moltype
+
+        allocate(sys%mol(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abend()
+        end if
+
+        do n = 1, nummoltype
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totnummol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*, "(A)") "sys%mol%type = "
+          do n = 1, nummoltype
+            write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
+          end do
+          write(*,*)
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+        ! unused for viscosity
+        allocate(charge(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abend()
+        end if
+        charge = 0
+
       case ('-n', '--numframe')
         call get_command_argument(i, arg)
         i = i + 1
@@ -442,10 +497,10 @@ contains
       select case (dec_mode)
       case (dec_mode_ec0, dec_mode_ec1)
         sysnumatom = read_natom_xdr(trjfile)
-      case (dec_mode_vsc)
+      case (dec_mode_vsc, dec_mode_vel)
         sysnumatom = read_natom_xyz(trjfile)
       end select
-      if (dec_mode == dec_mode_ec1 .or. dec_mode == dec_mode_vsc) then
+      if (dec_mode == dec_mode_ec1 .or. dec_mode == dec_mode_vsc .or. dec_mode == dec_mode_vel) then
         if (sysnumatom /= totnummol) then
           write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
           write(*,*) "In ec1 and vsc modes, sysnumatom should equal to totnummol!"
@@ -471,7 +526,7 @@ contains
       end if
 
       select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
+      case (dec_mode_ec0, dec_mode_ec1, dec_mode_vel)
         allocate(qnt_tmp(qnt_dim, sysnumatom), stat=stat)
         if (stat /=0) then
           write(*,*) "Allocation failed: qnt_tmp"
@@ -489,7 +544,7 @@ contains
       select case (dec_mode)
       case (dec_mode_ec0, dec_mode_ec1)
         call open_xdr(trjfileio, trjfile)
-      case (dec_mode_vsc)
+      case (dec_mode_vsc, dec_mode_vel)
         call open_xyz(trjfileio, trjfile, 'old')
       end select
       do i = 1, numframe
@@ -505,7 +560,7 @@ contains
               write(*,*) "trjfile end-of-file! ", i-1, " frames have been read"
               call mpi_abend()
             end if
-          case (dec_mode_vsc)
+          case (dec_mode_vsc, dec_mode_vel)
             call read_xyz(trjfileio, pos_tmp)
           end select
         end do
@@ -518,7 +573,7 @@ contains
             write(*,*) "Reading trajectory error"
             call mpi_abend()
           end if
-        case (dec_mode_vsc)
+        case (dec_mode_vsc, dec_mode_vel)
           call read_xyz(trjfileio, pos_tmp, info=info_xyz, opt_data=qnt_tmp)
           read(info_xyz, *) dum_c, xyz_version, time(i), density
         end select
@@ -531,7 +586,7 @@ contains
           if (do_sd) then
             call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
           end if
-        case (dec_mode_ec1)
+        case (dec_mode_ec1, dec_mode_vel)
           qnt(:, i, :) = qnt_tmp
           if (do_sd) then
             pos(:, i, :) = pos_tmp
@@ -555,7 +610,7 @@ contains
       select case (dec_mode)
       case (dec_mode_ec0, dec_mode_ec1)
         call close_xdr(trjfileio)
-      case (dec_mode_vsc)
+      case (dec_mode_vsc, dec_mode_vel)
         cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
         call close_xyz(trjfileio)
       end select
@@ -816,7 +871,8 @@ contains
                                    OUT_TYPE = "CorrFile", &
                                    ATTR_QNT = "quantity", &
                                    ATTR_QNT_EC = "electrical conductivity", &
-                                   ATTR_QNT_VSC = "viscosity"
+                                   ATTR_QNT_VSC = "viscosity", &
+                                   ATTR_QNT_VEL = "velocity correlation"
     !/Dataset
     character(len=*), parameter :: DSETNAME_VOLUME = "volume", &
                                    DSETNAME_TEMP = "temperature", &
@@ -862,6 +918,15 @@ contains
       unit_decbins_ed = ec_unit_decbins_ed
     case (dec_mode_vsc)
       qnt_type = ATTR_QNT_VSC
+      unit_volume = vsc_unit_volume
+      unit_corr = vsc_unit_corr
+      unit_time = vsc_unit_time
+      unit_temperature = vsc_unit_temperature
+      unit_charge = vsc_unit_charge
+      unit_decbins_sd = vsc_unit_decbins_sd
+      unit_decbins_ed = vsc_unit_decbins_ed
+    case (dec_mode_vel)
+      qnt_type = ATTR_QNT_VEL
       unit_volume = vsc_unit_volume
       unit_corr = vsc_unit_corr
       unit_time = vsc_unit_time
@@ -1149,6 +1214,8 @@ contains
     write(*, *) "-vsc <trajectory.xyz> <molecule1> <number1>"
     write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
+    write(*, *) "-vel <trajectory.xyz> <molecule1> <number1>"
+    write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
     write(*, *) "Provide the necessary parameters"
     write(*, *) "--------------------------------"
