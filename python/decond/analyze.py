@@ -23,20 +23,22 @@ class Unit:
     si_energy = 'J'
     si_siemens = 'S'
     si_temperature = 'K'
-    si_D = 'm$^2$ s$^{-1}$'
+    si_D = r'm$^2$ s$^{-1}$'
+    si_corr = r'm$^2$ s$^{-2}$'
 
     gmx_time = 'ps'
     gmx_length = 'nm'
     gmx_energy = 'kJ mol$^{-1}$'
     gmx_temperature = si_temperature
-    gmx_ec_nD_list = ["nm$^2$ ps$^{-1}$", "nm$^2$ $ps^{-1}$"]
+    gmx_ec_nD_list = [r"nm$^2$ ps$^{-1}$", r"nm$^2$ $ps^{-1}$"]
+    gmx_ec_corr = r"nm$^2$ ps$^{-2}$"
 
-    er_energy = 'kcal mol$^{-1}$'
+    er_energy = r'kcal mol$^{-1}$'
 
     default_unit = {'time': si_time,
                     'length': si_length,
                     'energy': gmx_energy,
-                    'energy_inv': 'kJ$^{-1}$ mol',
+                    'energy_inv': r'kJ$^{-1}$ mol',
                     'siemens': si_siemens,
                     'temperature': si_temperature}
 
@@ -1099,24 +1101,46 @@ def get_fit(decname):
     with h5py.File(decname, 'r') as f:
         fit = f['fit'][...]
         fit_unit = f['fit'].attrs['unit'].decode()
-        if fit_unit == Unit.dimless:
-            fit_unit = Unit.dimless
-        else:
-            if qnttype == Quantity.ec:
-                if fit_unit == Unit.gmx_time:
-                    fit *= const.pico
-                    fit_unit = Unit.si_time
-                else:
-                    raise UnknownUnitError('fit_unit "{}" cannot be recognized'
-                                           ' for {}'.format(fit_unit, qnttype))
-            elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
-                raise UnknownUnitError('fit_unit "{}" cannot be recognized '
-                                       'for {}'.format(fit_unit, qnttype))
+
+    if fit_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if fit_unit == Unit.gmx_time:
+                fit *= const.pico
+                fit_unit = Unit.si_time
             else:
-                raise Error("Unknown qnttype: {}".format(qnttype))
+                raise UnknownUnitError('fit_unit "{}" cannot be recognized'
+                                       ' for {}'.format(fit_unit, qnttype))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('fit_unit "{}" cannot be recognized '
+                                   'for {}'.format(fit_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
     return fit, fit_unit
 
-def get_decBins(decname, dectype):
+def get_timelags(decname):
+    """
+    Return timelags, timelags_unit
+    """
+    with h5py.File(decname, 'r') as f:
+        timelags = f['timeLags']
+        timelags_unit = f['timeLags'].attrs['unit'].decode()
+
+    if timelags_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if timelags_unit == Unit.gmx_time:
+                timelags *= const.pico
+                timelags_unit = Unit.si_time
+            else:
+                raise UnknownUnitError('timelags_unit "{}" cannot be recognized'
+                                       ' for {}'.format(timelags_unit, qnttype))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('timelags_unit "{}" cannot be recognized '
+                                   'for {}'.format(timelags_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+    return timelags, timelags_unit
+
+def get_decbins(decname, dectype):
     """
     Return decBins, decBins_unit
     """
@@ -1125,9 +1149,7 @@ def get_decBins(decname, dectype):
         gid = f[dectype.value]
         decBins = gid['decBins'][...]
         decBins_unit = gid['decBins'].attrs['unit'].decode()
-        if decBins_unit == Unit.dimless:
-            decBins_unit = Unit.dimless
-        else:
+        if decBins_unit != Unit.dimless:
             if qnttype == Quantity.ec:
                 if dectype is DecType.spatial:
                     if decBins_unit == Unit.gmx_length:
@@ -1153,6 +1175,41 @@ def get_decBins(decname, dectype):
             else:
                 raise Error("Unknown qnttype: {}".format(qnttype))
     return decBins, decBins_unit
+
+
+def get_deccorr(decname, dectype):
+    """
+    Return deccorr, deccorr_err, deccorr_unit,
+           decbins, decbins_unit, timelags, timelags_unit
+    """
+    qnttype = get_qnttype(decname)
+    timelags, timelags_unit = get_timelags(decname)
+    decbins, decbins_unit = get_decbins(decname, dectype)
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
+        deccorr = gid['decCorr'][...]
+        deccorr_err = gid['decCorr_err'][...]
+        deccorr_unit = gid['decCorr'].attrs['unit'].decode()
+
+    if deccorr_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if deccorr_unit == Unit.gmx_ec_corr:
+                cc = const.nano**2 / const.pico**2
+                deccorr *= cc
+                deccorr_err *= cc
+                deccorr_unit = "{length}$^2$ {time}$^{{-2}}$".format(
+                        **Unit.default_unit)
+            else:
+                raise UnknownUnitError('deccorr_unit "{}" cannot be recognized'
+                                       ' for {}'.format(deccorr_unit, qnttype))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('decD_unit "{}" cannot be recognized '
+                                   'for {}'.format(deccorr_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
+    return (deccorr, deccorr_err, deccorr_unit,
+            decbins, decbins_unit, timelags, timelags_unit)
 
 
 def get_rdf(decname):
@@ -1260,7 +1317,7 @@ def get_decD(decname, dectype):
             raise Error("Unknown qnttype: {}".format(qnttype))
 
     fit, fit_unit = get_fit(decname)
-    decBins, decBins_unit = get_decBins(decname, dectype)
+    decBins, decBins_unit = get_decbins(decname, dectype)
     return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
 
 
@@ -1581,8 +1638,8 @@ def window_decond(outname, decname, window, report=True):
 def report_decond(decname):
     print()
 
-    quantity = get_qnttype(decname)
-    if quantity == Quantity.ec:
+    qnttype = get_qnttype(decname)
+    if qnttype == Quantity.ec:
         diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
             get_D(decname)
         print("Diffusion")
@@ -1611,7 +1668,7 @@ def report_decond(decname):
                 '', str(ec_total[i]), str(ec_total_err[i])))
             print()
 
-    elif quantity == Quantity.vsc:
+    elif qnttype == Quantity.vsc:
         vsc_total, vsc_total_err, vsc, vsc_err, vsc_unit, fit, fit_unit = \
             get_quantity(decname)
         print("Viscosity")
