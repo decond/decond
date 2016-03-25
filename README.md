@@ -1,6 +1,6 @@
 Decond
 ======
-Decond is a framework to analyze the transport properties in electrolyte solution with various decomposition methods. Currently, the decomposition by species and by spatial correlation is implemented and is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
+Decond is a framework to analyze the transport properties of fluid with various decomposition methods. Currently, the decomposition by species and by spatial correlation is implemented and is based on [J. Chem. Phys. 141, 044126 (2014)](http://dx.doi.org/10.1063/1.4890741).
 
 More details can be found on the [wiki page](https://github.com/kmtu/decond/wiki). If you find bugs or have questions, feel free to [open an issue](https://github.com/kmtu/decond/issues/new), or leave a message in the [chat room](https://gitter.im/kmtu/decond).
 
