@@ -7,6 +7,9 @@ FC = h5pfc
 # -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
 MODFLAG = -module
 
+# optimization flag: -Kfast for Fujitsu (K) computers
+OPTFLAG =
+
 # XTC Library directory (where lib/ and include/ are located inside)
 XDRFILE_DIR = $(HOME)/local
 
@@ -45,7 +48,7 @@ FFTW_LINK = $(FFTW_DIR)/lib/libfftw3.a
 SRCDIR = ./src
 BINDIR = ../bin
 
-FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL)
+FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) $(OPTFLAG)
 # FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) -g -check all -traceback
 
 FLFLAGS = $(HDF5_LINK) $(FFTW_LINK) $(XDRFILE_LINK)
