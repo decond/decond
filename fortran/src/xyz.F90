@@ -1,5 +1,9 @@
 module xyz
   use varpars, only: rk
+#ifndef FORTRAN2008
+  use utility, only: newunit
+#endif
+
   implicit none
   private
   integer, parameter :: line_len = 1024
@@ -13,7 +17,11 @@ contains
     integer, intent(out) :: unit
     character(len=*), intent(in) :: file, status
 
+#ifdef FORTRAN2008
     open(newunit=unit, file=file, status=status)
+#else
+    open(newunit(unit), file=file, status=status)
+#endif
   end subroutine
 
   subroutine write_xyz(unit, coord, num_atom, info, atom_name, opt_data)

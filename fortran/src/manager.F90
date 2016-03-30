@@ -1,7 +1,11 @@
 module manager
   use mpiproc
   use hdf5
+#ifdef FORTRAN2008
   use utility, only: get_pairindex_upper_diag
+#else
+  use utility, only: get_pairindex_upper_diag, newunit
+#endif
   use varpars, only: line_len, line_len_str, rk, decond_version, &
                      trjfile, corrfile, dec_mode, &
                      dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, dec_mode_vel, &
@@ -1106,7 +1110,11 @@ contains
     logical :: found_average
 
     found_average = .false.
+#ifdef FORTRAN2008
     open(newunit=logio, file=logfile, status='old', action="READ", form="FORMATTED")
+#else
+    open(newunit(logio), file=logfile, status='old', action="READ", form="FORMATTED")
+#endif
     do while(.true.)
       read(logio, "(A"//line_len_str//")", iostat=stat) line
       if (stat > 0) then

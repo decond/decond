@@ -1,6 +1,10 @@
 module top
   use, intrinsic :: iso_fortran_env, only: real64
+#ifdef FORTRAN2008
   use utility, only: count_record_in_string
+#else
+  use utility, only: count_record_in_string, newunit
+#endif
   implicit none
 
   private
@@ -33,7 +37,11 @@ contains
     implicit none
     character(len=*), intent(in) :: filename
   
+#ifdef FORTRAN2008
     open(newunit=open_top, file=filename, status='old', action="READ", form="FORMATTED")
+#else
+    open(newunit(open_top), file=filename, status='old', action="READ", form="FORMATTED")
+#endif
   end function open_top
 
   subroutine close_top(htop)

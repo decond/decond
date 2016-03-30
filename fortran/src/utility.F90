@@ -33,38 +33,33 @@ module utility
          get_pairindex_upper_diag, parse_version, swap, &
          get_pairindex_upper_nodiag, f2c_string
 
+#ifndef FORTRAN2008
+  public newunit
+#endif
+
   interface swap
     module procedure swap_int, swap_char
   end interface
 
 contains
-  ! The following function is a snippet from Fortran wiki and in public
-  ! domain.
-  ! 
-  ! This is a simple function to search for an available unit.
-  ! LUN_MIN and LUN_MAX define the range of possible LUNs to check.
-  ! The UNIT value is returned by the function, and also by the optional
-  ! argument. This allows the function to be used directly in an OPEN
-  ! statement, and optionally save the result in a local variable.
-  ! If no units are available, -1 is returned.
-  integer function newunit(unit)
-    implicit none
+#ifndef FORTRAN2008
+  integer function newunit(unit) result(n)
+    ! http://www.fortran90.org/src/best-practices.html
+    ! returns lowest i/o unit number not in use
     integer, intent(out), optional :: unit
-    ! local
-    integer, parameter :: LUN_MIN=100, LUN_MAX=200
-    logical :: opened
-    integer :: lun
-    ! begin
-    newunit=-1
-    do lun=LUN_MIN,LUN_MAX
-       inquire(unit=lun,opened=opened)
-       if (.not. opened) then
-          newunit=lun
-          exit
-       end if
+    logical inuse
+    integer, parameter :: nmin=10   ! avoid lower numbers which are sometimes reserved
+    integer, parameter :: nmax=999  ! may be system-dependent
+    do n = nmin, nmax
+      inquire(unit=n, opened=inuse)
+      if (.not. inuse) then
+        if (present(unit)) unit=n
+        return
+      end if
     end do
-    if (present(unit)) unit=newunit
-  end function newunit
+    stop "newunit ERROR: available unit not found."
+  end function
+#endif /* FORTRAN2008 */
 
   function f2c_string(string)
     implicit none

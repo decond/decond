@@ -8,7 +8,7 @@ FC = h5pfc
 MODFLAG = -module
 
 # optimization flag: -Kfast for Fujitsu (K) computers
-OPTFLAG =
+FCFLAG =
 
 # XTC Library directory (where lib/ and include/ are located inside)
 XDRFILE_DIR = $(HOME)/local
@@ -48,7 +48,7 @@ FFTW_LINK = $(FFTW_DIR)/lib/libfftw3.a
 SRCDIR = ./src
 BINDIR = ../bin
 
-FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) $(OPTFLAG)
+FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) $(FCFLAG)
 # FCFLAGS = $(MODFLAG) $(SRCDIR) $(HDF5_INCL) $(FFTW_INCL) -g -check all -traceback
 
 FLFLAGS = $(HDF5_LINK) $(FFTW_LINK) $(XDRFILE_LINK)
@@ -99,7 +99,7 @@ $(SRCDIR)/correlation.o : $(SRCDIR)/fftw.o
 
 
 # ===================
-$(SRCDIR)/%.o : $(SRCDIR)/%.f90
+$(SRCDIR)/%.o : $(SRCDIR)/%.F90
 	$(FC) -c $(FCFLAGS) $< -o $@
 
 
