@@ -7,7 +7,9 @@ FC = h5pfc
 # -module for Intel ifort, -J for GNU gfortran, -M for Fujitsu frt
 MODFLAG = -module
 
-# optimization flag: -Kfast for Fujitsu (K) computers
+# compiler flags:
+# -Kfast for Fujitsu compiler (K computer)
+# -DFORTRAN2008 for compilers support Fortran 2008 specification
 FCFLAG =
 
 # XTC Library directory (where lib/ and include/ are located inside)
