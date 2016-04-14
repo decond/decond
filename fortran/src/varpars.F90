@@ -7,7 +7,7 @@ module varpars
   integer, parameter:: rk = real64
   integer, parameter :: line_len = 1024
   character(len=*), parameter :: line_len_str = "1024"
-  character(len=*), parameter :: decond_version = "0.5.0"
+  character(len=*), parameter :: decond_version = "0.5.1"
   character(len=*), parameter :: dec_mode_ec0 = "ec0"
   character(len=*), parameter :: dec_mode_ec1 = "ec1"
   character(len=*), parameter :: dec_mode_vsc = "vsc"
