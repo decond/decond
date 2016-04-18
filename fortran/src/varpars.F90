@@ -18,7 +18,7 @@ module varpars
   integer :: numframe, maxlag, nummoltype, skiptrj, num_moltypepair_all
   integer, allocatable :: charge(:), framecount(:)
   real(rk) :: cell(world_dim), timestep, temperature
-  logical :: do_sd, do_ed
+  logical :: do_sd, do_ed, do_minus_avg
   type(system) :: sys
   integer :: qnt_dim
 end module varpars
