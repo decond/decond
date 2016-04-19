@@ -798,7 +798,7 @@ contains
                   qnt_mavg_r(n, 1:numframe_k) = qnt_r(n, k:numframe, ir) - qnt_avg_r(n)
                   qnt_mavg_c(n, 1:numframe_k) = qnt_c(n, 1:numframe_k, jc) - qnt_avg_c(n)
                 end do
-                qq(1:numframe_k) = sum(qnt_mavg_r * qnt_mavg_c, 1)
+                qq(1:numframe_k) = sum(qnt_mavg_r(:, 1:numframe_k) * qnt_mavg_c(:, 1:numframe_k), 1)
               else
                 qq(1:numframe_k) = sum(qnt_r(:, k:numframe, ir) * qnt_c(:, 1:numframe_k, jc), 1)
               end if
