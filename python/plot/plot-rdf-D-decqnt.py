@@ -197,6 +197,8 @@ sdD_list = []
 rBins_sdD_list = []
 g_sdD_list = []
 
+print("fitting range: {}".format(fit[fitkey]))
+
 for file in decond_D:
     _sdD, _, _, _rBins_sdD = da.get_decD(file, da.DecType.spatial)[0:4]
     sdD_list.append(_sdD)
@@ -229,6 +231,7 @@ numPlots = 3
 
 halfCellIndex = rBins.size / np.sqrt(3)
 halfCellLength = rBins[halfCellIndex]
+print("halfCellLength = {}".format(halfCellLength))
 
 fig, axs = plt.subplots(numPlots, 1, sharex=False, figsize=figsize3)
 
