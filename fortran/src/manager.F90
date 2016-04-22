@@ -1318,6 +1318,10 @@ contains
     write(*, *) "         energy-decomposition bin width. default = 0.1"
     write(*, *) "         only meaningful when -ed is given."
     write(*, *)
+    write(*, *) "-mavg: adopt minus-average scheme"
+    write(*, *) "       <q(t)q(0)> becomes <(q(t)-<q(t)>)(q(0)-<q(0)>)>"
+    write(*, *) "       note: must be used with -sd and/or -ed"
+    write(*, *)
     write(*, *) "-d <num_domain_r> <num_domain_c>:"
     write(*, *) "   manually assign the MPI decomposition pattern"
   end subroutine print_usage
