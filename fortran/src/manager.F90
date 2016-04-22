@@ -12,7 +12,7 @@ module manager
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
-                     timestep, world_dim, qnt_dim
+                     timestep, world_dim, qnt_dim, do_minus_avg
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
@@ -64,6 +64,7 @@ contains
     maxlag = -1
     do_sd = .false.
     do_ed = .false.
+    do_minus_avg = .false.
     num_domain_r = 0
     num_domain_c = 0
     call sd_init()
@@ -393,6 +394,9 @@ contains
         if (myrank == root) write(*,*) "Decond " // decond_version
         call mpi_abend()
 
+      case ('-mavg')
+        do_minus_avg = .true.
+
       case default
         if (myrank == root) write(*,*) "Unknown argument: ", trim(adjustl(arg))
         if (myrank == root) call print_usage()
@@ -419,6 +423,11 @@ contains
 
     if (dec_mode == dec_mode_vsc .and. do_ed) then
       write(*,*) 'Sorry, buddy. -' // dec_mode_vsc // " with -ed have not been implemented."
+      call mpi_abend()
+    end if
+
+    if (do_minus_avg .and. .not. (do_sd .or. do_ed)) then
+      write(*,*) "Sorry, -mavg must be used with -sd or -ed."
       call mpi_abend()
     end if
 
@@ -674,6 +683,9 @@ contains
 
   subroutine decompose()
     !decomposition
+    real(rk), allocatable :: qnt_avg_r(:), qnt_avg_c(:), qnt_mavg_r(:, :), qnt_mavg_c(:, :)
+    integer :: ir, jc
+
     if (myrank == root) then
       write(*,*) "start one-two decomposition"
       if (do_sd) write(*,*) "start spatial decomposition"
@@ -685,6 +697,32 @@ contains
     if (stat /=0) then
       write(*,*) "Allocation failed: qq"
       call mpi_abend()
+    end if
+
+    if (do_minus_avg) then
+      allocate(qnt_avg_r(qnt_dim), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: qnt_avg_r"
+        call mpi_abend()
+      end if
+
+      allocate(qnt_avg_c(qnt_dim), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: qnt_avg_c"
+        call mpi_abend()
+      end if
+
+      allocate(qnt_mavg_r(qnt_dim, numframe), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: qnt_mavg_r"
+        call mpi_abend()
+      end if
+
+      allocate(qnt_mavg_c(qnt_dim, numframe), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: qnt_mavg_c"
+        call mpi_abend()
+      end if
     end if
 
     allocate(ncorr(maxlag+1, num_moltypepair_all), stat=stat)
@@ -712,36 +750,58 @@ contains
     if (myrank == root) write(*,*) "time for allocation (sec):", mpi_wtime() - starttime
 
     do j = c_start, c_end
+      jc = j - c_start + 1
       do i = r_start, r_end
+        ir = i - r_start + 1
         if (i == j) then
-          if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
-                                            ", c =", j-c_start+1, " of ", num_c
+          if (myrank == root) write(*,*) "loop r =", ir, " of ", num_r,&
+                                            ", c =", jc, " of ", num_c
           starttime2 = mpi_wtime()
           moltypepair_allidx = getMolTypeIndex(i, sys%mol(:)%num, nummoltype)
           if (do_sd .or. do_ed) then
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
-              qq(1:numframe_k) = sum(qnt_r(:, k:numframe, i-r_start+1) * qnt_c(:, 1:numframe_k, j-c_start+1), 1)
+              if (do_minus_avg) then
+                qnt_avg_r = sum(qnt_r(:, k:numframe, ir), 2) / numframe_k
+                qnt_avg_c = sum(qnt_c(:, 1:numframe_k, jc), 2) / numframe_k
+                do n = 1, qnt_dim
+                  qnt_mavg_r(n, 1:numframe_k) = qnt_r(n, k:numframe, ir) - qnt_avg_r(n)
+                  qnt_mavg_c(n, 1:numframe_k) = qnt_c(n, 1:numframe_k, jc) - qnt_avg_c(n)
+                end do
+                qq(1:numframe_k) = sum(qnt_mavg_r(:, 1:numframe_k) * qnt_mavg_c(:, 1:numframe_k), 1)
+              else
+                qq(1:numframe_k) = sum(qnt_r(:, k:numframe, ir) * qnt_c(:, 1:numframe_k, jc), 1)
+              end if
               ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(qq(1:numframe_k))
             end do
           else
             do k = 1, qnt_dim
-              corr_tmp = corr(qnt_r(k, :, i-r_start+1), maxlag)
+              corr_tmp = corr(qnt_r(k, :, ir), maxlag)
               ncorr(:, moltypepair_allidx) = ncorr(:, moltypepair_allidx) + corr_tmp(maxlag+1:)
             end do
           end if
         else
-          if (myrank == root) write(*,*) "loop r =",i-r_start+1, " of ", num_r,&
-                                            ", c =", j-c_start+1, " of ", num_c
+          if (myrank == root) write(*,*) "loop r =",ir, " of ", num_r,&
+                                            ", c =", jc, " of ", num_c
           starttime2 = mpi_wtime()
           moltypepair_idx = getMolTypePairIndex(i, j, sys%mol(:)%num, nummoltype)
           moltypepair_allidx = moltypepair_idx + nummoltype
           if (do_sd .or. do_ed) then
-            if (do_sd) call sd_getbinindex(i-r_start+1, j-c_start+1, cell, sd_binIndex)
+            if (do_sd) call sd_getbinindex(ir, jc, cell, sd_binIndex)
             if (do_ed) call ed_getbinindex(i, j, ed_binIndex)
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
-              qq(1:numframe_k) = sum(qnt_r(:, k:numframe, i-r_start+1) * qnt_c(:, 1:numframe_k, j-c_start+1), 1)
+              if (do_minus_avg) then
+                qnt_avg_r = sum(qnt_r(:, k:numframe, ir), 2) / numframe_k
+                qnt_avg_c = sum(qnt_c(:, 1:numframe_k, jc), 2) / numframe_k
+                do n = 1, qnt_dim
+                  qnt_mavg_r(n, 1:numframe_k) = qnt_r(n, k:numframe, ir) - qnt_avg_r(n)
+                  qnt_mavg_c(n, 1:numframe_k) = qnt_c(n, 1:numframe_k, jc) - qnt_avg_c(n)
+                end do
+                qq(1:numframe_k) = sum(qnt_mavg_r(:, 1:numframe_k) * qnt_mavg_c(:, 1:numframe_k), 1)
+              else
+                qq(1:numframe_k) = sum(qnt_r(:, k:numframe, ir) * qnt_c(:, 1:numframe_k, jc), 1)
+              end if
               !TODO: test if this sum should be put here or inside the following loop for better performance
               ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(qq(1:numframe_k))
               do n = 1, numframe_k
@@ -779,7 +839,7 @@ contains
 
           else ! one-two only
             do k = 1, qnt_dim
-              corr_tmp = corr(qnt_r(k, :, i-r_start+1), qnt_c(k, :, j-c_start+1), maxlag)
+              corr_tmp = corr(qnt_r(k, :, ir), qnt_c(k, :, jc), maxlag)
               ncorr(:, moltypepair_allidx) = ncorr(:, moltypepair_allidx) + corr_tmp(maxlag+1:)
             end do
           end if

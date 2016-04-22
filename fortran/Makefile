@@ -91,7 +91,11 @@ $(SRCDIR)/spatial_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o top.o utility.o)
 
 $(SRCDIR)/energy_dec.o : $(addprefix $(SRCDIR)/, mpiproc.o utility.o)
 
+$(SRCDIR)/mpiproc.o : $(addprefix $(SRCDIR)/, varpars.o)
+
 $(SRCDIR)/xdr.o : $(addprefix $(SRCDIR)/, varpars.o utility.o)
+
+$(SRCDIR)/xyz.o : $(addprefix $(SRCDIR)/, varpars.o utility.o)
 
 $(SRCDIR)/varpars.o : $(SRCDIR)/top.o
 
