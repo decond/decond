@@ -1122,7 +1122,7 @@ def get_timelags(decname):
     Return timelags, timelags_unit
     """
     with h5py.File(decname, 'r') as f:
-        timelags = f['timeLags']
+        timelags = f['timeLags'][...]
         timelags_unit = f['timeLags'].attrs['unit'].decode()
 
     if timelags_unit != Unit.dimless:
