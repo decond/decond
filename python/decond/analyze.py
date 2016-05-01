@@ -32,6 +32,7 @@ class Unit:
     gmx_temperature = si_temperature
     gmx_ec_nD_list = [r"nm$^2$ ps$^{-1}$", r"nm$^2$ $ps^{-1}$"]
     gmx_ec_corr = r"nm$^2$ ps$^{-2}$"
+    gmx_ec_dcesaro = r"nm$^2$"
 
     er_energy = r'kcal mol$^{-1}$'
 
@@ -1175,6 +1176,41 @@ def get_decbins(decname, dectype):
             else:
                 raise Error("Unknown qnttype: {}".format(qnttype))
     return decBins, decBins_unit
+
+
+def get_dec_dcesaro(decname, dectype):
+    """
+    Return dec_dcesaro, dec_dcesaro_err, dec_dcesaro_unit,
+           decbins, decbins_unit, timelags, timelags_unit
+    """
+    qnttype = get_qnttype(decname)
+    timelags, timelags_unit = get_timelags(decname)
+    decbins, decbins_unit = get_decbins(decname, dectype)
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
+        dec_dcesaro = gid['decDCesaro'][...]
+        dec_dcesaro_err = gid['decDCesaro_err'][...]
+        dec_dcesaro_unit = gid['decDCesaro'].attrs['unit'].decode()
+
+    if dec_dcesaro_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if dec_dcesaro_unit == Unit.gmx_ec_dcesaro:
+                cc = const.nano**2
+                dec_dcesaro *= cc
+                dec_dcesaro_err *= cc
+                dec_dcesaro_unit = "{length}$^2$".format(
+                        **Unit.default_unit)
+            else:
+                raise UnknownUnitError('dec_dcesaro_unit "{}" cannot be recognized'
+                                       ' for {}'.format(dec_dcesaro_unit, qnttype))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('decD_unit "{}" cannot be recognized '
+                                   'for {}'.format(dec_dcesaro_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
+    return (dec_dcesaro, dec_dcesaro_err, dec_dcesaro_unit,
+            decbins, decbins_unit, timelags, timelags_unit)
 
 
 def get_deccorr(decname, dectype):
