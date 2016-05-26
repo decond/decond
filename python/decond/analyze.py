@@ -3,6 +3,7 @@ import numpy as np
 import scipy.integrate as integrate
 import scipy.constants as const
 from scipy.special import gammainc
+from scipy import interpolate
 from enum import Enum
 from ._version import __version__
 
@@ -1118,10 +1119,12 @@ def get_fit(decname):
             raise Error("Unknown qnttype: {}".format(qnttype))
     return fit, fit_unit
 
+
 def get_timelags(decname):
     """
     Return timelags, timelags_unit
     """
+    qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
         timelags = f['timeLags'][...]
         timelags_unit = f['timeLags'].attrs['unit'].decode()
@@ -1140,6 +1143,7 @@ def get_timelags(decname):
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
     return timelags, timelags_unit
+
 
 def get_decbins(decname, dectype):
     """
@@ -1323,9 +1327,14 @@ def get_D(decname):
     return D, D_err, D_unit, fit, fit_unit
 
 
-def get_decD(decname, dectype):
+def get_decD(decname, dectype, weight=None, threshold=0.0,
+             smooth=None, num_smooth_point=500):
     """
     Return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
+
+    smoothing method
+    http://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.interpolate.interp1d.html
+    ‘linear’, ‘nearest’, ‘zero’, ‘slinear’, ‘quadratic, ‘cubic’
     """
     qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
@@ -1354,6 +1363,37 @@ def get_decD(decname, dectype):
 
     fit, fit_unit = get_fit(decname)
     decBins, decBins_unit = get_decbins(decname, dectype)
+
+    if weight is not None:
+        decD_ret = []
+        decBins_ret = []
+        w_masked = np.where(np.isnan(weight), -1, weight)
+        for fitkey, DD in enumerate(decD):
+            decD_ret.append([])
+            decBins_ret.append([])
+            for itype, D in enumerate(DD):
+                idx_threshold = next(
+                        i for i, w in enumerate(w_masked[itype])
+                        if w >= threshold)
+
+                _decBins = decBins[idx_threshold:]
+                D = D[idx_threshold:]
+
+                if smooth is not None:
+                    not_nan_D = np.logical_not(np.isnan(D))
+                    _decBins = _decBins[not_nan_D]
+                    D = D[not_nan_D]
+
+                    D_interp = interpolate.interp1d(_decBins, D, kind=smooth)
+                    _decBins = np.linspace(
+                            _decBins[0], _decBins[-1], num_smooth_point)
+                    D = D_interp(_decBins)
+
+                decD_ret[fitkey].append(D)
+                decBins_ret[fitkey].append(_decBins)
+
+        decD = decD_ret
+        decBins = decBins_ret
     return decD, decD_err, decD_unit, decBins, decBins_unit, fit, fit_unit
 
 
