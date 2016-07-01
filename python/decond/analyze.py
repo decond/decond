@@ -1463,6 +1463,101 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
     return arr, decBins
 
 
+def get_decqnt2_sd(decname, sep_nonlocal=False, sep_r=None):
+    """
+    Return decqnt, decqnt_unit, decBins, decBins_unit, fit, fit_unit,
+           decqnt_local, decqnt_nonlocal
+    """
+    dectype = DecType.spatial
+    qnttype = get_qnttype(decname)
+    nD2qnt = _nD_to_qnt_const(decname)
+    with h5py.File(decname, 'r') as f:
+        gid = f[dectype.value]
+        nummol = f['numMol'][...]
+        charge = f['charge'][...]
+        vol = f['volume'][...]
+        num_moltype, _, _ = _numtype(nummol)
+        nD = f['nD'][...]
+        nD_unit = f['nD'].attrs['unit'].decode()
+        decD = gid['decD'][...]  # L^2 T^-1
+        decBins = gid['decBins'][...]
+        decBins_unit = gid['decBins'].attrs['unit'].decode()
+        paircount = gid['decPairCount'][...]
+        bw = decBins[1] - decBins[0]
+
+#     if qnttype != Quantity.vsc:
+#         raise Error("get_decqnt2_sd currenlty only supports qnttype: "
+#                     "{}".format(Quantity.vsc))
+    if qnttype == Quantity.ec:
+        zz = _zz(charge, nummol)
+    elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+        zz = np.ones_like(_zz(charge, nummol))
+    else:
+        raise Error("Unknown qnttype: {}".format(qnttype))
+
+    if sep_nonlocal:
+        if sep_r is None:
+            sep_r = vol**(1/3) / 2
+        vol_out = vol - 4 / 3 * np.pi * sep_r**3
+        sep_idx = int(sep_r / bw) + 1
+        if sep_idx >= decBins.size:
+            raise Error("sep_r is too large: {}, it should be smaller than "
+                        "{}".format(sep_r, decBins[-1]))
+        fx = paircount[np.newaxis, :, sep_idx:] * decD[:, :, sep_idx:]
+        fx[np.isnan(fx)] = 0
+        decD_nonlocal = np.sum(fx, axis=2) / vol_out
+        decqnt_nonlocal = decD_nonlocal * vol * zz[num_moltype:] * nD2qnt
+
+    else:
+        sep_idx = decBins.size
+        decD_nonlocal = np.zeros(decD.shape[:-1])
+        decqnt_nonlocal = np.zeros_like(decD_nonlocal)
+
+    decqnt_local = ((paircount * decD - decD_nonlocal[:, :, np.newaxis]) *
+                    zz[num_moltype:, np.newaxis] * nD2qnt)
+    decqnt_local[np.isnan(decqnt_local)] = 0
+    decqnt_local = integrate.cumtrapz(decqnt_local, initial=0)
+
+    qnt_auto = (nD[:, :num_moltype] * zz[:num_moltype] * nD2qnt)
+    decqnt = qnt_auto[:, :, np.newaxis] * np.ones_like(decBins)
+
+    # decqnt = qnt_auto + qnt_cross
+    #        = qnt_auto + (decqnt_local + decqnt_nonlocal)
+    for r in range(num_moltype):
+        for c in range(r, num_moltype):
+            idx = _pairtype_index(r, c, num_moltype)
+            decqnt[:, r] += (decqnt_local[:, idx] +
+                             decqnt_nonlocal[:, idx, np.newaxis])
+            if (r != c):
+                decqnt[:, c] += (decqnt_local[:, idx] +
+                                 decqnt_nonlocal[:, idx, np.newaxis])
+
+    if qnttype == Quantity.ec:
+        if nD_unit in Unit.gmx_ec_nD_list:
+            decqnt_unit = "{siemens} {length}$^{{-1}}$".format(
+                    **Unit.default_unit)
+        else:
+            raise UnknownUnitError('nD_unit "{}" cannot be '
+                                   'recognized'.format(nD_unit))
+    elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+        if nD_unit == Unit.dimless:
+            decqnt_unit = Unit.dimless
+        else:
+            raise UnknownUnitError('nD_unit "{}" cannot be recognized '
+                                   'for {}'.format(nD_unit, qnttype))
+    else:
+        raise Error("Unknown qnttype: {}".format(qnttype))
+
+    if decBins_unit == Unit.gmx_length:
+        decBins *= const.nano
+        decBins_unit = "{length}".format(**Unit.default_unit)
+
+    fit, fit_unit = get_fit(decname)
+    return (decqnt[..., :sep_idx], decqnt_unit,
+            decBins[:sep_idx], decBins_unit, fit, fit_unit,
+            decqnt_local[:, :, sep_idx-1], decqnt_nonlocal)
+
+
 def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
                   avewidth=None):
     """
