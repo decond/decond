@@ -26,6 +26,7 @@ class Unit:
     si_temperature = 'K'
     si_D = r'm$^2$ s$^{-1}$'
     si_corr = r'm$^2$ s$^{-2}$'
+    si_volume = si_length + r'$^3$'
 
     gmx_time = 'ps'
     gmx_length = 'nm'
@@ -34,11 +35,13 @@ class Unit:
     gmx_ec_nD_list = [r"nm$^2$ ps$^{-1}$", r"nm$^2$ $ps^{-1}$"]
     gmx_ec_corr = r"nm$^2$ ps$^{-2}$"
     gmx_ec_dcesaro = r"nm$^2$"
+    gmx_volume = gmx_length + r'$^3$'
 
     er_energy = r'kcal mol$^{-1}$'
 
     default_unit = {'time': si_time,
                     'length': si_length,
+                    'volume': si_length + r'$^3$',
                     'energy': gmx_energy,
                     'energy_inv': r'kJ$^{-1}$ mol',
                     'siemens': si_siemens,
@@ -1087,6 +1090,33 @@ def get_qnttype(decname):
     return qnttype
 
 
+def get_volume(decname):
+    """
+    Return volume, volume unit
+    """
+    with h5py.File(decname, 'r') as f:
+        vol = f['volume'][...]
+        vol_unit = f['volume'].attrs['unit'].decode()
+
+    if vol_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if vol_unit == Unit.gmx_volume:
+                vol *= const.nano ** 3
+                vol_unit = "{volume}".format(**Unit.default_unit)
+            else:
+                raise UnknownUnitError('vol_unit "{}" cannot be '
+                                       'recognized for ec'.format(
+                                           vol_unit))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('vol_unit "{}" cannot be '
+                                   'recognized for {}'.format(
+                                       vol_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
+    return vol, vol_unit
+
+
 def _check_qnttype(decname, required_qnt):
     quantity = get_qnttype(decname)
     if quantity != required_qnt:
@@ -1589,7 +1619,7 @@ def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
 
     if sep_nonlocal:
         if nonlocal_ref is None:
-            nonlocal_ref_idx = decBins.size / np.sqrt(3)
+            nonlocal_ref_idx = int(decBins.size / np.sqrt(3))
         else:
             nonlocal_ref_idx = int(nonlocal_ref / bw)
         if avewidth is None:
