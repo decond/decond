@@ -1498,22 +1498,22 @@ def get_decqnt2_sd(decname, sep_nonlocal=False, sep_r=None):
     if sep_nonlocal:
         if sep_r is None:
             sep_r = vol**(1/3) / 2
-        vol_out = vol - 4 / 3 * np.pi * sep_r**3
         sep_idx = int(sep_r / bw) + 1
         if sep_idx >= decBins.size:
             raise Error("sep_r is too large: {}, it should be smaller than "
                         "{}".format(sep_r, decBins[-1]))
-        fx = paircount[np.newaxis, :, sep_idx:] * decD[:, :, sep_idx:]
-        fx[np.isnan(fx)] = 0
-        decD_nonlocal = np.sum(fx, axis=2) / vol_out
-        decqnt_nonlocal = decD_nonlocal * vol * zz[num_moltype:] * nD2qnt
+        c_all = np.nansum(paircount[:, :], axis=1)
+        c_out = np.nansum(paircount[:, sep_idx:], axis=1)
+        tmp = paircount[np.newaxis, :, sep_idx:] * decD[:, :, sep_idx:]
+        decD_nonlocal = np.nansum(tmp, axis=2) / c_out[np.newaxis, :]
+        decqnt_nonlocal = decD_nonlocal * c_all * zz[num_moltype:] * nD2qnt
 
     else:
         sep_idx = decBins.size
         decD_nonlocal = np.zeros(decD.shape[:-1])
         decqnt_nonlocal = np.zeros_like(decD_nonlocal)
 
-    decqnt_local = ((paircount * decD - decD_nonlocal[:, :, np.newaxis]) *
+    decqnt_local = (paircount * (decD - decD_nonlocal[:, :, np.newaxis]) *
                     zz[num_moltype:, np.newaxis] * nD2qnt)
     decqnt_local[np.isnan(decqnt_local)] = 0
     decqnt_local = integrate.cumtrapz(decqnt_local, initial=0)
