@@ -1247,7 +1247,7 @@ def get_dec_dcesaro(decname, dectype):
             decbins, decbins_unit, timelags, timelags_unit)
 
 
-def get_deccorr(decname, dectype):
+def get_deccorr(decname, dectype, weight=None, threshold=0.0):
     """
     Return deccorr, deccorr_err, deccorr_unit,
            decbins, decbins_unit, timelags, timelags_unit
@@ -1277,6 +1277,24 @@ def get_deccorr(decname, dectype):
                                    'for {}'.format(deccorr_unit, qnttype))
         else:
             raise Error("Unknown qnttype: {}".format(qnttype))
+
+    if weight is not None:
+        deccorr_ret = []
+        decbins_ret = []
+        w_masked = np.where(np.isnan(weight), -1, weight)
+        for itype, decc in enumerate(deccorr):
+            idx_threshold = next(
+                    i for i, w in enumerate(w_masked[itype])
+                    if w >= threshold)
+
+            _decbins = decbins[idx_threshold:]
+            decc = decc[idx_threshold:, :]
+
+            deccorr_ret.append(decc)
+            decbins_ret.append(_decbins)
+
+        deccorr = deccorr_ret
+        decbins = decbins_ret
 
     return (deccorr, deccorr_err, deccorr_unit,
             decbins, decbins_unit, timelags, timelags_unit)
