@@ -207,7 +207,7 @@ contains
           write(*,*) "sys%mol%num = ", sys%mol%num
         end if
 
-      case ('-vsc')
+      case ('-' // dec_mode_vsc)
         if (myrank == root .and. dec_mode /= 'undefined') then
           write(*,*) "Only one mode can be given!"
           call print_usage()
@@ -262,7 +262,7 @@ contains
         end if
         charge = 0
 
-      case ('-vel')
+      case ('-' // dec_mode_vel)
         if (myrank == root .and. dec_mode /= 'undefined') then
           write(*,*) "Only one mode can be given!"
           call print_usage()
