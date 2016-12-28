@@ -7,12 +7,13 @@ module manager
   use utility, only: get_pairindex_upper_diag, newunit
 #endif
   use varpars, only: line_len, line_len_str, rk, decond_version, &
-                     trjfile, corrfile, dec_mode, &
+                     trjfile, corrfile, dec_mode, trjtype, &
                      dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, dec_mode_vel, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
-                     timestep, world_dim, qnt_dim, do_minus_avg
+                     timestep, world_dim, qnt_dim, do_minus_avg, &
+                     trj_trr, trj_xyz
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
@@ -30,6 +31,15 @@ module manager
   implicit none
   private
   public init_config, read_config, prepare, decompose, output, finish
+
+  abstract interface
+    function read_natom(fname)
+      integer :: read_natom
+      character(len=*), intent(in):: fname
+    end function
+  end interface
+
+  procedure(read_natom), pointer :: read_natom_ptr => null()
 
   integer :: num_arg, num_subarg, num_arg_per_moltype
   character(len=line_len) :: arg
@@ -404,6 +414,14 @@ contains
       end select
     end do
 
+    trjtype = get_trjtype(trjfile)
+    select case (trjtype)
+    case (trj_trr)
+      read_natom_ptr => read_natom_xdr
+    case (trj_xyz)
+      read_natom_ptr => read_natom_xyz
+    end select
+
     !auto1, auto2, ...autoN, cross11, cross12, ..., cross1N, cross22, ...cross2N, cross33,..., crossNN
     != [auto part] + [cross part]
     != [nummoltype] + [nummoltype * (nummoltype + 1) / 2]
@@ -451,6 +469,7 @@ contains
     if (myrank == root) then
       write(*,*) "output corrfile = ", trim(corrfile)
       write(*,*) "input trjfile = ", trim(trjfile)
+      write(*,*) "input trjtype = ", trim(trjtype)
       if (dec_mode == dec_mode_ec0) then
         write(*,*) "input topfile = ", trim(topfile)
         write(*,*) "input logfile = ", trim(logfile)
@@ -507,12 +526,7 @@ contains
     if (myrank == root) then
       write(*,*) "start reading trajectory..."
       starttime = mpi_wtime()
-      select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        sysnumatom = read_natom_xdr(trjfile)
-      case (dec_mode_vsc, dec_mode_vel)
-        sysnumatom = read_natom_xyz(trjfile)
-      end select
+      sysnumatom = read_natom_ptr(trjfile)
       if (dec_mode == dec_mode_ec1 .or. dec_mode == dec_mode_vsc .or. dec_mode == dec_mode_vel) then
         if (sysnumatom /= totnummol) then
           write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
@@ -1266,6 +1280,27 @@ contains
       end do
     end do
   end subroutine com_qnt
+
+  function get_trjtype(fname)
+    implicit none
+    character(len=3) :: get_trjtype
+    character(len=*) :: fname
+    character(len=3) :: trjtype
+    integer :: p
+
+    p = scan(fname, '.', .true.)
+    trjtype = fname(p+1:)
+
+    select case (trjtype)
+    case (trj_trr)
+      get_trjtype = trj_trr
+    case (trj_xyz)
+      get_trjtype = trj_xyz
+    case default
+      write(*,*) "Unknown trjectory type:", trjtype
+      call mpi_abend()
+    end select
+  end function
 
   subroutine print_usage()
     write(*, *) "Necessary arguments"
