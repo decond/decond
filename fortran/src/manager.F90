@@ -37,9 +37,21 @@ module manager
       integer :: read_natom
       character(len=*), intent(in):: fname
     end function
+
+    subroutine open_trj(id, fname, mode)
+      integer, intent(out) :: id
+      character(len=*), intent(in) :: fname
+      character(len=1), optional, intent(in) :: mode
+    end subroutine
+
+    subroutine close_trj(id)
+      integer, intent(in) :: id
+    end subroutine
   end interface
 
   procedure(read_natom), pointer :: read_natom_ptr => null()
+  procedure(open_trj), pointer :: open_trj_ptr => null()
+  procedure(close_trj), pointer :: close_trj_ptr => null()
 
   integer :: num_arg, num_subarg, num_arg_per_moltype
   character(len=line_len) :: arg
@@ -418,8 +430,12 @@ contains
     select case (trjtype)
     case (trj_trr)
       read_natom_ptr => read_natom_xdr
+      open_trj_ptr => open_xdr
+      close_trj_ptr => close_xdr
     case (trj_xyz)
       read_natom_ptr => read_natom_xyz
+      open_trj_ptr => open_xyz
+      close_trj_ptr => close_xyz
     end select
 
     !auto1, auto2, ...autoN, cross11, cross12, ..., cross1N, cross22, ...cross2N, cross33,..., crossNN
@@ -568,12 +584,7 @@ contains
       end select
 
       numframe_read = 0
-      select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        call open_xdr(trjfileio, trjfile)
-      case (dec_mode_vsc, dec_mode_vel)
-        call open_xyz(trjfileio, trjfile, 'old')
-      end select
+      call open_trj_ptr(trjfileio, trjfile)
       do i = 1, numframe
         ! skip first skiptrj frames
         do j = 1, skiptrj-1
@@ -635,12 +646,12 @@ contains
       end do
 
       select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        call close_xdr(trjfileio)
       case (dec_mode_vsc, dec_mode_vel)
-        cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
-        call close_xyz(trjfileio)
+        if (trjtype == trj_xyz) then
+          cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
+        end if
       end select
+      call close_trj_ptr(trjfileio)
 
       write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then

@@ -12,15 +12,31 @@ module xyz
   public :: open_xyz, write_xyz, read_xyz, read_natom_xyz, close_xyz
 
 contains
-  subroutine open_xyz(unit, file, status)
+  subroutine open_xyz(unit, file, mode)
     implicit none
     integer, intent(out) :: unit
-    character(len=*), intent(in) :: file, status
+    character(len=*), intent(in) :: file
+    character(len=1), optional, intent(in) :: mode
+    character(len=1) :: fmode
+    character(len=7) :: fstatus
+
+    if (present(mode)) then
+      fmode = mode
+    else
+      fmode = 'r'
+    end if
+
+    select case (fmode)
+    case ('r')
+      fstatus = 'old'
+    case ('w')
+      fstatus = 'new'
+    end select
 
 #ifdef FORTRAN2008
-    open(newunit=unit, file=file, status=status)
+    open(newunit=unit, file=file, status=fstatus)
 #else
-    open(newunit(unit), file=file, status=status)
+    open(newunit(unit), file=file, status=fstatus)
 #endif
   end subroutine
 
@@ -108,7 +124,7 @@ contains
     character(len=*), intent(in) :: file
     integer :: unit
 
-    call open_xyz(unit, file, 'old')
+    call open_xyz(unit, file, 'r')
     read(unit, *) natom
     call close_xyz(unit)
   end function read_natom_xyz
