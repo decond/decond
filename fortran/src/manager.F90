@@ -65,7 +65,7 @@ module manager
   integer :: moltypepair_idx, moltypepair_allidx
   real(rk) :: tmp_r
   integer :: trjfileio
-  integer, allocatable :: framecount(:)
+  integer, allocatable :: framecount(:), step(:)
   real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
   !one frame data (dim=qnt_dim, atom)
   real(rk), allocatable :: qnt(:, :, :)
@@ -639,6 +639,11 @@ contains
         write(*,*) "Allocation failed: time"
         call mpi_abend()
       end if
+      allocate(step(numframe), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: step"
+        call mpi_abend()
+      end if
 
       select case (dec_mode)
       case (dec_mode_ec0, dec_mode_ec1, dec_mode_vel, dec_mode_vsc1)
@@ -689,7 +694,7 @@ contains
           call read_xyz(trjfileio, pos_tmp, info=info_xyz, opt_data=qnt_tmp)
           read(info_xyz, *) dum_c, xyz_version, time(i), density
         case (dec_mode_vsc1)
-          call read_lmp(trjfileio, pos_tmp, cell=cell, opt_data=qnt_tmp)
+          call read_lmp(trjfileio, pos_tmp, step=step(i), cell=cell, opt_data=qnt_tmp)
         end select
 
         numframe_read = numframe_read + 1
@@ -735,12 +740,15 @@ contains
         call mpi_abend()
       end if
 
-      if (dec_mode /= dec_mode_vsc1) then
+      if (dec_mode == dec_mode_vsc1) then
+        timestep = timestep * (step(2) - step(1))
+      else
         timestep = time(2) - time(1)
       end if
       deallocate(pos_tmp)
       deallocate(qnt_tmp)
       deallocate(time)
+      deallocate(step)
       endtime = mpi_wtime()
       write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
       write(*,*) "timestep = ", timestep
