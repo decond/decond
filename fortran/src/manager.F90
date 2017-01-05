@@ -622,7 +622,7 @@ contains
           call mpi_abend()
         end if
       end select
-      write(*,*) "sysnumatom=", sysnumatom
+      write(*,*) "sysnumatom =", sysnumatom
 
       allocate(qnt(qnt_dim, numframe, totnummol), stat=stat)
       if (stat /=0) then
@@ -1385,6 +1385,8 @@ contains
       get_trjtype = trj_trr
     case (trj_xyz)
       get_trjtype = trj_xyz
+    case (trj_lmp)
+      get_trjtype = trj_lmp
     case default
       write(*,*) "Unknown trjectory type:", trjtype
       call mpi_abend()
@@ -1406,7 +1408,7 @@ contains
     write(*, *) "-vsc0 <trajectory.xyz> <molecule1> <number1>"
     write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
-    write(*, *) "-vsc1 <trajectory.xyz> <timestep> <molecule1> <number1>"
+    write(*, *) "-vsc1 <trajectory.lmp> <timestep> <molecule1> <number1>"
     write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
     write(*, *) "-vel <trajectory.xyz> <molecule1> <number1>"
