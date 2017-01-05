@@ -91,7 +91,7 @@ contains
   ! Close trajectory specified by handle
   subroutine close_xdr(htraj)
     implicit none
-    integer, intent(inout) :: htraj
+    integer, intent(in) :: htraj
     integer(C_INT) :: ret
 
     ret = xdrfile_close(xdr_iohandle(htraj)) 
