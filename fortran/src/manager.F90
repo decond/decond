@@ -14,7 +14,8 @@ module manager
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
                      timestep, world_dim, qnt_dim, do_minus_avg, &
-                     trj_trr, trj_xyz, trj_lmp
+                     trj_trr, trj_xyz, trj_lmp, &
+                     do_diagonal, do_orthogonal
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
@@ -24,7 +25,7 @@ module manager
                          sdcorr, sdpaircount, sd_prep, sd_broadcastpos, &
                          com_pos, sd_prep_corrmemory, sd_collectcorr, &
                          sd_average, sd_getbinindex, sd_cal_num_rbin, &
-                         sd_make_rbins, sd_finish
+                         sd_make_rbins, sd_finish, od_tol
   use energy_dec, only: ed_init, skipeng, num_engfiles, engfiles, ebinwidth, &
                         ed_binIndex, edcorr, num_ebin, edpaircount, ed_prep, &
                         ed_prep_corrmemory, ed_collectcorr, ed_average, &
@@ -89,6 +90,8 @@ contains
     do_sd = .false.
     do_ed = .false.
     do_minus_avg = .false.
+    do_diagonal = .false.
+    do_orthogonal = .false.
     num_domain_r = 0
     num_domain_c = 0
     call sd_init()
@@ -449,6 +452,29 @@ contains
           i = i + 1
         end do
 
+      case ('-od')
+        num_subarg = count_arg(i, num_arg)
+        if (num_subarg /= 2) then
+            write(*,*) "Number of arguments for -od should be 2"
+            call mpi_abend()
+        end if
+
+        call get_command_argument(i, arg)
+        i = i + 1
+        if (trim(arg) == 'diag') then
+            do_diagonal = .true.
+        else if (trim(arg) == 'orth') then
+            do_orthogonal = .true.
+        else
+            write(*,*) "Unknow argument for -od: ", trim(arg)
+            write(*,*) "It has to be either 'diag' or 'orth'"
+            call mpi_abend()
+        end if
+
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) od_tol
+
       case ('-sbwidth')
         call get_command_argument(i, arg)
         i = i + 1
@@ -569,6 +595,13 @@ contains
       write(*,*) "nummoltype = ", nummoltype
       write(*,*) "num_domain_r = ", num_domain_r
       write(*,*) "num_domain_c = ", num_domain_c
+      if (do_diagonal) then
+          write(*, *) "orientaion decompositio = diagonal"
+          write(*, *) "od_tol = ", od_tol
+      else if (do_orthogonal) then
+          write(*, *) "orientaion decompositio = orthogonal"
+          write(*, *) "od_tol = ", od_tol
+      end if
     end if
   end subroutine read_config
 
@@ -918,7 +951,7 @@ contains
               do n = 1, numframe_k
                 if (do_sd) then
                   tmp_i = sd_binIndex(n)
-                  if (tmp_i <= num_rbin) then
+                  if (tmp_i <= num_rbin .and. tmp_i > 0) then
                     sdcorr(k, tmp_i, moltypepair_idx) = sdcorr(k, tmp_i, moltypepair_idx) + qq(n)
                   end if
                 end if
@@ -936,7 +969,7 @@ contains
             do t = 1, numframe
               if (do_sd) then
                 tmp_i = sd_binIndex(t)
-                if (tmp_i <= num_rbin) then
+                if (tmp_i <= num_rbin .and. tmp_i > 0) then
                   sdpaircount(tmp_i, moltypepair_idx) = sdpaircount(tmp_i, moltypepair_idx) + 1d0
                 end if
               end if
@@ -1446,6 +1479,9 @@ contains
     write(*, *) "-sd: do spatial decomposition."
     write(*, *)
     write(*, *) "-ed <engtraj> <engtraj> ...: do energy decomposition."
+    write(*, *)
+    write(*, *) "-od [diag|orth]: do orientaion decomposition, "
+    write(*, *) "                 diagonal or orthogoanl."
     write(*, *)
     write(*, *) "-sbwidth <sBinWidth(nm)>:"
     write(*, *) "         spatial-decomposition bin width. default = 0.01."
