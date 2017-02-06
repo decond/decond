@@ -7,15 +7,18 @@ module manager
   use utility, only: get_pairindex_upper_diag, newunit
 #endif
   use varpars, only: line_len, line_len_str, rk, decond_version, &
-                     trjfile, corrfile, dec_mode, &
-                     dec_mode_ec0, dec_mode_ec1, dec_mode_vsc, dec_mode_vel, &
+                     trjfile, corrfile, dec_mode, trjtype, &
+                     dec_mode_ec0, dec_mode_ec1, dec_mode_vel, &
+                     dec_mode_vsc, dec_mode_vsc0, dec_mode_vsc1, &
                      temperature, numframe, nummoltype, &
                      sys, charge, totnummol, num_moltypepair_all, &
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
-                     timestep, world_dim, qnt_dim, do_minus_avg
+                     timestep, world_dim, qnt_dim, do_minus_avg, &
+                     trj_trr, trj_xyz, trj_lmp
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
+  use lmp, only: open_lmp, close_lmp, read_lmp, read_natom_lmp
   use correlation, only: corr
   use spatial_dec, only: sd_init, rbinwidth, pos, sd_binIndex, num_rbin, &
                          sdcorr, sdpaircount, sd_prep, sd_broadcastpos, &
@@ -31,6 +34,27 @@ module manager
   private
   public init_config, read_config, prepare, decompose, output, finish
 
+  abstract interface
+    function read_natom(fname)
+      integer :: read_natom
+      character(len=*), intent(in):: fname
+    end function
+
+    subroutine open_trj(id, fname, mode)
+      integer, intent(out) :: id
+      character(len=*), intent(in) :: fname
+      character(len=1), optional, intent(in) :: mode
+    end subroutine
+
+    subroutine close_trj(id)
+      integer, intent(in) :: id
+    end subroutine
+  end interface
+
+  procedure(read_natom), pointer :: read_natom_ptr => null()
+  procedure(open_trj), pointer :: open_trj_ptr => null()
+  procedure(close_trj), pointer :: close_trj_ptr => null()
+
   integer :: num_arg, num_subarg, num_arg_per_moltype
   character(len=line_len) :: arg
   integer, allocatable :: start_index(:)
@@ -41,7 +65,7 @@ module manager
   integer :: moltypepair_idx, moltypepair_allidx
   real(rk) :: tmp_r
   integer :: trjfileio
-  integer, allocatable :: framecount(:)
+  integer, allocatable :: framecount(:), step(:)
   real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
   !one frame data (dim=qnt_dim, atom)
   real(rk), allocatable :: qnt(:, :, :)
@@ -207,17 +231,76 @@ contains
           write(*,*) "sys%mol%num = ", sys%mol%num
         end if
 
-      case ('-' // dec_mode_vsc)
+      case ('-' // dec_mode_vsc0, '-' // dec_mode_vsc)
         if (myrank == root .and. dec_mode /= 'undefined') then
           write(*,*) "Only one mode can be given!"
           call print_usage()
           call mpi_abend()
         end if
-        dec_mode = dec_mode_vsc
+        dec_mode = dec_mode_vsc0
         qnt_dim = world_dim * (world_dim - 1)  ! off-diagonal tensor
 
         call get_command_argument(i, trjfile)
         i = i + 1
+        num_subarg = count_arg(i, num_arg)
+        num_arg_per_moltype = 2
+        if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
+          if (myrank == root) then
+            write(*,*) "Wrong number of arguments for -" // trim(dec_mode) // ': ', num_subarg + 1
+            call print_usage()
+            call mpi_abend()
+          end if
+        end if
+
+        nummoltype = num_subarg / num_arg_per_moltype
+
+        allocate(sys%mol(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: sys%mol"
+          call mpi_abend()
+        end if
+
+        do n = 1, nummoltype
+          call get_command_argument(i, sys%mol(n)%type)
+          i = i + 1
+          call get_command_argument(i, arg)
+          i = i + 1
+          read(arg, *) sys%mol(n)%num
+        end do
+
+        totnummol = sum(sys%mol(:)%num)
+        if (myrank == root) then
+          write(*, "(A)") "sys%mol%type = "
+          do n = 1, nummoltype
+            write(*, "(A, X)", advance='no') trim(sys%mol(n)%type)
+          end do
+          write(*,*)
+          write(*,*) "sys%mol%num = ", sys%mol%num
+        end if
+
+        ! unused for viscosity
+        allocate(charge(nummoltype), stat=stat)
+        if (stat /=0) then
+          write(*,*) "Allocation failed: charge"
+          call mpi_abend()
+        end if
+        charge = 0
+
+      case ('-' // dec_mode_vsc1)
+        if (myrank == root .and. dec_mode /= 'undefined') then
+          write(*,*) "Only one mode can be given!"
+          call print_usage()
+          call mpi_abend()
+        end if
+        dec_mode = dec_mode_vsc1
+        qnt_dim = world_dim * (world_dim - 1) / 2  ! half of the off-diagonal tensor
+
+        call get_command_argument(i, trjfile)
+        i = i + 1
+        call get_command_argument(i, arg)
+        i = i + 1
+        read(arg, *) timestep
+
         num_subarg = count_arg(i, num_arg)
         num_arg_per_moltype = 2
         if (mod(num_subarg, num_arg_per_moltype) > 0 .or. num_subarg < num_arg_per_moltype) then
@@ -404,6 +487,22 @@ contains
       end select
     end do
 
+    trjtype = get_trjtype(trjfile)
+    select case (trjtype)
+    case (trj_trr)
+      read_natom_ptr => read_natom_xdr
+      open_trj_ptr => open_xdr
+      close_trj_ptr => close_xdr
+    case (trj_xyz)
+      read_natom_ptr => read_natom_xyz
+      open_trj_ptr => open_xyz
+      close_trj_ptr => close_xyz
+    case (trj_lmp)
+      read_natom_ptr => read_natom_lmp
+      open_trj_ptr => open_lmp
+      close_trj_ptr => close_lmp
+    end select
+
     !auto1, auto2, ...autoN, cross11, cross12, ..., cross1N, cross22, ...cross2N, cross33,..., crossNN
     != [auto part] + [cross part]
     != [nummoltype] + [nummoltype * (nummoltype + 1) / 2]
@@ -421,10 +520,13 @@ contains
       end if
     end if
 
-    if (dec_mode == dec_mode_vsc .and. do_ed) then
-      write(*,*) 'Sorry, buddy. -' // dec_mode_vsc // " with -ed have not been implemented."
-      call mpi_abend()
-    end if
+    select case (dec_mode)
+    case (dec_mode_vsc0, dec_mode_vsc1)
+      if (do_ed) then
+        write(*,*) 'Sorry, buddy. -' // dec_mode_vsc0 // " and -" // dec_mode_vsc1 // " with -ed have not been implemented."
+        call mpi_abend()
+      end if
+    end select
 
     if (do_minus_avg .and. .not. (do_sd .or. do_ed)) then
       write(*,*) "Sorry, -mavg must be used with -sd or -ed."
@@ -451,9 +553,13 @@ contains
     if (myrank == root) then
       write(*,*) "output corrfile = ", trim(corrfile)
       write(*,*) "input trjfile = ", trim(trjfile)
+      write(*,*) "input trjtype = ", trim(trjtype)
       if (dec_mode == dec_mode_ec0) then
         write(*,*) "input topfile = ", trim(topfile)
         write(*,*) "input logfile = ", trim(logfile)
+      end if
+      if (dec_mode == dec_mode_vsc1) then
+        write(*,*) "timestep = ", timestep
       end if
       write(*,*) "temperature = ", temperature
       write(*,*) "numframe= ", numframe
@@ -507,20 +613,16 @@ contains
     if (myrank == root) then
       write(*,*) "start reading trajectory..."
       starttime = mpi_wtime()
+      sysnumatom = read_natom_ptr(trjfile)
       select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        sysnumatom = read_natom_xdr(trjfile)
-      case (dec_mode_vsc, dec_mode_vel)
-        sysnumatom = read_natom_xyz(trjfile)
-      end select
-      if (dec_mode == dec_mode_ec1 .or. dec_mode == dec_mode_vsc .or. dec_mode == dec_mode_vel) then
+      case (dec_mode_ec1, dec_mode_vsc0, dec_mode_vsc1, dec_mode_vel)
         if (sysnumatom /= totnummol) then
           write(*,*) "sysnumatom = ", sysnumatom, ", totnummol = ", totnummol
-          write(*,*) "In ec1 and vsc modes, sysnumatom should equal to totnummol!"
+          write(*,*) "In ec1, vsc0, vsc1, vel modes, sysnumatom should equal to totnummol!"
           call mpi_abend()
         end if
-      end if
-      write(*,*) "sysnumatom=", sysnumatom
+      end select
+      write(*,*) "sysnumatom =", sysnumatom
 
       allocate(qnt(qnt_dim, numframe, totnummol), stat=stat)
       if (stat /=0) then
@@ -537,15 +639,20 @@ contains
         write(*,*) "Allocation failed: time"
         call mpi_abend()
       end if
+      allocate(step(numframe), stat=stat)
+      if (stat /=0) then
+        write(*,*) "Allocation failed: step"
+        call mpi_abend()
+      end if
 
       select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1, dec_mode_vel)
+      case (dec_mode_ec0, dec_mode_ec1, dec_mode_vel, dec_mode_vsc1)
         allocate(qnt_tmp(qnt_dim, sysnumatom), stat=stat)
         if (stat /=0) then
           write(*,*) "Allocation failed: qnt_tmp"
           call mpi_abend()
         end if
-      case (dec_mode_vsc)
+      case (dec_mode_vsc0)
         allocate(qnt_tmp(world_dim * world_dim, sysnumatom), stat=stat)
         if (stat /=0) then
           write(*,*) "Allocation failed: qnt_tmp"
@@ -554,12 +661,7 @@ contains
       end select
 
       numframe_read = 0
-      select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        call open_xdr(trjfileio, trjfile)
-      case (dec_mode_vsc, dec_mode_vel)
-        call open_xyz(trjfileio, trjfile, 'old')
-      end select
+      call open_trj_ptr(trjfileio, trjfile)
       do i = 1, numframe
         ! skip first skiptrj frames
         do j = 1, skiptrj-1
@@ -573,8 +675,10 @@ contains
               write(*,*) "trjfile end-of-file! ", i-1, " frames have been read"
               call mpi_abend()
             end if
-          case (dec_mode_vsc, dec_mode_vel)
+          case (dec_mode_vsc0, dec_mode_vel)
             call read_xyz(trjfileio, pos_tmp)
+          case (dec_mode_vsc1)
+            call read_lmp(trjfileio, pos_tmp)
           end select
         end do
 
@@ -586,9 +690,11 @@ contains
             write(*,*) "Reading trajectory error"
             call mpi_abend()
           end if
-        case (dec_mode_vsc, dec_mode_vel)
+        case (dec_mode_vsc0, dec_mode_vel)
           call read_xyz(trjfileio, pos_tmp, info=info_xyz, opt_data=qnt_tmp)
           read(info_xyz, *) dum_c, xyz_version, time(i), density
+        case (dec_mode_vsc1)
+          call read_lmp(trjfileio, pos_tmp, step=step(i), cell=cell, opt_data=qnt_tmp)
         end select
 
         numframe_read = numframe_read + 1
@@ -599,12 +705,12 @@ contains
           if (do_sd) then
             call com_pos(pos(:, i, :), pos_tmp, start_index, sys, cell)
           end if
-        case (dec_mode_ec1, dec_mode_vel)
+        case (dec_mode_ec1, dec_mode_vel, dec_mode_vsc1)
           qnt(:, i, :) = qnt_tmp
           if (do_sd) then
             pos(:, i, :) = pos_tmp
           end if
-        case (dec_mode_vsc)
+        case (dec_mode_vsc0)
           n = 0
           do j = 1, world_dim
             do k = 1, world_dim
@@ -621,12 +727,12 @@ contains
       end do
 
       select case (dec_mode)
-      case (dec_mode_ec0, dec_mode_ec1)
-        call close_xdr(trjfileio)
-      case (dec_mode_vsc, dec_mode_vel)
-        cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
-        call close_xyz(trjfileio)
+      case (dec_mode_vsc0, dec_mode_vel)
+        if (trjtype == trj_xyz) then
+          cell = (sysnumatom / density)**(1.0_rk / 3.0_rk)
+        end if
       end select
+      call close_trj_ptr(trjfileio)
 
       write(*,*) "numframe_read = ", numframe_read
       if (numframe_read /= numframe) then
@@ -634,10 +740,15 @@ contains
         call mpi_abend()
       end if
 
-      timestep = time(2) - time(1)
+      if (dec_mode == dec_mode_vsc1) then
+        timestep = timestep * (step(2) - step(1))
+      else
+        timestep = time(2) - time(1)
+      end if
       deallocate(pos_tmp)
       deallocate(qnt_tmp)
       deallocate(time)
+      deallocate(step)
       endtime = mpi_wtime()
       write(*,*) "finished reading trajectory. It took ", endtime - starttime, "seconds"
       write(*,*) "timestep = ", timestep
@@ -958,13 +1069,13 @@ contains
                                    ec_unit_decbins_sd = "nm", &
                                    ec_unit_decbins_ed = "kcal mol$^{-1}$"
 
-    character(len=*), parameter :: vsc_unit_volume = "dimensionless", &
-                                   vsc_unit_corr = "dimensionless", &
-                                   vsc_unit_temperature = "dimensionless", &
-                                   vsc_unit_time = "dimensionless", &
-                                   vsc_unit_charge = "dimensionless", &
-                                   vsc_unit_decbins_sd = "dimensionless", &
-                                   vsc_unit_decbins_ed = "dimensionless"
+    character(len=*), parameter :: dimless_unit_volume = "dimensionless", &
+                                   dimless_unit_corr = "dimensionless", &
+                                   dimless_unit_temperature = "dimensionless", &
+                                   dimless_unit_time = "dimensionless", &
+                                   dimless_unit_charge = "dimensionless", &
+                                   dimless_unit_decbins_sd = "dimensionless", &
+                                   dimless_unit_decbins_ed = "dimensionless"
 
     character(len=line_len) :: qnt_type, unit_volume, unit_corr, unit_time, &
                                unit_decbins_sd, unit_decbins_ed, &
@@ -980,24 +1091,24 @@ contains
       unit_charge = ec_unit_charge
       unit_decbins_sd = ec_unit_decbins_sd
       unit_decbins_ed = ec_unit_decbins_ed
-    case (dec_mode_vsc)
+    case (dec_mode_vsc0, dec_mode_vsc1)
       qnt_type = ATTR_QNT_VSC
-      unit_volume = vsc_unit_volume
-      unit_corr = vsc_unit_corr
-      unit_time = vsc_unit_time
-      unit_temperature = vsc_unit_temperature
-      unit_charge = vsc_unit_charge
-      unit_decbins_sd = vsc_unit_decbins_sd
-      unit_decbins_ed = vsc_unit_decbins_ed
+      unit_volume = dimless_unit_volume
+      unit_corr = dimless_unit_corr
+      unit_time = dimless_unit_time
+      unit_temperature = dimless_unit_temperature
+      unit_charge = dimless_unit_charge
+      unit_decbins_sd = dimless_unit_decbins_sd
+      unit_decbins_ed = dimless_unit_decbins_ed
     case (dec_mode_vel)
       qnt_type = ATTR_QNT_VEL
-      unit_volume = vsc_unit_volume
-      unit_corr = vsc_unit_corr
-      unit_time = vsc_unit_time
-      unit_temperature = vsc_unit_temperature
-      unit_charge = vsc_unit_charge
-      unit_decbins_sd = vsc_unit_decbins_sd
-      unit_decbins_ed = vsc_unit_decbins_ed
+      unit_volume = dimless_unit_volume
+      unit_corr = dimless_unit_corr
+      unit_time = dimless_unit_time
+      unit_temperature = dimless_unit_temperature
+      unit_charge = dimless_unit_charge
+      unit_decbins_sd = dimless_unit_decbins_sd
+      unit_decbins_ed = dimless_unit_decbins_ed
     end select
 
     allocate(timeLags(maxlag+1), stat=stat)
@@ -1267,6 +1378,29 @@ contains
     end do
   end subroutine com_qnt
 
+  function get_trjtype(fname)
+    implicit none
+    character(len=3) :: get_trjtype
+    character(len=*) :: fname
+    character(len=3) :: trjtype
+    integer :: p
+
+    p = scan(fname, '.', .true.)
+    trjtype = fname(p+1:)
+
+    select case (trjtype)
+    case (trj_trr)
+      get_trjtype = trj_trr
+    case (trj_xyz)
+      get_trjtype = trj_xyz
+    case (trj_lmp)
+      get_trjtype = trj_lmp
+    case default
+      write(*,*) "Unknown trjectory type:", trjtype
+      call mpi_abend()
+    end select
+  end function
+
   subroutine print_usage()
     write(*, *) "Necessary arguments"
     write(*, *) "=================================================================="
@@ -1279,7 +1413,10 @@ contains
     write(*, *) "-ec1 <trajectory.trr> <molecule1> <charge1> <number1>"
     write(*, *) "      [<molecule2> <charge2> <number2>...]"
     write(*, *)
-    write(*, *) "-vsc <trajectory.xyz> <molecule1> <number1>"
+    write(*, *) "-vsc0 <trajectory.xyz> <molecule1> <number1>"
+    write(*, *) "      [<molecule2> <number2>...]"
+    write(*, *)
+    write(*, *) "-vsc1 <trajectory.lmp> <timestep> <molecule1> <number1>"
     write(*, *) "      [<molecule2> <number2>...]"
     write(*, *)
     write(*, *) "-vel <trajectory.xyz> <molecule1> <number1>"

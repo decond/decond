@@ -74,7 +74,7 @@ contains
   ! Should open fails, the program abends.
   subroutine open_xdr(htraj, fname, mode)
     implicit none
-    integer, intent(inout) :: htraj
+    integer, intent(out) :: htraj
     character(len=*), intent(in) :: fname
     character(len=1), optional, intent(in) :: mode
     character(len=1) :: fmode
@@ -91,7 +91,7 @@ contains
   ! Close trajectory specified by handle
   subroutine close_xdr(htraj)
     implicit none
-    integer, intent(inout) :: htraj
+    integer, intent(in) :: htraj
     integer(C_INT) :: ret
 
     ret = xdrfile_close(xdr_iohandle(htraj)) 
