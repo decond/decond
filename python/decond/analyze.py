@@ -843,14 +843,14 @@ def _get_inner_sel(a, b):
     (a_begin, a_end, b_begin, b_end) = (0, len(a) - 1, 0, len(b) - 1)
 
     if b[0] > a[0]:
-        a_begin = round((b[0] - a[0]) / awidth)
+        a_begin = int(round((b[0] - a[0]) / awidth))
     elif b[0] < a[0]:
-        b_begin = round((a[0] - b[0]) / bwidth)
+        b_begin = int(round((a[0] - b[0]) / bwidth))
 
     if b[-1] < a[-1]:
-        a_end = round((b[-1] - a[0]) / awidth)
+        a_end = int(round((b[-1] - a[0]) / awidth))
     elif b[-1] > a[-1]:
-        b_end = round((a[-1] - b[0]) / bwidth)
+        b_end = int(round((a[-1] - b[0]) / bwidth))
 
     return np.s_[a_begin:a_end+1], np.s_[b_begin:b_end+1]
 
@@ -874,7 +874,7 @@ def _pairtype_index(moltype1, moltype2, num_moltype):
     """
     r = min(moltype1, moltype2)
     c = max(moltype1, moltype2)
-    return r * num_moltype + c - r * (r + 1) / 2
+    return r * num_moltype + c - r * (r + 1) // 2
 
 
 def _fit_to_sel(fit, timelags):
@@ -1727,7 +1727,7 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
     num_moltype, num_pairtype, _ = _numtype(nummol)
 
     def sep_at_end():
-        nonlocal_idx = np.empty(decD.shape[:-1])
+        nonlocal_idx = np.empty(decD.shape[:-1], dtype=int)
         for f in range(nonlocal_idx.shape[0]):
             for t in range(nonlocal_idx.shape[1]):
                 if zz[num_moltype + t] > 0:
@@ -1742,7 +1742,7 @@ def get_ec_dec_energy(decname, sep_nonlocal=True, threshold=0):
         return decD_nonlocal
 
     def sep_at_edf_max():
-        nonlocal_idx = np.empty(decD.shape[:-1])
+        nonlocal_idx = np.empty(decD.shape[:-1], dtype=int)
         for f in range(nonlocal_idx.shape[0]):
             nonlocal_idx[f, :] = np.argmax(paircount, axis=-1)
         for f in range(nonlocal_idx.shape[0]):

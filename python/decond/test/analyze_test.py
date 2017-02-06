@@ -104,7 +104,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
 
         e_decbins = rand_axis(begin, end, scale)
 
-    numpairtype = nummoltype * (nummoltype + 1) / 2
+    numpairtype = nummoltype * (nummoltype + 1) // 2
     numalltype = nummoltype + numpairtype
     numtbin = timeLags.size
     numrbin = r_decbins.size
@@ -190,6 +190,7 @@ def rand_c5(filename, nummoltype, timeLags=None, base_timeLags=None,
                            paircount_amp / 2 + paircount_offset) / numebin
 
     with da.CorrFile(filename, 'w-') as f:
+        f.buffer.quantity = np.string_(da.Quantity.ec)
         f.buffer.charge = charge
         f.buffer.charge_unit = charge_unit
         f.buffer.numMol = numMol
@@ -450,10 +451,10 @@ def test_extend_decond():
 
     with da.DecondFile(decond_extend[0]) as f_all, \
             da.DecondFile(decond_onebyone[1]) as f_one:
-        assert(f_all.buffer.temperature == f_one.buffer.temperature)
-        assert(f_all.buffer.temperature_err == f_one.buffer.temperature_err)
-        assert(f_all.buffer.volume == f_one.buffer.volume)
-        assert(f_all.buffer.volume_err == f_one.buffer.volume_err)
+        np.testing.assert_allclose(f_all.buffer.temperature, f_one.buffer.temperature)
+        np.testing.assert_allclose(f_all.buffer.temperature_err, f_one.buffer.temperature_err)
+        np.testing.assert_allclose(f_all.buffer.volume, f_one.buffer.volume)
+        np.testing.assert_allclose(f_all.buffer.volume_err, f_one.buffer.volume_err)
 
     # get common timeLags
     fs = ([da.CorrFile(file) for file in extend_file] +
@@ -502,10 +503,10 @@ def test_get_rdf():
     print("test_get_rdf: pass")
 
 
-def test_get_diffusion():
-    print("test_get_diffusion: starting...")
-    da.get_diffusion(decondtest)
-    print("test_get_diffusion: pass")
+def test_get_D():
+    print("test_get_D: starting...")
+    da.get_D(decondtest)
+    print("test_get_D: pass")
 
 
 def test_get_decD():
@@ -517,9 +518,9 @@ def test_get_decD():
 
 def test_get_ec_dec():
     print("test_get_ec_dec: starting...")
-    da.get_ec_dec(decondtest, da.DecType.spatial)
+    da.get_decqnt_sd(decondtest)
     try:
-        da.get_ec_dec(decondtest, da.DecType.energy)
+        da.get_ec_dec_energy(decondtest)
     except da.NotImplementedError:
         print("  NotImplementedError caught")
     print("test_get_ec_dec: pass")
