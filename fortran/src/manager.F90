@@ -596,10 +596,10 @@ contains
       write(*,*) "num_domain_r = ", num_domain_r
       write(*,*) "num_domain_c = ", num_domain_c
       if (do_diagonal) then
-          write(*, *) "orientaion decompositio = diagonal"
+          write(*, *) "orientation decomposition = diagonal"
           write(*, *) "od_tol = ", od_tol
       else if (do_orthogonal) then
-          write(*, *) "orientaion decompositio = orthogonal"
+          write(*, *) "orientation decomposition = orthogonal"
           write(*, *) "od_tol = ", od_tol
       end if
     end if

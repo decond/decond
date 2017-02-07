@@ -63,7 +63,7 @@ contains
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     real(rk), dimension(world_dim), intent(in) :: cell
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
+    integer :: d, i, j, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
     do i = 1, size(sys%mol)
