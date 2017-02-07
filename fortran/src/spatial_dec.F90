@@ -179,9 +179,9 @@ contains
       sd_binIndex = 1
     end where
     if (do_diagonal) then
-        sd_binIndex(not_diag(pp, ppd, od_tol)) = -1
+        where(not_diag(pp, ppd, od_tol)) sd_binIndex = -1
     else if (do_orthogonal) then
-        sd_binIndex(not_orth(pp, ppd, od_tol)) = -1
+        where(not_orth(pp, ppd, od_tol)) sd_binIndex = -1
     end if
   end subroutine sd_getbinindex
 
