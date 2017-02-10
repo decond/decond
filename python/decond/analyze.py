@@ -975,20 +975,25 @@ def _nummolpair(nummol):
                      for (e2, n2) in enumerate(nummol) if e2 >= e1])
 
 
-def _paircount_to_rdf(paircount, rbins, nummol, volume):
+def _paircount_to_rdf(paircount, rbins, nummol, volume, solid_angle):
     v2 = volume**2
     pair_density = _nummolpair(nummol) / v2
 
     l_half = volume**(1/3) / 2
     dr = rbins[1] - rbins[0]
-    dv = 4 * np.pi * dr * rbins**2
+    dv = solid_angle * dr * rbins**2
     dv[dv == 0] = np.nan
     dvsim = dv.copy()
-    filter = (rbins > l_half) & (rbins < np.sqrt(2) * l_half)
-    dvsim[filter] = 4 * np.pi * dr * rbins[filter] * (3 * l_half -
-                                                      2 * rbins[filter])
-    filter = (rbins >= np.sqrt(2) * l_half)
-    dvsim[filter] = np.nan
+
+    if np.isclose(solid_angle, 4*np.pi):
+        filter = (rbins > l_half) & (rbins < np.sqrt(2) * l_half)
+        dvsim[filter] = solid_angle * dr * rbins[filter] * (3 * l_half -
+                                                          2 * rbins[filter])
+        filter = (rbins >= np.sqrt(2) * l_half)
+        dvsim[filter] = np.nan
+    else:
+        dvsim[rbins > l_half] = np.nan
+
     rho_vdvsim = paircount
     rho_v = rho_vdvsim / dvsim
     # rho_dvsim = rho_vdvsim / volume
@@ -1300,15 +1305,17 @@ def get_deccorr(decname, dectype, weight=None, threshold=0.0):
             decbins, decbins_unit, timelags, timelags_unit)
 
 
-def get_rdf(decname):
+def get_rdf(decname, solid_angle=None):
     """
     Return rdf, rbins, rbins_unit
     """
+    if solid_angle is None:
+        solid_angle = 4 * np.pi
     with h5py.File(decname, 'r') as f:
         gid = f[DecType.spatial.value]
         rbins = gid['decBins'][...]
         rdf = _paircount_to_rdf(gid['decPairCount'][...], rbins,
-                                f['numMol'][...], f['volume'][...])
+                                f['numMol'][...], f['volume'][...], solid_angle)
         if gid['decBins'].attrs['unit'].decode() == Unit.dimless:
             rbins_unit = Unit.dimless
         else:
