@@ -1,7 +1,7 @@
 module spatial_dec
   use mpiproc
   use varpars, only: rk, numframe, totnummol, world_dim, &
-                     do_diagonal, do_orthogonal
+                     do_diagonal, do_paraxes
   implicit none
   private
   public sd_init, com_pos, sd_prep_corrmemory, sd_getbinindex, &
@@ -180,8 +180,8 @@ contains
     end where
     if (do_diagonal) then
         where(not_diag(pp, ppd, od_tol)) sd_binIndex = -1
-    else if (do_orthogonal) then
-        where(not_orth(pp, ppd, od_tol)) sd_binIndex = -1
+    else if (do_paraxes) then
+        where(not_paxs(pp, ppd, od_tol)) sd_binIndex = -1
     end if
   end subroutine sd_getbinindex
 
@@ -261,26 +261,26 @@ contains
       not_diag = sum(c * c, 1) > tol
   end function
 
-  function not_orth(r, rd, tol)
+  function not_paxs(r, rd, tol)
       implicit none
       real(rk), intent(in) :: r(:, :)    !(world_dim, num_frame)
       real(rk), intent(in) :: rd(:) !(num_frame)
       real(rk), intent(in) :: tol        !tolerance = sin^2(tol_angle)
-      logical :: not_orth(size(r, 2))
+      logical :: not_paxs(size(r, 2))
       real(rk) :: c(world_dim, size(r, 2))
       real(rk) :: nr(world_dim, size(r, 2))
-      real(rk) :: orth(world_dim, world_dim)
-      logical :: is_orth(size(r, 2))
+      real(rk) :: paxs(world_dim, world_dim)
+      logical :: is_paxs(size(r, 2))
       integer :: i
 
       nr = r / spread(rd, 1, world_dim)
-      orth = reshape([1_rk, 0_rk, 0_rk, 0_rk, 1_rk, 0_rk, 0_rk, 0_rk, 1_rk], [3, 3])
-      is_orth = .false.
+      paxs = reshape([1_rk, 0_rk, 0_rk, 0_rk, 1_rk, 0_rk, 0_rk, 0_rk, 1_rk], [3, 3])
+      is_paxs = .false.
       do i = 1, 3
-          c = cross_prod(nr, orth(i, :))
-          is_orth = is_orth .or. sum(c * c, 1) < tol
+          c = cross_prod(nr, paxs(i, :))
+          is_paxs = is_paxs .or. sum(c * c, 1) < tol
       end do
-      not_orth = .not. is_orth
+      not_paxs = .not. is_paxs
   end function
 
   pure function cross_prod(a, v)

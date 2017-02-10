@@ -15,7 +15,7 @@ module manager
                      maxlag, skiptrj, do_sd, do_ed, sysnumatom, cell, &
                      timestep, world_dim, qnt_dim, do_minus_avg, &
                      trj_trr, trj_xyz, trj_lmp, &
-                     do_diagonal, do_orthogonal
+                     do_diagonal, do_paraxes
   use top, only: open_top, close_top, read_top, print_sys
   use xdr, only: open_xdr, close_xdr, read_xdr, read_natom_xdr
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
@@ -91,7 +91,7 @@ contains
     do_ed = .false.
     do_minus_avg = .false.
     do_diagonal = .false.
-    do_orthogonal = .false.
+    do_paraxes = .false.
     num_domain_r = 0
     num_domain_c = 0
     call sd_init()
@@ -463,11 +463,11 @@ contains
         i = i + 1
         if (trim(arg) == 'diag') then
             do_diagonal = .true.
-        else if (trim(arg) == 'orth') then
-            do_orthogonal = .true.
+        else if (trim(arg) == 'paxs') then
+            do_paraxes = .true.
         else
             write(*,*) "Unknow argument for -od: ", trim(arg)
-            write(*,*) "It has to be either 'diag' or 'orth'"
+            write(*,*) "It has to be either 'diag' or 'paxs'"
             call mpi_abend()
         end if
 
@@ -598,8 +598,8 @@ contains
       if (do_diagonal) then
           write(*, *) "orientation decomposition = diagonal"
           write(*, *) "od_tol = ", od_tol
-      else if (do_orthogonal) then
-          write(*, *) "orientation decomposition = orthogonal"
+      else if (do_paraxes) then
+          write(*, *) "orientation decomposition = paraxes"
           write(*, *) "od_tol = ", od_tol
       end if
     end if
@@ -1480,7 +1480,7 @@ contains
     write(*, *)
     write(*, *) "-ed <engtraj> <engtraj> ...: do energy decomposition."
     write(*, *)
-    write(*, *) "-od [diag|orth]: do orientaion decomposition, "
+    write(*, *) "-od [diag|paxs]: do orientation decomposition, "
     write(*, *) "                 diagonal or orthogoanl."
     write(*, *)
     write(*, *) "-sbwidth <sBinWidth(nm)>:"
