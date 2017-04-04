@@ -1513,6 +1513,9 @@ def _symmetrize_array(arr, decBins, center=0, axis=-1):
 
 def get_decqnt2_sd(decname, sep_nonlocal=False, sep_r=None):
     """
+    Instead of avewidth, r ranges from sep_r to the end will be averaged
+    as the nonlocal component.
+
     Return decqnt, decqnt_unit, decBins, decBins_unit, fit, fit_unit,
            decqnt_local, decqnt_nonlocal
     """
