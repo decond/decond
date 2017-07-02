@@ -6,9 +6,14 @@ program decond
   real(rk) :: prog_starttime
 
   call mpi_setup('init')
+
+  ! record starting time for estimating the total run time later
   prog_starttime = mpi_wtime()
 
+  ! initialize config to default or undefined values
   call init_config()
+
+  ! read config from the command line
   call read_config()
   call prepare()
   call decompose()
