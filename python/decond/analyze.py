@@ -1,16 +1,16 @@
+from enum import Enum
 import h5py
 import numpy as np
 import scipy.integrate as integrate
 import scipy.constants as const
 from scipy.special import gammainc
 from scipy import interpolate
-from enum import Enum
 from ._version import __version__
 
 
 class Quantity:
     key = 'quantity'
-    ec = 'electrical conductivity'
+    elc = 'electrical conductivity'
     vsc = 'viscosity'
     vel = 'velocity correlation'
 
@@ -32,9 +32,9 @@ class Unit:
     gmx_length = 'nm'
     gmx_energy = 'kJ mol$^{-1}$'
     gmx_temperature = si_temperature
-    gmx_ec_nD_list = [r"nm$^2$ ps$^{-1}$", r"nm$^2$ $ps^{-1}$"]
-    gmx_ec_corr = r"nm$^2$ ps$^{-2}$"
-    gmx_ec_dcesaro = r"nm$^2$"
+    gmx_elc_nD_list = [r"nm$^2$ ps$^{-1}$", r"nm$^2$ $ps^{-1}$"]
+    gmx_elc_corr = r"nm$^2$ ps$^{-2}$"
+    gmx_elc_dcesaro = r"nm$^2$"
     gmx_volume = gmx_length + r'$^3$'
 
     er_energy = r'kcal mol$^{-1}$'
@@ -85,16 +85,16 @@ class CorrFile(h5py.File):
             (major, minor, patch) = (__version__.split(sep='.'))
             if fmajor < major:
                 raise Error(
-                        "File " + self.filename +
-                        " is of version " + fmajor + ".X.X, " +
-                        "while this program requires at least " +
-                        major + ".X.X")
+                    "File " + self.filename +
+                    " is of version " + fmajor + ".X.X, " +
+                    "while this program requires at least " +
+                    major + ".X.X")
         else:
             raise Error(
-                    "File " + self.filename +
-                    " has no version number. " +
-                    "This program requires files of at least " +
-                    "version " + major + ".X.X")
+                "File " + self.filename +
+                " has no version number. " +
+                "This program requires files of at least " +
+                "version " + major + ".X.X")
 
         filetype = self.attrs['type'].decode()
         if filetype != type(self).__name__:
@@ -105,7 +105,7 @@ class CorrFile(h5py.File):
         if Quantity.key in self.attrs:
             self.buffer.quantity = self.attrs[Quantity.key]
         else:
-            self.buffer.quantity = np.string_(Quantity.ec)
+            self.buffer.quantity = np.string_(Quantity.elc)
         self.buffer.charge = self['charge'][...]
         self.buffer.charge_unit = self['charge'].attrs['unit']
         self.buffer.numMol = self['numMol'][...]
@@ -194,7 +194,7 @@ class CorrFile(h5py.File):
                                                 self.buffer.timeLags)
 
         qnttype = self.buffer.quantity.decode()
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             self.buffer.nDTotalCesaro = np.sum(
                     self.buffer.nDCesaro *
                     (self.zz * self.ww)[:, np.newaxis], axis=0)
@@ -295,7 +295,20 @@ class CorrFile(h5py.File):
         super().close()
 
     class _Buffer():
-        pass
+        def __init__(self):
+            self.quantity = None
+            self.charge = None
+            self.charge_unit = None
+            self.numMol = None
+            self.volume = None
+            self.volume_unit = None
+            self.temperature = None
+            self.temperature_unit = None
+            self.timeLags = None
+            self.timeLags_unit = None
+            self.timeLags_width = None
+            self.nCorr = None
+            self.nCorr_unit = None
 
 
 class DecondFile(CorrFile):
@@ -1070,7 +1083,7 @@ def _nD_to_qnt_const(decname):
         raise UnknownUnitError('nD_unit "{}" cannot be '
                                'recognized'.format(nD_unit))
 
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         fac *= e**2
 
     nD_to_qnt = fac / (kB * temp * vol)
@@ -1085,7 +1098,7 @@ def get_qnttype(decname):
         if Quantity.key in f.attrs:
             qnttype = f.attrs[Quantity.key].decode()
         else:
-            qnttype = Quantity.ec
+            qnttype = Quantity.elc
 
     return qnttype
 
@@ -1099,7 +1112,7 @@ def get_volume(decname):
         vol_unit = f['volume'].attrs['unit'].decode()
 
     if vol_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if vol_unit == Unit.gmx_volume:
                 vol *= const.nano ** 3
                 vol_unit = "{volume}".format(**Unit.default_unit)
@@ -1135,7 +1148,7 @@ def get_fit(decname):
         fit_unit = f['fit'].attrs['unit'].decode()
 
     if fit_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if fit_unit == Unit.gmx_time:
                 fit *= const.pico
                 fit_unit = Unit.si_time
@@ -1160,7 +1173,7 @@ def get_timelags(decname):
         timelags_unit = f['timeLags'].attrs['unit'].decode()
 
     if timelags_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if timelags_unit == Unit.gmx_time:
                 timelags *= const.pico
                 timelags_unit = Unit.si_time
@@ -1185,7 +1198,7 @@ def get_decbins(decname, dectype):
         decBins = gid['decBins'][...]
         decBins_unit = gid['decBins'].attrs['unit'].decode()
         if decBins_unit != Unit.dimless:
-            if qnttype == Quantity.ec:
+            if qnttype == Quantity.elc:
                 if dectype is DecType.spatial:
                     if decBins_unit == Unit.gmx_length:
                         decBins *= const.nano
@@ -1217,6 +1230,13 @@ def get_dec_dcesaro(decname, dectype):
     Return dec_dcesaro, dec_dcesaro_err, dec_dcesaro_unit,
            decbins, decbins_unit, timelags, timelags_unit
     """
+
+
+def get_dec_dcesaro(decname, dectype):
+    """
+    Return dec_dcesaro, dec_dcesaro_err, dec_dcesaro_unit,
+           decbins, decbins_unit, timelags, timelags_unit
+    """
     qnttype = get_qnttype(decname)
     timelags, timelags_unit = get_timelags(decname)
     decbins, decbins_unit = get_decbins(decname, dectype)
@@ -1227,7 +1247,7 @@ def get_dec_dcesaro(decname, dectype):
         dec_dcesaro_unit = gid['decDCesaro'].attrs['unit'].decode()
 
     if dec_dcesaro_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if dec_dcesaro_unit == Unit.gmx_ec_dcesaro:
                 cc = const.nano**2
                 dec_dcesaro *= cc
@@ -1262,7 +1282,7 @@ def get_deccorr(decname, dectype, weight=None, threshold=0.0):
         deccorr_unit = gid['decCorr'].attrs['unit'].decode()
 
     if deccorr_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if deccorr_unit == Unit.gmx_ec_corr:
                 cc = const.nano**2 / const.pico**2
                 deccorr *= cc
@@ -1355,7 +1375,7 @@ def get_D(decname):
     if nD_unit == Unit.dimless:
         D_unit = Unit.dimless
     else:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if nD_unit in Unit.gmx_ec_nD_list:
                 cc = const.nano**2 / const.pico
                 D *= cc
@@ -1393,7 +1413,7 @@ def get_decD(decname, dectype, weight=None, threshold=0.0,
         decBins = gid['decBins'][...]
 
     if decD_unit != Unit.dimless:
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             if decD_unit in Unit.gmx_ec_nD_list:
                 ccD = const.nano**2 / const.pico
                 decD *= ccD
@@ -1462,7 +1482,7 @@ def get_quantity(decname):
         nD_err = f['nD_err'][...]
         nummol = f['numMol'][...]
         charge = f['charge'][...]
-        if qnttype == Quantity.ec:
+        if qnttype == Quantity.elc:
             zz = _zz(charge, nummol)
             if nD_unit == Unit.dimless:
                 qnt_unit = Unit.dimless
@@ -1539,7 +1559,7 @@ def get_decqnt2_sd(decname, sep_nonlocal=False, sep_r=None):
 #     if qnttype != Quantity.vsc:
 #         raise Error("get_decqnt2_sd currenlty only supports qnttype: "
 #                     "{}".format(Quantity.vsc))
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         zz = _zz(charge, nummol)
     elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
         zz = np.ones_like(_zz(charge, nummol))
@@ -1583,7 +1603,7 @@ def get_decqnt2_sd(decname, sep_nonlocal=False, sep_r=None):
                 decqnt[:, c] += (decqnt_local[:, idx] +
                                  decqnt_nonlocal[:, idx, np.newaxis])
 
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         if nD_unit in Unit.gmx_ec_nD_list:
             decqnt_unit = "{siemens} {length}$^{{-1}}$".format(
                     **Unit.default_unit)
@@ -1631,7 +1651,7 @@ def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
         paircount = gid['decPairCount'][...]
         bw = decBins[1] - decBins[0]
 
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         zz = _zz(charge, nummol)
     elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
         zz = np.ones_like(_zz(charge, nummol))
@@ -1676,7 +1696,7 @@ def get_decqnt_sd(decname, sep_nonlocal=False, nonlocal_ref=None,
                 decqnt[:, c] += (decqnt_local[:, idx] +
                                  decqnt_nonlocal[:, idx, np.newaxis])
 
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         if nD_unit in Unit.gmx_ec_nD_list:
             decqnt_unit = "{siemens} {length}$^{{-1}}$".format(
                     **Unit.default_unit)
@@ -1861,7 +1881,7 @@ def report_decond(decname):
     print()
 
     qnttype = get_qnttype(decname)
-    if qnttype == Quantity.ec:
+    if qnttype == Quantity.elc:
         diffusion, diffusion_err, diffusion_unit, fit, fit_unit = \
             get_D(decname)
         print("Diffusion")
