@@ -1212,6 +1212,37 @@ def get_decbins(decname, dectype):
     return decBins, decBins_unit
 
 
+def get_ncorr(decname):
+    """
+    Return ncorr, ncorr_err, ncorr_unit, timelags, timelags_unit
+    """
+    qnttype = get_qnttype(decname)
+    timelags, timelags_unit = get_timelags(decname)
+    with h5py.File(decname, 'r') as f:
+        ncorr = f['nCorr'][...]
+        ncorr_err = f['nCorr_err'][...]
+        ncorr_unit = f['nCorr'].attrs['unit'].decode()
+
+    if  ncorr_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if ncorr_unit == Unit.gmx_ec_corr:
+                cc = const.nano**2 / const.pico**2
+                ncorr *= cc
+                ncorr_err *= cc
+                ncorr_unit = "{length}$^2$ {time}$^{{-2}}$".format(
+                        **Unit.default_unit)
+            else:
+                raise UnknownUnitError('ncorr_unit "{}" cannot be recognized'
+                                       ' for {}'.format(ncorr_unit, qnttype))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('ncorr_unit "{}" cannot be recognized '
+                                   'for {}'.format(ncorr_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
+    return (ncorr, ncorr_err, ncorr_unit, timelags, timelags_unit)
+
+
 def get_ndtotal_cesaro(decname):
     """
     Return ndtotal_cesaro, ndtotal_cesaro_err, ndtotal_cesaro_unit,
