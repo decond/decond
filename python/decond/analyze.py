@@ -1090,10 +1090,38 @@ def get_qnttype(decname):
     return qnttype
 
 
+def get_temperature(decname):
+    """
+    Return temperature, temperature unit
+    """
+    qnttype = get_qnttype(decname)
+    with h5py.File(decname, 'r') as f:
+        temperature = f['temperature'][...]
+        temperature_unit = f['temperature'].attrs['unit'].decode()
+
+    if temperature_unit != Unit.dimless:
+        if qnttype == Quantity.ec:
+            if temperature_unit == Unit.gmx_temperature:
+                pass
+            else:
+                raise UnknownUnitError('temperature_unit "{}" cannot be '
+                                       'recognized for ec'.format(
+                                           temperature_unit))
+        elif qnttype == Quantity.vsc or qnttype == Quantity.vel:
+            raise UnknownUnitError('temperature_unit "{}" cannot be '
+                                   'recognized for {}'.format(
+                                       temperature_unit, qnttype))
+        else:
+            raise Error("Unknown qnttype: {}".format(qnttype))
+
+    return temperature, temperature_unit
+
+
 def get_volume(decname):
     """
     Return volume, volume unit
     """
+    qnttype = get_qnttype(decname)
     with h5py.File(decname, 'r') as f:
         vol = f['volume'][...]
         vol_unit = f['volume'].attrs['unit'].decode()
