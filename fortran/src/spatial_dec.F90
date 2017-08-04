@@ -1,6 +1,7 @@
 module spatial_dec
   use mpiproc
-  use varpars, only: rk, numframe, totnummol, world_dim
+  use varpars, only: rk, numframe, totnummol, world_dim, &
+                     do_diagonal, do_paraxes
   implicit none
   private
   public sd_init, com_pos, sd_prep_corrmemory, sd_getbinindex, &
@@ -15,6 +16,7 @@ module spatial_dec
   real(rk), public, allocatable :: rbins(:)
   !MPI variables
   real(rk), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
+  real(rk), public :: od_tol
 
   integer :: stat
 
@@ -28,20 +30,20 @@ contains
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_r"
       call mpi_abend()
-    end if 
+    end if
 
     allocate(pos_c(world_dim, numframe, num_c), stat=stat)
     if (stat /=0) then
       write(*,*) "Allocation failed: pos_c"
       call mpi_abend()
-    end if 
+    end if
 
     if (myrank == root) then
       allocate(pos(world_dim, numframe, totnummol), stat=stat)
       if (stat /=0) then
         write(*,*) "Allocation failed: pos"
         call mpi_abend()
-      end if 
+      end if
     else
       !not root, allocate dummy pos to inhibit error messages
       allocate(pos(1, 1, 1), stat=stat)
@@ -61,7 +63,7 @@ contains
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     real(rk), dimension(world_dim), intent(in) :: cell
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
+    integer :: d, i, j, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
     do i = 1, size(sys%mol)
@@ -164,20 +166,23 @@ contains
     real(rk), intent(in) :: cell(world_dim)
     integer, intent(out) :: sd_binIndex(:)
     real(rk) :: pp(world_dim, size(sd_binIndex))
+    real(rk) :: ppd(size(sd_binIndex))
     integer :: d
 
     pp = pos_r(:,:,r) - pos_c(:,:,c)
     do d = 1, world_dim
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
-    sd_binIndex = ceiling(sqrt(sum(pp*pp, 1)) / rbinwidth)
+    ppd = sqrt(sum(pp*pp, 1))
+    sd_binIndex = ceiling(ppd / rbinwidth)
     where (sd_binIndex == 0)
       sd_binIndex = 1
     end where
-!    where (sd_binIndex >= ceiling(cellLength / 2.d0 / rbinwidth))
-!    where (sd_binIndex > num_rbin)
-!      sd_binIndex = -1
-!    end where
+    if (do_diagonal) then
+        where(not_diag(pp, ppd, od_tol)) sd_binIndex = -1
+    else if (do_paraxes) then
+        where(not_paxs(pp, ppd, od_tol)) sd_binIndex = -1
+    end if
   end subroutine sd_getbinindex
 
   subroutine sd_collectcorr()
@@ -229,7 +234,7 @@ contains
     if (stat /=0) then
       write(*,*) "Allocation failed: rbins"
       call mpi_abend()
-    end if 
+    end if
     rbins = [ (i - 0.5d0, i = 1, num_rbin) ] * rbinwidth
   end subroutine sd_make_rbins
 
@@ -238,4 +243,53 @@ contains
     !deallocate(pos_r, pos_c, sdcorr, sdpaircount)
     ! sd_binIndex has been deallocated in the main program
   end subroutine sd_finish
+
+  function not_diag(r, rd, tol)
+      implicit none
+      real(rk), intent(in) :: r(:, :)    !(world_dim, num_frame)
+      real(rk), intent(in) :: rd(:) !(num_frame)
+      real(rk), intent(in) :: tol        !tolerance = sin^2(tol_angle)
+      logical :: not_diag(size(r, 2))
+      real(rk) :: c(world_dim, size(r, 2))
+      real(rk) :: nr(world_dim, size(r, 2))
+
+      nr = abs(r) / spread(rd, 1, world_dim)
+      c(1, :) = nr(2, :) - nr(3, :)
+      c(2, :) = nr(3, :) - nr(1, :)
+      c(3, :) = nr(1, :) - nr(2, :)
+      c = c / sqrt(3.0_rk)  !normalize to sin(theta)
+      not_diag = sum(c * c, 1) > tol
+  end function
+
+  function not_paxs(r, rd, tol)
+      implicit none
+      real(rk), intent(in) :: r(:, :)    !(world_dim, num_frame)
+      real(rk), intent(in) :: rd(:) !(num_frame)
+      real(rk), intent(in) :: tol        !tolerance = sin^2(tol_angle)
+      logical :: not_paxs(size(r, 2))
+      real(rk) :: c(world_dim, size(r, 2))
+      real(rk) :: nr(world_dim, size(r, 2))
+      real(rk) :: paxs(world_dim, world_dim)
+      logical :: is_paxs(size(r, 2))
+      integer :: i
+
+      nr = r / spread(rd, 1, world_dim)
+      paxs = reshape([1_rk, 0_rk, 0_rk, 0_rk, 1_rk, 0_rk, 0_rk, 0_rk, 1_rk], [3, 3])
+      is_paxs = .false.
+      do i = 1, 3
+          c = cross_prod(nr, paxs(i, :))
+          is_paxs = is_paxs .or. sum(c * c, 1) < tol
+      end do
+      not_paxs = .not. is_paxs
+  end function
+
+  pure function cross_prod(a, v)
+    implicit none
+    real(rk), intent(in) :: a(:, :), v(world_dim)
+    real(rk) :: cross_prod(world_dim, size(a, 2))
+
+    cross_prod(1, :) = a(2, :) * v(3) - a(3, :) * v(2)
+    cross_prod(2, :) = a(3, :) * v(1) - a(1, :) * v(3)
+    cross_prod(3, :) = a(1, :) * v(2) - a(2, :) * v(1)
+  end function
 end module spatial_dec
