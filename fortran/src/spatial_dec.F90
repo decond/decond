@@ -12,7 +12,7 @@ module spatial_dec
   !sdpaircount: (num_rbin, moltypepair_idx)
   real(rk), public, allocatable :: sdpaircount(:, :), sdcorr(:, :, :), pos(:, :, :)
   integer, public :: num_rbin
-  integer, public, allocatable :: sd_binIndex(:)
+  integer, public, allocatable :: sd_binindex(:)
   real(rk), public, allocatable :: rbins(:)
   !MPI variables
   real(rk), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
@@ -153,20 +153,20 @@ contains
     end if
     sdpaircount = 0d0
 
-    allocate(sd_binIndex(numframe), stat=stat)
+    allocate(sd_binindex(numframe), stat=stat)
     if (stat /= 0) then
-      write(*,*) "Allocation failed: sd_binIndex"
+      write(*,*) "Allocation failed: sd_binindex"
       call mpi_abend()
     end if
   end subroutine sd_prep_corrmemory
 
-  subroutine sd_getbinindex(r, c, cell, sd_binIndex)
+  subroutine sd_getbinindex(r, c, cell, sd_binindex)
     implicit none
     integer, intent(in) :: r, c
     real(rk), intent(in) :: cell(world_dim)
-    integer, intent(out) :: sd_binIndex(:)
-    real(rk) :: pp(world_dim, size(sd_binIndex))
-    real(rk) :: ppd(size(sd_binIndex))
+    integer, intent(out) :: sd_binindex(:)
+    real(rk) :: pp(world_dim, size(sd_binindex))
+    real(rk) :: ppd(size(sd_binindex))
     integer :: d
 
     pp = pos_r(:,:,r) - pos_c(:,:,c)
@@ -174,14 +174,14 @@ contains
       pp(d, :) = pp(d, :) - nint(pp(d, :) / cell(d)) * cell(d)
     end do
     ppd = sqrt(sum(pp*pp, 1))
-    sd_binIndex = ceiling(ppd / rbinwidth)
-    where (sd_binIndex == 0)
-      sd_binIndex = 1
+    sd_binindex = ceiling(ppd / rbinwidth)
+    where (sd_binindex == 0)
+      sd_binindex = 1
     end where
     if (do_diagonal) then
-        where(not_diag(pp, ppd, od_tol)) sd_binIndex = -1
+        where(not_diag(pp, ppd, od_tol)) sd_binindex = -1
     else if (do_paraxes) then
-        where(not_paxs(pp, ppd, od_tol)) sd_binIndex = -1
+        where(not_paxs(pp, ppd, od_tol)) sd_binindex = -1
     end if
   end subroutine sd_getbinindex
 
@@ -241,7 +241,7 @@ contains
   subroutine sd_finish()
     implicit none
     !deallocate(pos_r, pos_c, sdcorr, sdpaircount)
-    ! sd_binIndex has been deallocated in the main program
+    ! sd_binindex has been deallocated in the main program
   end subroutine sd_finish
 
   function not_diag(r, rd, tol)

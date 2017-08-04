@@ -21,7 +21,7 @@ module manager
   use xyz, only: open_xyz, close_xyz, read_xyz, read_natom_xyz
   use lmp, only: open_lmp, close_lmp, read_lmp, read_natom_lmp
   use correlation, only: corr
-  use spatial_dec, only: sd_init, rbinwidth, pos, sd_binIndex, num_rbin, &
+  use spatial_dec, only: sd_init, rbinwidth, pos, sd_binindex, num_rbin, &
                          sdcorr, sdpaircount, sd_prep, sd_broadcastpos, &
                          com_pos, sd_prep_corrmemory, sd_collectcorr, &
                          sd_average, sd_getbinindex, sd_cal_num_rbin, &
@@ -901,7 +901,7 @@ contains
           if (myrank == root) write(*,*) "loop r =", ir, " of ", num_r,&
                                             ", c =", jc, " of ", num_c
           starttime2 = mpi_wtime()
-          moltypepair_allidx = getMolTypeIndex(i, sys%mol(:)%num, nummoltype)
+          moltypepair_allidx = get_moltype_idx(i, sys%mol(:)%num, nummoltype)
           if (do_sd .or. do_ed) then
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
@@ -928,10 +928,10 @@ contains
           if (myrank == root) write(*,*) "loop r =",ir, " of ", num_r,&
                                             ", c =", jc, " of ", num_c
           starttime2 = mpi_wtime()
-          moltypepair_idx = getMolTypePairIndex(i, j, sys%mol(:)%num, nummoltype)
+          moltypepair_idx = get_moltypepair_idx(i, j, sys%mol(:)%num, nummoltype)
           moltypepair_allidx = moltypepair_idx + nummoltype
           if (do_sd .or. do_ed) then
-            if (do_sd) call sd_getbinindex(ir, jc, cell, sd_binIndex)
+            if (do_sd) call sd_getbinindex(ir, jc, cell, sd_binindex)
             if (do_ed) call ed_getbinindex(i, j, ed_binIndex)
             do k = 1, maxlag+1
               numframe_k = numframe - k + 1
@@ -950,7 +950,7 @@ contains
               ncorr(k, moltypepair_allidx) = ncorr(k, moltypepair_allidx) + sum(qq(1:numframe_k))
               do n = 1, numframe_k
                 if (do_sd) then
-                  tmp_i = sd_binIndex(n)
+                  tmp_i = sd_binindex(n)
                   if (tmp_i <= num_rbin .and. tmp_i > 0) then
                     sdcorr(k, tmp_i, moltypepair_idx) = sdcorr(k, tmp_i, moltypepair_idx) + qq(n)
                   end if
@@ -968,7 +968,7 @@ contains
 
             do t = 1, numframe
               if (do_sd) then
-                tmp_i = sd_binIndex(t)
+                tmp_i = sd_binindex(t)
                 if (tmp_i <= num_rbin .and. tmp_i > 0) then
                   sdpaircount(tmp_i, moltypepair_idx) = sdpaircount(tmp_i, moltypepair_idx) + 1d0
                 end if
@@ -992,7 +992,7 @@ contains
         if (myrank == root) write(*,*)
       end do
     end do
-    if (do_sd) deallocate(sd_binIndex)
+    if (do_sd) deallocate(sd_binindex)
     if (do_ed) deallocate(ed_binIndex)
 
     endtime = mpi_wtime()
@@ -1350,22 +1350,22 @@ contains
     end do
   end function getTfromLog
 
-  integer function getMolTypeIndex(i, numMol, nummoltype)
+  integer function get_moltype_idx(i, numMol, nummoltype)
     integer, intent(in) :: i, numMol(:), nummoltype
     integer :: n, numMol_acc
 
-    getMolTypeIndex = -1
+    get_moltype_idx = -1
     numMol_acc = 0
     do n = 1, nummoltype
       numMol_acc = numMol_acc + numMol(n)
       if (i <= numMol_acc) then
-        getMolTypeIndex = n
+        get_moltype_idx = n
         return
       end if
     end do
-  end function getMolTypeIndex
+  end function get_moltype_idx
 
-  integer function getMolTypePairIndex(i, j, numMol, nummoltype)
+  integer function get_moltypepair_idx(i, j, numMol, nummoltype)
     integer, intent(in) :: i, j, numMol(:), nummoltype
     integer :: r, c, ii, jj
     !          c
@@ -1383,12 +1383,12 @@ contains
     !  where n = size(c) = size(r), r <= c
 
 
-    ii = getMolTypeIndex(i, numMol, nummoltype)
-    jj = getMolTypeIndex(j, numMol, nummoltype)
+    ii = get_moltype_idx(i, numMol, nummoltype)
+    jj = get_moltype_idx(j, numMol, nummoltype)
     r = min(ii, jj)
     c = max(ii, jj)
-    getMolTypePairIndex = (r - 1) * nummoltype + c - r * (r - 1) / 2
-  end function getMolTypePairIndex
+    get_moltypepair_idx = (r - 1) * nummoltype + c - r * (r - 1) / 2
+  end function get_moltypepair_idx
 
   subroutine com_qnt(com_q, qnt, start_index)
     real(rk), dimension(:, :), intent(out) :: com_q
