@@ -142,8 +142,7 @@ contains
   subroutine read_attrs()
     implicit none
     integer :: i
-    integer(hid_t) :: file_id, attr_id
-    integer(hsize_t) :: dims(1)
+    integer(hid_t) :: file_id
     integer :: buf
 
     do i = 1, num_engfiles
@@ -365,10 +364,8 @@ contains
     use utility, only: parse_version
     use H5LT
     implicit none
-    character(len=11) :: engtrajVer
-    integer :: engtrajVer_major, numpair
     integer(hid_t) :: plist_id  ! property list identifier for HDF5
-    integer :: buf(1), i
+    integer :: i
 
     ! setup file access property list with parallel I/O access.
     call H5Pcreate_f(H5P_FILE_ACCESS_F, plist_id, ierr)

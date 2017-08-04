@@ -6,19 +6,19 @@ program trjconv2com
   integer, parameter :: num_parArg = 5
   integer, parameter :: num_argPerData = 2
   integer, parameter :: rk = real64
-  integer :: num_dataArg, i, j, k, n, totnummol, t, sysnumatom
+  integer :: num_dataArg, i, j, n, totnummol, sysnumatom
   character(len=128) :: outFilename 
   character(len=128) :: dataFilename
   character(len=128) :: topFilename
   integer :: outFileHandle, dataFileHandle, topFileHandle
   integer :: numFrame, stat, numMolType, numFrameRead, percent
-  integer :: moltypepair_idx, moltypepair_allidx, tmp_i, skip
+  integer :: skip
   integer, allocatable :: charge(:), start_index(:)
   character(len=10) :: tmp_str
-  real(rk) :: cell(3), timestep, tmp_r
+  real(rk) :: cell(3), tmp_r
   real(rk), allocatable :: pos_tmp(:, :), vel_tmp(:, :), pos_com(:, :), vel_com(:, :)
   !pos(dim=3, timeFrame, atom), vel(dim=3, timeFrame, atom)
-  real(rk), allocatable :: time(:), dummy_null
+  real(rk), allocatable :: time(:)
 
   type(system) :: sys
 
@@ -166,7 +166,7 @@ contains
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
     real(rk), dimension(3), intent(in) :: cell
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com, num_atom
+    integer :: d, i, j, idx_begin, idx_end, idx_com, num_atom
 
     idx_com = 0
     do i = 1, size(sys%mol)
@@ -211,7 +211,7 @@ contains
     real(rk), dimension(:, :), intent(in) :: vel 
     integer, dimension(:), intent(in) :: start_index
     type(system), intent(in) :: sys
-    integer :: d, i, j, k, idx_begin, idx_end, idx_com
+    integer :: d, i, j, idx_begin, idx_end, idx_com
 
     com_v = 0d0
     idx_com = 0

@@ -159,7 +159,7 @@ contains
     type(atom), intent(inout) :: at
     integer :: stat
     character(len=line_len) :: line, atype, dum_s
-    integer :: i, j, num_atom, num_rec, dum_i
+    integer :: num_rec, dum_i
     real(rk) :: dum_r, mass, charge
     logical :: is_read
 

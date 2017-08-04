@@ -10,7 +10,7 @@ MODFLAG = -module
 # Compiler flags:
 # -Kfast for Fujitsu compiler (K computer)
 # -DFORTRAN2008 for compilers support Fortran 2008 specification
-FCFLAG = -g -O2
+FCFLAG = -O2 -g -warn all
 
 # XTC Library directory (where lib/ and include/ are located inside)
 XDRFILE_DIR = $(HOME)/local
