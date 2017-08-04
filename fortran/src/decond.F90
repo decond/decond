@@ -1,3 +1,6 @@
+! This is the main decond program.
+! It calls subroutines from modules mpiproc and manager.
+
 program decond
   use mpiproc
   use varpars, only: rk
@@ -15,8 +18,14 @@ program decond
 
   ! read config from the command line
   call read_config()
+
+  ! do MPI domain decomposition, allocate memories
+  ! read MD trajectories, distribute data to each node
   call prepare()
+
+  ! perform spatial decomposition
   call decompose()
+
   call output()
   call finish()
 

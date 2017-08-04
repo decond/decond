@@ -1,3 +1,5 @@
+! This module contains subroutines that read and parse Gromacs topology files
+
 module top
   use, intrinsic :: iso_fortran_env, only: real64
 #ifdef FORTRAN2008

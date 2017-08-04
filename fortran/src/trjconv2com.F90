@@ -1,3 +1,6 @@
+! This program converts an all-atom trajectory to
+! a molecule-center-of-mass trajectory.
+
 program trjconv2com
   use, intrinsic :: iso_fortran_env, only: real64
   use xdr, only : open_xdr, close_xdr, read_xdr, write_xdr, read_natom_xdr

@@ -1,3 +1,14 @@
+! This module is the engine of the whole program.
+! It contains subroutines doing initialization, memory allocation,
+! file I/O, and most of all, (spatial) decomposition.
+!
+! Note that besides spatial decomposition, energy decomposition is also
+! implemented but has not yet been tested extensively.
+!
+! #TODO
+! This module is waaayyy too big. Refactoring is needed by dividing related
+! subroutines into their own modules.
+
 module manager
   use mpiproc
   use hdf5
@@ -68,11 +79,9 @@ module manager
   integer :: trjfileio
   integer, allocatable :: framecount(:), step(:)
   real(rk), allocatable :: pos_tmp(:, :), qnt_tmp(:, :), qq(:)
-  !one frame data (dim=qnt_dim, atom)
-  real(rk), allocatable :: qnt(:, :, :)
-  !pos(dim=world_dim, timeFrame, atom), qnt(dim=qnt_dim, timeFrame, atom)
+  real(rk), allocatable :: qnt(:, :, :)  !qnt(dim=qnt_dim, timeFrame, atom)
   real(rk), allocatable :: time(:), ncorr(:, :), corr_tmp(:)
-  !MPI variables
+  !MPI domain decomposed variables
   real(rk), allocatable :: qnt_r(:, :, :), qnt_c(:, :, :)
 
 contains
@@ -165,7 +174,7 @@ contains
           write(*,*) "start_index = ", start_index
         end if
 
-        !read topFile
+        !read topology file
         topfileio = open_top(topfile)
         call read_top(topfileio, sys)
         call close_top(topfileio)

@@ -1,3 +1,7 @@
+! This module contains MPI-related variables and constants,
+! as well as the subroutines to setup MPI communication and
+! perform domain decomposition.
+
 module mpiproc
   use mpi
   use varpars, only: rk, world_dim, qnt_dim

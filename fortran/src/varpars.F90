@@ -1,4 +1,6 @@
-! variables and parameters
+! This module serves as a convenient place to store variables and parameters
+! that are used across several other modules.
+
 module varpars
   use, intrinsic :: iso_fortran_env, only: real64
   use top, only: system
