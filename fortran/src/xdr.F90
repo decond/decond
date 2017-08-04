@@ -1,3 +1,6 @@
+! This module provides subroutines for MD trajectory I/O
+! of Gromacs TRR files through the bundled xdrfile library
+
 module xdr
   use, intrinsic :: iso_c_binding
   use varpars, only: rk

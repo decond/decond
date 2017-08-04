@@ -1,3 +1,17 @@
+! This module provides subroutines for MD trajectory I/O
+! of customized xyz files.
+!
+! A customized xyz file contains one or more time frames.
+! Each frame is stacked together and has the following format
+! ===== begin of a frame =====
+! <N: number of atoms>
+! <arbitrary title/info>
+! <atom1 name> <x> <y> <z> <optional data>
+! <atom2 name> <x> <y> <z> <optional data>
+! ...
+! <atomN name> <x> <y> <z> <optional data>
+! ===== end of a frame =====
+
 module xyz
   use varpars, only: rk
 #ifndef FORTRAN2008

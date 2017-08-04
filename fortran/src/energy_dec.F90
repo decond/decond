@@ -1,3 +1,6 @@
+! This module contains variables and subroutines
+! related to the energy decomposition
+
 module energy_dec
   use mpiproc
   use hdf5

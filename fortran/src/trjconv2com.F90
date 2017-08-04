@@ -1,5 +1,6 @@
-! This program converts an all-atom trajectory to
-! a molecule-center-of-mass trajectory.
+! This program converts an all-atom TRR trajectory to
+! a center-of-mass TRR trajectory where each record is
+! the center-of-mass of a molecule.
 
 program trjconv2com
   use, intrinsic :: iso_fortran_env, only: real64

@@ -1,3 +1,6 @@
+! This module contains variables and subroutines
+! related to the spatial decomposition
+
 module spatial_dec
   use mpiproc
   use varpars, only: rk, numframe, totnummol, world_dim, &
@@ -16,7 +19,7 @@ module spatial_dec
   real(rk), public, allocatable :: rbins(:)
   !MPI variables
   real(rk), public, allocatable :: pos_r(:, :, :), pos_c(:, :, :)
-  real(rk), public :: od_tol
+  real(rk), public :: od_tol  ! tolerance angle for orientation decomposition
 
   integer :: stat
 
@@ -179,9 +182,9 @@ contains
       sd_binindex = 1
     end where
     if (do_diagonal) then
-        where(not_diag(pp, ppd, od_tol)) sd_binindex = -1
+      where(not_diag(pp, ppd, od_tol)) sd_binindex = -1
     else if (do_paraxes) then
-        where(not_paxs(pp, ppd, od_tol)) sd_binindex = -1
+      where(not_paxs(pp, ppd, od_tol)) sd_binindex = -1
     end if
   end subroutine sd_getbinindex
 

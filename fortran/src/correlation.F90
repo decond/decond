@@ -1,3 +1,9 @@
+! This module provides a single interface corr(...)
+! which calls the corresponding subroutine calculating
+! 1. autocorrelation of a vector,
+! 2. cross-correlation between two vectors,
+! 3. correlations between column vectors of a matrix (not implemented, yet)
+
 module correlation
   use fftw
   implicit none
@@ -11,7 +17,6 @@ module correlation
 
 contains
   function corr_vec1(vec, maxlag)
-  ! strangely this function cannot be run on sigma, memory problem occurs!
     implicit none
     real(C_DOUBLE), dimension(2*maxlag+1) :: corr_vec1
     real(C_DOUBLE), dimension(:), intent(in) :: vec
@@ -134,10 +139,9 @@ contains
     first_entry = .false.
   end function
 
-!TODO: unfinished
+  !TODO: unfinished
   function corr_mat(mat, maxlag)
     implicit none
-!    real(C_DOUBLE), dimension(maxlag+1, size(mat, 2)) :: corr_mat
     real(C_DOUBLE), dimension(:,:), allocatable :: corr_mat
     real(C_DOUBLE), dimension(:,:), intent(in) :: mat
     integer, intent(in) :: maxlag
@@ -149,7 +153,8 @@ contains
       call exit(1)
     end if
 
-    corr_mat = 5
+    write(*,*) "corr_mat is not implemented"
+    call exit(1)
   end function
 
 !  function nextpow2(n)

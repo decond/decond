@@ -1,3 +1,24 @@
+! This module provides subroutines for MD trajectory I/O
+! of customized xyz files dumped by LAMMPS (I call them lmp files).
+!
+! A customized lmp file contains one or more time frames.
+! Each frame is stacked together and has the following format
+! ===== begin of a frame =====
+! ITEM: TIMESTEP
+! 0
+! ITEM: NUMBER OF ATOMS
+! <N>
+! ITEM: BOX BOUNDS pp pp pp
+! 0 <box length x>
+! 0 <box length y>
+! 0 <box length z>
+! ITEM: ATOMS id x y z <optional data name>
+! 1  <x> <y> <z> <optional data>
+! 2  <x> <y> <z> <optional data>
+! ...
+! N  <x> <y> <z> <optional data>
+! ===== end of a frame =====
+
 module lmp
   use varpars, only: rk
 #ifndef FORTRAN2008

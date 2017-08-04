@@ -1,3 +1,6 @@
+! This is a wrapper module for FFTW library
+! It is used only by the correlation module
+
 module fftw
   use, intrinsic :: iso_c_binding
   private
