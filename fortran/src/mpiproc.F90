@@ -74,7 +74,7 @@ contains
     else if (num_domain_r > 0) then
       num_domain_c = nprocs / num_domain_r
     else if (num_domain_c > 0) then
-      num_domain_c = nprocs / num_domain_r
+      num_domain_r = nprocs / num_domain_c
     else
       write(*,*) "Invalid domain decomposition: ", num_domain_r, " x ", num_domain_c
       call mpi_abend()
